@@ -71,25 +71,29 @@ class LeadScraper:
             
         return []
 
-    def scrape_entire_grid(self, query: str, center_lat: float, center_lng: float) -> List[Dict[str, Any]]:
+    def scrape_entire_grid(self, query: str, center_lat: float, center_lng: float, on_progress=None) -> List[Dict[str, Any]]:
         """
-        [Metodo Pubblico Principale] Orchestra la generazione della griglia, 
-        l'interrogazione delle API e applica lo SLEEP per evitare i ban.
+        [Metodo Pubblico Principale] Orchestra la generazione della griglia.
+        on_progress: Callable[[int, int], None] -> riceve (punto_attuale, totale_punti)
         """
         all_leads = []
         grid_coords = self._generate_grid(center_lat, center_lng)
+        total_points = len(grid_coords)
         
-        print(f"📍 Griglia generata: {len(grid_coords)} punti di scansione.")
+        print(f"📍 Griglia generata: {total_points} punti di scansione.")
 
         for idx, coord in enumerate(grid_coords, 1):
-            print(f"   ⏳ Scansione punto {idx}/{len(grid_coords)} ({coord['lat']}, {coord['lng']})...")
+            if on_progress:
+                on_progress(idx, total_points)
+                
+            print(f"   ⏳ Scansione punto {idx}/{total_points} ({coord['lat']}, {coord['lng']})...")
             
             places = self._fetch_places_at_location(query, coord["lat"], coord["lng"])
             all_leads.extend(places)
             
             # --- RATE LIMITING OBBLIGATORIO ---
             # Pausa di 1 secondo tra le chiamate per rispettare le quote di Google
-            if idx < len(grid_coords):
+            if idx < total_points:
                 time.sleep(1)
                 
         return all_leads

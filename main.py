@@ -2,6 +2,7 @@ import sys
 import argparse
 import textwrap
 import subprocess
+from datetime import datetime
 from typing import Dict, List, Any
 
 # Importiamo i moduli dal package 'src'
@@ -16,14 +17,27 @@ class LeadHunterOrchestrator:
         self.auditor = LeadAuditor()
         self.all_leads: Dict[str, Dict[str, Any]] = {}
 
-    def run(self, lat: float, lng: float, keywords: List[str]) -> List[Dict[str, Any]]:
-        """Esegue il funnel di scraping e auditing. Restituisce i lead arricchiti."""
+    def run(self, lat: float, lng: float, keywords: List[str], 
+            on_kw_start=None, on_kw_progress=None, on_kw_end=None) -> List[Dict[str, Any]]:
+        """
+        Esegue il funnel di scraping e auditing.
+        on_kw_start: Callable[[str], None]
+        on_kw_progress: Callable[[str, int, int], None]
+        on_kw_end: Callable[[str, int], None]
+        """
         raw_leads_to_audit = []
         
         print("\n🔍 --- FASE 1: Scraping Google Maps ---")
         # FASE 1: Scraping e Deduplicazione
         for keyword in keywords:
-            places = self.scraper.scrape_entire_grid(keyword, lat, lng)
+            if on_kw_start:
+                on_kw_start(keyword)
+                
+            def _grid_progress_wrapper(current, total):
+                if on_kw_progress:
+                    on_kw_progress(keyword, current, total)
+
+            places = self.scraper.scrape_entire_grid(keyword, lat, lng, on_progress=_grid_progress_wrapper)
             top_competitor = self.scraper.identify_top_competitor(places)
             
             new_leads_count = 0
@@ -36,11 +50,18 @@ class LeadHunterOrchestrator:
                         "keyword": keyword, "competitor": top_competitor
                     })
                     new_leads_count += 1
+            
+            if on_kw_end:
+                on_kw_end(keyword, new_leads_count)
+                
             print(f"✅ Trovati {new_leads_count} nuovi lead per '{keyword}'.")
 
         if not raw_leads_to_audit:
             print("⚠️ Nessun lead senza sito web trovato.")
             return []
+
+        if on_kw_progress: # Usiamo questo per segnalare l'inizio della Fase 2 se necessario
+            on_kw_progress("AI_AUDIT", 0, len(raw_leads_to_audit))
 
         print(f"\n🧠 --- FASE 2: AI Auditing ({len(raw_leads_to_audit)} lead da analizzare) ---")
         # FASE 2: AI Auditing Parallelo (Batch Mode)
@@ -127,11 +148,12 @@ if __name__ == "__main__":
     print(f"\n🚀 Avvio Lead Hunter V3 CLI su coordinate {args.lat}, {args.lng}")
     orchestrator = LeadHunterOrchestrator()
     
-    # Se il nome file è quello di default, cerchiamo il nome della città
+    # Se il nome file è quello di default, cerchiamo il nome della città e aggiungiamo la data
     out_file = args.out
     if out_file == "leads_output.xlsx":
         city = orchestrator.scraper.get_city_name(args.lat, args.lng)
-        out_file = f"Lead_Hunter_{city}.xlsx"
+        date_str = datetime.now().strftime("%d_%m_%Y")
+        out_file = f"Lead_Hunter_{city}_{date_str}.xlsx"
     
     try:
         results = orchestrator.run(args.lat, args.lng, args.keywords)
