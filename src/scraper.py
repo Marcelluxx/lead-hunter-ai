@@ -11,7 +11,8 @@ from .config import (
     LAT_DEGREE_KM, 
     GRID_STEP_KM, 
     GRID_SIZE, 
-    RADIUS_M
+    RADIUS_M,
+    GOOGLE_GEOCODING_URL
 )
 
 class LeadScraper:
@@ -109,3 +110,31 @@ class LeadScraper:
         
         top_comp = max(competitors, key=lambda x: float(x.get("rating", 0.0)))
         return top_comp.get("displayName", {}).get("text", "Competitor Locale")
+
+    def get_city_name(self, lat: float, lng: float) -> str:
+        """
+        Esegue il Reverse Geocoding per ottenere il nome della città.
+        Restituisce 'leads' come fallback in caso di errore.
+        """
+        params = {
+            "latlng": f"{lat},{lng}",
+            "key": GOOGLE_API_KEY,
+            "language": "it",
+            "result_type": "locality" # Cerchiamo specificamente la città/località
+        }
+        try:
+            response = requests.get(GOOGLE_GEOCODING_URL, params=params)
+            response.raise_for_status()
+            data = response.json()
+            
+            if data.get("status") == "OK" and data.get("results"):
+                # Estraiamo il nome della città dal primo risultato
+                for component in data["results"][0].get("address_components", []):
+                    if "locality" in component.get("types", []):
+                        return component.get("long_name", "leads")
+                return data["results"][0].get("formatted_address", "leads").split(",")[0]
+                
+        except Exception as e:
+            print(f"⚠️ Errore durante il geocoding inverso: {e}")
+            
+        return "leads"

@@ -54,7 +54,7 @@ with col1:
     st.markdown(f"**Coordinate Selezionate:** \nLat: `{st.session_state.target_coords['lat']}` \nLng: `{st.session_state.target_coords['lng']}`")
     st.info("💡 Clicca su un punto qualsiasi della mappa per aggiornare le coordinate e spostare la griglia di ricerca.")
 
-    start_btn = st.button("🚀 Avvia Ricerca", type="primary", use_container_width=True)
+    start_btn = st.button("🚀 Avvia Ricerca", type="primary", width="stretch")
 
 with col2:
     # --- MAPPA INTERATTIVA ---
@@ -98,16 +98,30 @@ if start_btn:
         st.error("Inserisci almeno un Tag/Keyword per iniziare.")
     else:
         st.markdown("---")
-        st.markdown("### 🔄 Scansione in corso...")
+        st.markdown("### 🔄 Avanzamento Processo")
         
-        # ProgressBar e Spinner per UI
-        progress_bar = st.progress(0)
+        # Area di log dinamica nella GUI
+        log_container = st.empty()
+        status_text = st.empty()
         
-        with st.spinner("Scraping da Google e Generazione AI (potrebbe volerci qualche minuto)..."):
+        def update_log(msg):
+            if "logs" not in st.session_state:
+                st.session_state.logs = []
+            st.session_state.logs.append(msg)
+            log_container.code("\n".join(st.session_state.logs))
+
+        st.session_state.logs = []
+        update_log("🚀 Avvio Lead Hunter V3 Engine...")
+        update_log("🧠 Fase 2 attivata: AI Auditing Parallelo (Multi-threading).")
+        
+        with st.spinner("🧠 AI Auditing Parallelo in corso... Analisi dei lead con LLM (Batch Mode)"):
             orchestrator = LeadHunterOrchestrator()
             
             try:
-                # Esegue la ricerca tramite la logica disaccoppiata nel main.py
+                # Nota: Poiché l'orchestratore stampa su stdout, in Streamlit 
+                # vedremo i log nel terminale. Per vederli nella GUI dovremmo
+                # iniettare un callback, ma per ora facciamo un'esecuzione pulita.
+                
                 results = orchestrator.run(
                     st.session_state.target_coords["lat"], 
                     st.session_state.target_coords["lng"], 
@@ -117,25 +131,29 @@ if start_btn:
                 if results:
                     st.success(f"🎉 Trovati {len(results)} Leads ad alto potenziale!")
                     
+                    # Genera nome file basato sulla città
+                    city = orchestrator.scraper.get_city_name(st.session_state.target_coords["lat"], st.session_state.target_coords["lng"])
+                    filename = f"{city}.xlsx"
+                    
                     # Salva su file locale per sicurezza
-                    DataExporter.export_to_excel(results, filename="gui_export.xlsx")
+                    DataExporter.export_to_excel(results, filename=filename)
                     
                     # Prepara il dataframe per la visualizzazione Web
                     df = pd.DataFrame(results)
-                    cols_to_show = ["displayName.text", "search_keyword", "formattedAddress", "sales_hook", "ideal_product"]
                     # Mostra tabella pulita
-                    st.dataframe(df, use_container_width=True)
+                    st.dataframe(df, width="stretch")
                     
                     # Bottone per scaricare il file Excel
-                    with open("gui_export.xlsx", "rb") as file:
+                    with open(filename, "rb") as file:
                         st.download_button(
-                            label="📥 Scarica Excel Formattato",
+                            label=f"📥 Scarica Excel: {filename}",
                             data=file,
-                            file_name="Leads_Premium.xlsx",
+                            file_name=filename,
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         )
                 else:
-                    st.warning("Nessun business trovato senza sito web in quest'area. Prova ad allargare la zona o cambiare tag.")
+                    st.warning("Nessun business trovato senza sito web in quest'area.")
 
             except Exception as e:
                 st.error(f"Errore durante l'elaborazione: {e}")
+                print(f"❌ [GUI Error] {e}")

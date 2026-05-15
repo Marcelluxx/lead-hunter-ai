@@ -16,6 +16,7 @@ if not GOOGLE_API_KEY or not OPENROUTER_API_KEY:
 
 # --- API ENDPOINTS ---
 GOOGLE_PLACES_V1_URL: Final[str] = "https://places.googleapis.com/v1/places:searchText"
+GOOGLE_GEOCODING_URL: Final[str] = "https://maps.googleapis.com/maps/api/geocode/json"
 OPENROUTER_BASE_URL: Final[str] = "https://openrouter.ai/api/v1"
 
 # --- LLM CONFIG ---

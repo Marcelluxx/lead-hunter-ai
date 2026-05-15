@@ -20,11 +20,13 @@ class LeadHunterOrchestrator:
         """Esegue il funnel di scraping e auditing. Restituisce i lead arricchiti."""
         raw_leads_to_audit = []
         
+        print("\n🔍 --- FASE 1: Scraping Google Maps ---")
         # FASE 1: Scraping e Deduplicazione
         for keyword in keywords:
             places = self.scraper.scrape_entire_grid(keyword, lat, lng)
             top_competitor = self.scraper.identify_top_competitor(places)
             
+            new_leads_count = 0
             for place in places:
                 place_id = place.get("id")
                 if place_id and not place.get("websiteUri") and place_id not in self.all_leads:
@@ -33,21 +35,27 @@ class LeadHunterOrchestrator:
                         "id": place_id, "place_data": place,
                         "keyword": keyword, "competitor": top_competitor
                     })
+                    new_leads_count += 1
+            print(f"✅ Trovati {new_leads_count} nuovi lead per '{keyword}'.")
 
         if not raw_leads_to_audit:
+            print("⚠️ Nessun lead senza sito web trovato.")
             return []
 
-        # FASE 2: AI Auditing
+        print(f"\n🧠 --- FASE 2: AI Auditing ({len(raw_leads_to_audit)} lead da analizzare) ---")
+        # FASE 2: AI Auditing Parallelo (Batch Mode)
+        audit_results_map = self.auditor.audit_leads_batch(raw_leads_to_audit, max_workers=5)
+        
+        # Aggiornamento efficiente del dizionario globale con i risultati dell'analisi
         for item in raw_leads_to_audit:
-            p_id, p_data = item["id"], item["place_data"]
-            kw, comp = item["keyword"], item["competitor"]
-            
-            audit_results = self.auditor.audit_lead(p_data, category=kw, competitor=comp)
-            
-            self.all_leads[p_id].update(audit_results)
-            self.all_leads[p_id]["competitor"] = comp
-            self.all_leads[p_id]["search_keyword"] = kw
+            p_id = item["id"]
+            if p_id in audit_results_map:
+                # Applichiamo i risultati dell'LLM e i metadati della ricerca
+                self.all_leads[p_id].update(audit_results_map[p_id])
+                self.all_leads[p_id]["competitor"] = item["competitor"]
+                self.all_leads[p_id]["search_keyword"] = item["keyword"]
 
+        print("\n✅ Tutte le fasi completate con successo.")
         return list(self.all_leads.values())
 
 
@@ -100,9 +108,11 @@ if __name__ == "__main__":
     if args.gui:
         print("🎨 Avvio interfaccia grafica Streamlit...")
         try:
-            subprocess.run(["streamlit", "run", "src/gui.py"], check=True)
-        except FileNotFoundError:
-            print("❌ Errore: Streamlit non è installato. Esegui 'pip install streamlit'.")
+            # Usiamo sys.executable per garantire l'uso dello stesso ambiente Python
+            subprocess.run([sys.executable, "-m", "streamlit", "run", "src/gui.py"], check=True)
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            print("❌ Errore: Impossibile avviare Streamlit. Assicurati che sia installato correttamente.")
+            print("Prova a eseguire: pip install streamlit")
         except KeyboardInterrupt:
             print("\n👋 GUI chiusa correttamente.")
         sys.exit(0)
@@ -117,11 +127,17 @@ if __name__ == "__main__":
     print(f"\n🚀 Avvio Lead Hunter V3 CLI su coordinate {args.lat}, {args.lng}")
     orchestrator = LeadHunterOrchestrator()
     
+    # Se il nome file è quello di default, cerchiamo il nome della città
+    out_file = args.out
+    if out_file == "leads_output.xlsx":
+        city = orchestrator.scraper.get_city_name(args.lat, args.lng)
+        out_file = f"Lead_Hunter_{city}.xlsx"
+    
     try:
         results = orchestrator.run(args.lat, args.lng, args.keywords)
         if results:
-            DataExporter.export_to_excel(results, filename=args.out)
-            print(f"✅ Completato. {len(results)} leads esportati in {args.out}")
+            DataExporter.export_to_excel(results, filename=out_file)
+            print(f"✅ Completato. {len(results)} leads esportati in {out_file}")
         else:
             print("⚠️ Nessun lead utile trovato nell'area.")
     except KeyboardInterrupt:
