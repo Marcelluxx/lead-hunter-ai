@@ -90,9 +90,4 @@ python main.py --examples
 - `requirements.txt`: Python package dependencies.
 
 ---
-
-## ⚠️ Disclaimer
-This tool is for educational and professional lead generation purposes. Please ensure compliance with Google's Terms of Service and data privacy regulations (e.g., GDPR).
-
----
 *Created by Marcellux02*
