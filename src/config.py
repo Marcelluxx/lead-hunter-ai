@@ -1,6 +1,6 @@
 import os
 import sys
-from typing import Final
+from typing import Final, List
 from dotenv import load_dotenv
 
 # Carica variabili d'ambiente
@@ -29,7 +29,7 @@ RADIUS_M: Final[float] = 2000.0      # Raggio per locationBias (obbligatorio per
 LAT_DEGREE_KM: Final[float] = 111.32 # Valore esatto per i calcoli GPS
 
 # --- GOOGLE PLACES CONFIG ---
-# Field Mask esatto come richiesto, senza dati superflui (risparmio banda/costi)
+# Field Mask con userRatingCount per filtro recensioni (Places V1 API)
 FIELD_MASK: Final[str] = (
     "places.id,"
     "places.displayName,"
@@ -37,6 +37,52 @@ FIELD_MASK: Final[str] = (
     "places.nationalPhoneNumber,"
     "places.websiteUri,"
     "places.rating,"
+    "places.userRatingCount,"
     "places.reviews,"
-    "places.types" 
+    "places.types"
 )
+
+# --- FILTRI LEAD (Modalità "Con Sito Web") ---
+MIN_RATING: Final[float] = 3.9       # Rating minimo Google
+MAX_REVIEWS: Final[int] = 100        # Numero massimo recensioni (filtra catene/franchise)
+MIN_BUSINESS_AGE_YEARS: Final[int] = 5  # Età minima attività (anni)
+
+# --- CRAWLER CONFIG ---
+MAX_CRAWL_PAGES: Final[int] = 5      # Pagine interne max da esplorare
+TOKEN_MODE: Final[str] = os.getenv("TOKEN_MODE", "high_fidelity")  # "high_fidelity" | "optimized"
+
+# --- INDICATORI E-COMMERCE (per esclusione automatica) ---
+ECOMMERCE_INDICATORS: Final[List[str]] = [
+    "cart", "checkout", "shopify", "woocommerce", "add-to-cart",
+    "add_to_cart", "stripe", "snipcart", "bigcommerce", "prestashop",
+    "magento", "opencart", "wc-add-to-cart", "product-price",
+    "shop-now", "buy-now", "carrello", "acquista"
+]
+
+# --- FRANCHISE / CATENE NAZIONALI NOTE ---
+KNOWN_FRANCHISES: Final[List[str]] = [
+    # Fast Food & Ristorazione
+    "mcdonald", "burger king", "kfc", "subway", "domino's pizza",
+    "starbucks", "autogrill", "old wild west", "roadhouse", "alice pizza",
+    "la piadineria", "spontini", "rossopomodoro", "billy tacos",
+    # GDO & Retail
+    "eurospin", "lidl", "aldi", "conad", "coop", "esselunga", "carrefour",
+    "penny market", "md discount", "iper", "bennet", "pam", "despar",
+    # Bricolage & Casa
+    "leroy merlin", "bricoman", "ikea", "mondo convenienza", "maisons du monde",
+    # Servizi & Cura persona
+    "jean louis david", "naturhouse", "mail boxes etc", "kipoint",
+    # Fitness
+    "virgin active", "anytime fitness", "mcfit",
+    # Ottica & Salute
+    "salmoiraghi", "grand vision", "fielmann",
+    # Automotive
+    "norauto", "midas", "euromaster",
+]
+
+# --- DOMINI SOCIAL MEDIA (per esclusione immediata) ---
+SOCIAL_MEDIA_DOMAINS: Final[List[str]] = [
+    "facebook.com", "instagram.com", "linkedin.com", "twitter.com", 
+    "x.com", "tiktok.com", "youtube.com", "pinterest.com", 
+    "wa.me", "linktr.ee", "msha.ke", "lnk.bio"
+]

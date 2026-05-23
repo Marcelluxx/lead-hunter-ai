@@ -1,4 +1,5 @@
 requests
+httpx
 pandas
 openpyxl
 python-dotenv
@@ -6,3 +7,7 @@ openai
 streamlit
 folium
 streamlit-folium
+beautifulsoup4
+playwright
+python-whois
+html2text

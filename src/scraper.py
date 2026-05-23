@@ -77,6 +77,7 @@ class LeadScraper:
         on_progress: Callable[[int, int], None] -> riceve (punto_attuale, totale_punti)
         """
         all_leads = []
+        seen_ids = set()
         grid_coords = self._generate_grid(center_lat, center_lng)
         total_points = len(grid_coords)
         
@@ -89,7 +90,13 @@ class LeadScraper:
             print(f"   ⏳ Scansione punto {idx}/{total_points} ({coord['lat']}, {coord['lng']})...")
             
             places = self._fetch_places_at_location(query, coord["lat"], coord["lng"])
-            all_leads.extend(places)
+            
+            # Deduplicazione base per ID
+            for p in places:
+                p_id = p.get("id")
+                if p_id and p_id not in seen_ids:
+                    seen_ids.add(p_id)
+                    all_leads.append(p)
             
             # --- RATE LIMITING OBBLIGATORIO ---
             # Pausa di 1 secondo tra le chiamate per rispettare le quote di Google

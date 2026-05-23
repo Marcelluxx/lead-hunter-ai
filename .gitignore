@@ -1,3 +1,20 @@
 .env
 __pycache__/
 *.xlsx
+
+# Claude
+.claude
+CLAUDE.md
+
+# Prompt di sistema (proprietari — non pubblicare)
+src/prompts.py
+
+# Ambienti virtuali
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+docs
