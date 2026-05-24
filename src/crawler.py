@@ -7,6 +7,7 @@ Includes multi-page crawling, email extraction, and token-mode content preparati
 """
 
 import re
+import json
 import asyncio
 import logging
 from dataclasses import dataclass, field
@@ -15,6 +16,10 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
+from openai import OpenAI
+
+from .config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, LLM_MODEL_FREE
+from .prompts import SYSTEM_LINK_DISCOVERY, build_link_discovery_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +64,11 @@ class HybridCrawler:
         self.max_pages = max_pages
         self.token_mode = token_mode
         self._http_client: Optional[httpx.AsyncClient] = None
+        self.client = OpenAI(
+            base_url=OPENROUTER_BASE_URL,
+            api_key=OPENROUTER_API_KEY,
+        )
+        self.model_free = LLM_MODEL_FREE
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._http_client is None or self._http_client.is_closed:
@@ -105,11 +115,28 @@ class HybridCrawler:
             result.pages[url] = prepared_content
             all_emails.update(self._extract_emails(html))
 
-            # --- Crawl pagine interne prioritarie ---
+            # --- Crawl pagine interne ---
             priority_links = self._discover_priority_links(url, soup)
-            pages_crawled = 1
+            all_links = list(priority_links)
+            pages_crawled = 1 + len(all_links)
 
-            for link_url in priority_links:
+            # Se abbiamo ancora spazio per altre pagine, usa l'LLM intelligente per scoprire altri link rilevanti
+            if pages_crawled < self.max_pages:
+                needed_count = self.max_pages - pages_crawled
+                logger.info(f"Ricerca intelligente link via LLM necessaria: mancano {needed_count} pagine...")
+                llm_links = await self._discover_links_with_llm(
+                    base_url=url,
+                    soup=soup,
+                    needed_count=needed_count,
+                    exclude_urls=set(all_links)
+                )
+                for l_url in llm_links:
+                    if l_url not in all_links and len(all_links) < (self.max_pages - 1):
+                        all_links.append(l_url)
+
+            # Esegui crawling effettivo di tutte le pagine trovate (sia statiche che da LLM)
+            pages_crawled = 1
+            for link_url in all_links:
                 if pages_crawled >= self.max_pages:
                     break
                 try:
@@ -241,6 +268,120 @@ class HybridCrawler:
 
         return list(found)[:self.max_pages - 1]  # -1 perché la homepage è già inclusa
 
+    async def _discover_links_with_llm(
+        self,
+        base_url: str,
+        soup: BeautifulSoup,
+        needed_count: int,
+        exclude_urls: Set[str],
+        max_retries: int = 3
+    ) -> List[str]:
+        """
+        Analizza tutti i link interni trovati sulla pagina che non corrispondono alle regole statiche,
+        e interroga LLM_MODEL_FREE per selezionare i link più rilevanti (es. servizi, portfolio, etc.)
+        al fine di riempire gli slot di crawling rimasti vuoti.
+        """
+        parsed_base = urlparse(base_url)
+        base_domain = parsed_base.netloc
+        
+        # Raccogli tutti i link interni validi
+        candidate_links = []
+        seen_hrefs = set()
+        
+        for a_tag in soup.find_all("a", href=True):
+            href = a_tag["href"].strip()
+            if not href:
+                continue
+                
+            full_url = urljoin(base_url, href)
+            parsed = urlparse(full_url)
+            
+            # Solo link interni (stesso dominio)
+            if parsed.netloc and parsed.netloc != base_domain:
+                continue
+                
+            # Ignora ancoraggi, file, e link esterni
+            if parsed.scheme and parsed.scheme not in ("http", "https"):
+                continue
+                
+            # Ignora url di base, url già scartati o già inclusi nei prioritari
+            clean_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+            if clean_url == base_url or clean_url in exclude_urls or clean_url in seen_hrefs:
+                continue
+                
+            # Ignora privacy, cookie e contatti generici (se per caso non sono già prioritari)
+            path_lower = parsed.path.lower()
+            if any(p in path_lower for p in ["privacy", "cookie", "legal", "logout"]):
+                continue
+                
+            # Ottieni l'etichetta del link (anchor text)
+            label = a_tag.get_text(separator=" ", strip=True)
+            if not label:
+                # Controlla se c'è un attributo title o alt
+                label = a_tag.get("title", "").strip() or a_tag.get("alt", "").strip()
+            
+            # Riduci spazi bianchi consecutivi all'interno della label
+            label = re.sub(r'\s+', ' ', label)
+            if len(label) > 100:
+                label = label[:100] + "..."
+                
+            # Se la label è ancora vuota o è solo caratteri speciali, usa il nome del file
+            if not label or label in [">", "<", "-", "_", "|", "»", "«"]:
+                label = parsed.path.split("/")[-1] or "Collegamento"
+                
+            seen_hrefs.add(clean_url)
+            candidate_links.append({
+                "url": clean_url,
+                "label": label
+            })
+            
+        if not candidate_links:
+            logger.info("Nessun link candidato trovato per la ricerca intelligente.")
+            return []
+            
+        # Filtriamo al massimo 40 link per non sovraccaricare il contesto del modello free
+        candidate_links = candidate_links[:40]
+        
+        links_json = json.dumps(candidate_links, ensure_ascii=False, indent=2)
+        prompt = build_link_discovery_prompt(needed_count, links_json)
+        
+        for attempt in range(max_retries):
+            try:
+                # Chiamata bloccante eseguita in un thread asincrono per non bloccare l'event loop
+                loop = asyncio.get_event_loop()
+                response = await loop.run_in_executor(
+                    None,
+                    lambda: self.client.chat.completions.create(
+                        model=self.model_free,
+                        messages=[
+                            {"role": "system", "content": SYSTEM_LINK_DISCOVERY},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.1
+                    )
+                )
+                raw_response = response.choices[0].message.content
+                if not raw_response:
+                    continue
+                    
+                # Pulisce ed estrae l'array JSON
+                match = re.search(r'\[.*\]', raw_response, re.DOTALL)
+                if match:
+                    json_str = match.group(0)
+                    selected_urls = json.loads(json_str)
+                    if isinstance(selected_urls, list):
+                        # Assicuriamoci che siano stringhe e rimuoviamo duplicati mantenendo l'ordine
+                        cleaned_selected = []
+                        for u in selected_urls:
+                            if isinstance(u, str) and u not in cleaned_selected:
+                                cleaned_selected.append(u)
+                        logger.info(f"Ricerca intelligente completata. Selezionati {len(cleaned_selected)} link: {cleaned_selected}")
+                        return cleaned_selected[:needed_count]
+            except Exception as e:
+                logger.error(f"Errore durante la ricerca intelligente dei link (tentativo {attempt+1}): {e}")
+                
+        return []
+
     def _extract_emails(self, html: str) -> Set[str]:
         """Estrae email dal testo HTML e dagli attributi mailto."""
         emails: Set[str] = set()
@@ -279,8 +420,19 @@ class HybridCrawler:
         - optimized: Markdown pulito, solo testo e headers
         """
         if self.token_mode == "optimized":
-            return self._prepare_optimized(html)
-        return self._prepare_high_fidelity(html)
+            content = self._prepare_optimized(html)
+        else:
+            content = self._prepare_high_fidelity(html)
+
+        # Compattamento degli spazi e dei caratteri a capo per massimizzare l'efficienza dei token
+        # 1. Rimuove gli spazi bianchi finali da ogni singola riga
+        content = "\n".join(line.rstrip() for line in content.splitlines())
+        # 2. Sostituisce 3 o più ritorni a capo consecutivi con al massimo 2 (\n\n)
+        content = re.sub(r'\n{3,}', '\n\n', content)
+        # 3. Sostituisce 3 o più spazi consecutivi con un singolo spazio
+        content = re.sub(r' {3,}', ' ', content)
+        # 4. Rimuove spazi e ritorni a capo all'inizio e alla fine dell'intero testo
+        return content.strip()
 
     def _prepare_high_fidelity(self, html: str) -> str:
         """

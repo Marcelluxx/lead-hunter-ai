@@ -378,6 +378,7 @@ if __name__ == "__main__":
                         help=f"Max pagine da crawlare per sito (default: {MAX_CRAWL_PAGES})")
 
     # Flag speciali
+    parser.add_argument("--test-url", type=str, help="Esegue un test diagnostico completo su un singolo URL (salva HTML/CSS/testi in test_output/)")
     parser.add_argument("--gui", action="store_true", help="Avvia l'interfaccia grafica Streamlit")
     parser.add_argument("--examples", action="store_true", help="Mostra gli esempi d'uso ed esci")
 
@@ -385,6 +386,11 @@ if __name__ == "__main__":
 
     if args.examples:
         show_examples()
+
+    if args.test_url:
+        from src.tester import run_url_test
+        run_url_test(args.test_url, max_pages=args.max_pages, token_mode=args.token_mode)
+        sys.exit(0)
 
     if args.gui:
         print("🎨 Avvio interfaccia grafica Streamlit...")

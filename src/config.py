@@ -21,6 +21,7 @@ OPENROUTER_BASE_URL: Final[str] = "https://openrouter.ai/api/v1"
 
 # --- LLM CONFIG ---
 LLM_MODEL: Final[str] = os.getenv("LLM_MODEL", "meta-llama/llama-3.1-8b-instruct")
+LLM_MODEL_FREE: Final[str] = os.getenv("LLM_MODEL_FREE", "google/gemini-2.5-flash:free")
 
 # --- GRID SEARCH CONFIG ---
 GRID_SIZE: Final[int] = 3            # Griglia 3x3

@@ -18,3 +18,4 @@ venv/
 .idea/
 
 docs
+test_output/

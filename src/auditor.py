@@ -19,12 +19,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from openai import OpenAI
 import openai
 
-from .config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, LLM_MODEL
+from .config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, LLM_MODEL, LLM_MODEL_FREE
 from .prompts import (
     SYSTEM_NO_WEBSITE,
     SYSTEM_WEBSITE_AUDIT,
+    SYSTEM_PAGE_CLEAN,
     build_no_website_prompt,
     build_website_audit_prompt,
+    build_page_clean_prompt,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,6 +38,7 @@ class LeadAuditor:
             base_url=OPENROUTER_BASE_URL,
             api_key=OPENROUTER_API_KEY,
         )
+        self.model_free = LLM_MODEL_FREE
 
     def _clean_json_output(self, raw_content: str) -> str:
         """Estrae e ripulisce il JSON dal testo generato dall'LLM."""
@@ -97,6 +100,49 @@ class LeadAuditor:
             "key_weakness": "Assenza di presenza web proprietaria.",
         }
 
+    def _clean_page_with_free_llm(self, page_url: str, content: str, max_retries: int = 3) -> str:
+        """
+        Pulisce e ricostruisce una pagina web utilizzando il modello economico/gratuito
+        configurato in LLM_MODEL_FREE per ridurre i token inutili ed eliminare codice
+        broken o boilerplate non necessario.
+        """
+        label = self._label_page(page_url)
+        # Tronca a 25000 caratteri per evitare di superare limiti fisici o abusare del contesto,
+        # riducendo comunque le dimensioni se eccessive.
+        truncated_content = content[:25000] if len(content) > 25000 else content
+
+        user_prompt = build_page_clean_prompt(page_url, label, truncated_content)
+
+        for attempt in range(max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model_free,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PAGE_CLEAN},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=0.3
+                )
+                raw_response = response.choices[0].message.content
+                if not raw_response:
+                    continue
+                # Rimuove spazi finali di riga, linee vuote inutili per l'efficienza massima dei token
+                lines = [line.rstrip() for line in raw_response.splitlines() if line.strip()]
+                return "\n".join(lines)
+            except openai.RateLimitError:
+                wait = (3 ** attempt) + random.uniform(1, 3)
+                if attempt < max_retries - 1:
+                    logger.warning(f"Rate limit per pulizia pagina '{page_url}', attendo {wait:.1f}s...")
+                    time.sleep(wait)
+            except Exception as e:
+                logger.error(f"Errore pulizia pagina con LLM gratuito '{page_url}': {e}")
+                break
+
+        # Fallback al testo originale se la chiamata fallisce
+        logger.warning(f"Fallback al testo originale per la pagina '{page_url}'")
+        orig_lines = [line.rstrip() for line in content.splitlines() if line.strip()]
+        return "\n".join(orig_lines)[:4000]
+
     # ==========================================
     # MODALITÀ 2: AUDIT SITO WEB COMPLETO
     # ==========================================
@@ -113,12 +159,44 @@ class LeadAuditor:
         Audit completo del sito web tramite LLM.
         Output: website_score, diagnosis, site_brief, cold_message.
         """
-        # Componi il contenuto delle pagine crawlate
-        pages_content = ""
-        for page_url, content in crawl_pages.items():
+        # Pulisci le pagine in parallelo usando ThreadPoolExecutor
+        cleaned_crawl_pages = {}
+        if crawl_pages:
+            logger.info(f"Avvio pulizia parallela di {len(crawl_pages)} pagine per '{business_name}'...")
+            with ThreadPoolExecutor(max_workers=len(crawl_pages)) as executor:
+                # Conserva l'ordine originale mappando direttamente URL -> Future
+                future_to_url = {
+                    url: executor.submit(self._clean_page_with_free_llm, url, text)
+                    for url, text in crawl_pages.items()
+                }
+                # Raccogli i risultati seguendo l'ordine esatto di crawl_pages
+                for url in crawl_pages.keys():
+                    future = future_to_url[url]
+                    try:
+                        cleaned_crawl_pages[url] = future.result()
+                    except Exception as exc:
+                        logger.error(f"Eccezione durante la pulizia parallela per {url}: {exc}")
+                        # Fallback
+                        orig_lines = [line.rstrip() for line in crawl_pages[url].splitlines() if line.strip()]
+                        cleaned_crawl_pages[url] = "\n".join(orig_lines)[:4000]
+        else:
+            cleaned_crawl_pages = {}
+
+        # Componi il contenuto delle pagine in modo altamente strutturato ed XML-like per massimizzare la precisione e l'efficienza
+        pages_content = f"<total_pages>{len(cleaned_crawl_pages)}</total_pages>\n"
+        pages_content += "<pages_index>\n"
+        for idx, (page_url, _) in enumerate(cleaned_crawl_pages.items(), 1):
             label = self._label_page(page_url)
-            truncated = content[:4000] if len(content) > 4000 else content
-            pages_content += f"\n\n--- PAGINA: {label} ({page_url}) ---\n{truncated}"
+            pages_content += f"  - Page {idx}: {label} ({page_url})\n"
+        pages_content += "</pages_index>\n\n"
+
+        for idx, (page_url, content) in enumerate(cleaned_crawl_pages.items(), 1):
+            label = self._label_page(page_url)
+            pages_content += (
+                f'<page id="{idx}" label="{label}" url="{page_url}">\n'
+                f'{content}\n'
+                f'</page>\n\n'
+            )
 
         prompt = build_website_audit_prompt(
             business_name, category, rating, review_count, pages_content
@@ -148,6 +226,9 @@ class LeadAuditor:
                     "diagnosis": data.get("diagnosis", "Analisi non disponibile."),
                     "site_brief": data.get("site_brief", ""),
                     "cold_message": data.get("cold_message", ""),
+                    "raw_response": raw,
+                    "cleaned_pages": cleaned_crawl_pages,
+                    "full_prompt": f"=== SYSTEM PROMPT ===\n{SYSTEM_WEBSITE_AUDIT}\n\n=== USER PROMPT ===\n{prompt}",
                 }
 
             except openai.RateLimitError:
@@ -168,6 +249,9 @@ class LeadAuditor:
             "diagnosis": "Errore durante l'analisi AI del sito web.",
             "site_brief": "",
             "cold_message": "",
+            "raw_response": "",
+            "cleaned_pages": cleaned_crawl_pages,
+            "full_prompt": f"=== SYSTEM PROMPT ===\n{SYSTEM_WEBSITE_AUDIT}\n\n=== USER PROMPT ===\n{prompt}" if 'prompt' in locals() else "",
         }
 
     def _label_page(self, url: str) -> str:

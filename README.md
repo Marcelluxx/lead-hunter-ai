@@ -13,15 +13,13 @@ Lead Hunter V3 is an AI-powered tool for automated B2B lead generation. It scrap
 
 ### Core Capabilities
 
-- **Grid-Based Scraping**: Scans a configurable 3x3 grid (9 API calls per keyword) to bypass Google's 20-result limit and ensure maximum area coverage.
-- **Hybrid Web Crawler**: Two-pass architecture — fast static fetch (`httpx` + `BeautifulSoup`) with automatic fallback to headless `Playwright` for JavaScript-rendered sites (Wix, Squarespace, etc.).
-- **Smart Filtering Pipeline** (Website Audit mode):
-  - **Review Filter**: Rating > 3.9, review count between 1 and 100.
-  - **Business Age Filter**: WHOIS domain age + regex copywriting analysis (e.g., "fondata nel 2005", "da oltre 15 anni"). If neither source finds data, the lead passes.
-  - **Scale Filter**: Excludes e-commerce sites and known national franchises/chains.
-- **AI Website Audit**: Sends crawled content to an LLM (via OpenRouter) for critical evaluation of copywriting, legal compliance, design, UX, and core services. Outputs a score (1–10), detailed diagnosis, site brief, and personalized cold outreach email.
+- **Hybrid Web Crawler**: Two-pass architecture — fast static fetch (`httpx` + `BeautifulSoup`) with automatic fallback to headless `Playwright` for JavaScript-rendered sites. Features **Intelligent AI Link Discovery** using a lightweight LLM (`LLM_MODEL_FREE`) to dynamically select the most relevant commercial subpages (e.g. custom pages like `attivita.html` or `struttura.html`) when static regex rules fail.
+- **Token Optimization & Whitespace Collapse**: Active token reduction system that strips trailing whitespaces, collapses 3+ consecutive blank lines to at most 2 newlines (`\n\n`), and collapses 3+ consecutive spaces into a single space, drastically reducing LLM token consumption.
+- **Two-Tier AI Website Audit**: Audits crawled websites using a robust two-stage pipeline:
+  1. **Parallel Pre-processing**: Clean and summarize all crawled pages simultaneously in parallel concurrent threads using `LLM_MODEL_FREE` to remove layout boilerplate.
+  2. **Audit Execution**: The main auditor LLM (via OpenRouter) receives pristine XML structured page content (with a total page index) to critically evaluate copywriting, legal compliance (e.g., Partita IVA in footer), UX, and core services. Outputs a score (1–10), detailed diagnosis, site brief, and personalized cold outreach hook.
 - **Email Extraction**: Automatically detects emails during crawling via regex and `mailto:` attribute inspection.
-- **Token Optimization**: Choose between High-Fidelity (semantic HTML + CSS class hints) and Optimized (clean Markdown) modes to control LLM token consumption.
+- **Technical Diagnostics**: Generates detailed testing diagnostics inside `test_output/`, including the real compiled XML prompt sent (`ai_prompt_sent.txt`), raw JSON responses from OpenRouter (`ai_raw_response.txt`), and the intermediate LLM-cleaned subpages (`page_X_..._cleaned.txt`).
 - **Professional Excel Export**: Formatted with `openpyxl` — colored headers, alternating rows, conditional score coloring, freeze panes, and auto-filter.
 - **Dual Interface**: Interactive Streamlit GUI with real-time progress tracking, or a full-featured CLI for automation.
 
@@ -70,6 +68,7 @@ Edit `.env` with your credentials:
 | `GOOGLE_API_KEY` | [Google Cloud Console](https://console.cloud.google.com/) | Requires **Places API (New)** enabled |
 | `OPENROUTER_API_KEY` | [OpenRouter](https://openrouter.ai/) | For LLM-based auditing |
 | `LLM_MODEL` | OpenRouter model ID | Default: `meta-llama/llama-3.1-8b-instruct` |
+| `LLM_MODEL_FREE` | OpenRouter model ID | Secondary lightweight/free model for pre-processing and dynamic link discovery (e.g. `google/gemini-2.5-flash:free`) |
 | `TOKEN_MODE` | `high_fidelity` or `optimized` | Controls how website content is sent to the LLM |
 
 ### 6. Setup Prompts File (Required)
