@@ -11,3 +11,4 @@ beautifulsoup4
 playwright
 python-whois
 html2text
+playwright-stealth

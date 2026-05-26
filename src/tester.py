@@ -32,13 +32,14 @@ def run_url_test(
     url: str,
     max_pages: int = 5,
     token_mode: str = "high_fidelity",
+    headless: bool = True,
 ) -> None:
     """
     Funzione principale che orchestra il test di un sito web e scrive i risultati
     sia nel terminale che in file temporanei dentro 'test_output/'.
     """
     print(f"\n🧪 INIZIO TEST DI DIAGNOSTICA SITO: {url}")
-    print(f"   Max Pagine: {max_pages} | Token Mode: {token_mode}")
+    print(f"   Max Pagine: {max_pages} | Token Mode: {token_mode} | Headless: {headless}")
     print("=" * 60)
 
     # 1. Setup Cartella di Output
@@ -63,7 +64,7 @@ def run_url_test(
     log_both(f"   - Testo elaborato per LLM: {proc_dir}\n")
 
     # 2. Inizializzazione Crawler
-    crawler = HybridCrawler(max_pages=max_pages, token_mode=token_mode)
+    crawler = HybridCrawler(max_pages=max_pages, token_mode=token_mode, headless=headless)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 

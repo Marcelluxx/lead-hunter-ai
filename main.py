@@ -107,6 +107,7 @@ class LeadHunterOrchestrator:
         min_age: int = MIN_BUSINESS_AGE_YEARS,
         max_pages: int = MAX_CRAWL_PAGES,
         token_mode: str = TOKEN_MODE,
+        headless: bool = True,
         on_phase: Optional[Callable] = None,
         on_progress: Optional[Callable] = None,
         on_crawl_progress: Optional[Callable] = None,
@@ -189,7 +190,7 @@ class LeadHunterOrchestrator:
 
         from concurrent.futures import ThreadPoolExecutor, as_completed
         
-        crawler = HybridCrawler(max_pages=max_pages, token_mode=token_mode)
+        crawler = HybridCrawler(max_pages=max_pages, token_mode=token_mode, headless=headless)
         
         total_to_crawl = len(filtered_places)
         total_to_audit = 0
@@ -376,6 +377,8 @@ if __name__ == "__main__":
                         default=TOKEN_MODE, help=f"Modalità token LLM (default: {TOKEN_MODE})")
     parser.add_argument("--max-pages", type=int, default=MAX_CRAWL_PAGES,
                         help=f"Max pagine da crawlare per sito (default: {MAX_CRAWL_PAGES})")
+    parser.add_argument("--no-headless", action="store_true",
+                        help="Disabilita la modalità headless di Playwright (esegue il browser visibile headed)")
 
     # Flag speciali
     parser.add_argument("--test-url", type=str, help="Esegue un test diagnostico completo su un singolo URL (salva HTML/CSS/testi in test_output/)")
@@ -389,7 +392,7 @@ if __name__ == "__main__":
 
     if args.test_url:
         from src.tester import run_url_test
-        run_url_test(args.test_url, max_pages=args.max_pages, token_mode=args.token_mode)
+        run_url_test(args.test_url, max_pages=args.max_pages, token_mode=args.token_mode, headless=not args.no_headless)
         sys.exit(0)
 
     if args.gui:
@@ -427,6 +430,7 @@ if __name__ == "__main__":
                 min_age=args.min_age,
                 max_pages=args.max_pages,
                 token_mode=args.token_mode,
+                headless=not args.no_headless,
             )
         else:
             results = orchestrator.run(args.lat, args.lng, args.keywords)

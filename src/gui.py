@@ -235,6 +235,12 @@ with col1:
         else:
             st.markdown('<p class="param-hint">Converte in Markdown pulito — meno token, analisi solo su contenuti testuali</p>', unsafe_allow_html=True)
 
+        headless = st.toggle("🕵️ Modalità Invisibile (Headless)", value=True)
+        if headless:
+            st.markdown('<p class="param-hint">Esegue il browser in background in modalità invisibile con bypass stealth</p>', unsafe_allow_html=True)
+        else:
+            st.markdown('<p class="param-hint">Mostra la finestra reale del browser durante il crawling (modalità Headed)</p>', unsafe_allow_html=True)
+
     # --- POSIZIONE ---
     st.markdown("<hr style='margin: 12px 0; border: none; border-top: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
     st.markdown("#### 📍 Centro Scansione")
@@ -416,6 +422,7 @@ if start_btn:
                         min_age=min_age,
                         max_pages=max_pages,
                         token_mode=token_mode_str,
+                        headless=headless,
                         on_phase=on_phase,
                         on_progress=on_progress,
                         on_crawl_progress=on_crawl_progress,

@@ -13,6 +13,18 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urljoin, urlparse
+import random
+
+try:
+    from playwright_stealth import Stealth
+    _has_modern_stealth = True
+except ImportError:
+    try:
+        from playwright_stealth import stealth_async
+        _has_modern_stealth = False
+    except ImportError:
+        _has_modern_stealth = None
+
 
 import httpx
 from bs4 import BeautifulSoup
@@ -60,9 +72,10 @@ class CrawlResult:
 class HybridCrawler:
     """Crawler ibrido: prima tenta fetch statico, poi fallback Playwright."""
 
-    def __init__(self, max_pages: int = 5, token_mode: str = "high_fidelity"):
+    def __init__(self, max_pages: int = 5, token_mode: str = "high_fidelity", headless: bool = True):
         self.max_pages = max_pages
         self.token_mode = token_mode
+        self.headless = headless
         self._http_client: Optional[httpx.AsyncClient] = None
         self.client = OpenAI(
             base_url=OPENROUTER_BASE_URL,
@@ -183,32 +196,126 @@ class HybridCrawler:
             return "", True  # Consideriamo come shell -> triggera Playwright
 
     async def _dynamic_fetch(self, url: str) -> str:
-        """Fallback asincrono con Playwright (headless Chromium)."""
+        """
+        Fallback asincrono con Playwright.
+        Applica una strategia a due tentativi per bypassare i blocchi WAF:
+        1. Primo tentativo in Headless con Stealth, custom viewport, locale e timezone.
+        2. In caso di errore 403 (Forbidden), esegue un fallback in Headed (senza Stealth) come ultima risorsa.
+        """
         try:
             from playwright.async_api import async_playwright
 
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
+            async def _run_fetch(p, is_headless: bool) -> tuple[str, int]:
+                # Ritardo casuale per ridurre i picchi di traffico e tracciamento
+                await asyncio.sleep(random.uniform(0.5, 1.5))
+                
+                browser = await p.chromium.launch(headless=is_headless)
                 context = await browser.new_context(
+                    viewport={"width": 1280, "height": 800},
+                    locale="it-IT",
+                    timezone_id="Europe/Rome",
+                    java_script_enabled=True,
                     user_agent=(
                         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                         "AppleWebKit/537.36 (KHTML, like Gecko) "
                         "Chrome/120.0.0.0 Safari/537.36"
                     )
                 )
+
+                # Applica stealth in headless per camuffare i parametri di automazione
+                if is_headless and _has_modern_stealth is True:
+                    stealth = Stealth()
+                    await stealth.apply_stealth_async(context)
+
                 page = await context.new_page()
 
+                if is_headless and _has_modern_stealth is False:
+                    await stealth_async(page)
+
                 try:
-                    await page.goto(url, wait_until="networkidle", timeout=20000)
-                    html = await page.content()
-                    return html
+                    resp = await page.goto(url, wait_until="networkidle", timeout=25000)
+                    status_code = resp.status if resp else 0
+                    
+                    # Simula interazione umana (scroll, pause) per far caricare contenuti dinamici
+                    await self._emulate_human_interaction(page)
+                    
+                    html_content = await page.content()
+                    return html_content, status_code
                 finally:
                     await context.close()
                     await browser.close()
 
+            async with async_playwright() as p:
+                if self.headless:
+                    # Tentativo 1: Headless con Stealth
+                    html, status = await _run_fetch(p, is_headless=True)
+                    
+                    # Se otteniamo 403 o la pagina contiene indicatori di blocco/forbidden, tentiamo il fallback headed
+                    is_blocked = (
+                        status == 403 or 
+                        "403 Forbidden" in html or 
+                        "403 - Forbidden" in html or
+                        "Access to this page is forbidden" in html
+                    )
+                    
+                    if is_blocked:
+                        logger.info(f"Rilevato blocco 403 in modalità headless per {url}. Tentativo di fallback in modalità HEADED...")
+                        html, status = await _run_fetch(p, is_headless=False)
+                else:
+                    # Avvia direttamente in modalità headed
+                    logger.info(f"Modalità HEADED richiesta dall'utente. Avvio diretto in modalità headed per {url}...")
+                    html, status = await _run_fetch(p, is_headless=False)
+                    
+                return html
+
         except Exception as e:
             logger.error(f"Playwright fallito per {url}: {e}")
             return ""
+
+    async def _emulate_human_interaction(self, page) -> None:
+        """Simula uno scorrimento umano non lineare per ridurre i sospetti di automazione e forzare il rendering dei contenuti dinamici."""
+        try:
+            # Attesa casuale prima di iniziare l'interazione
+            await asyncio.sleep(random.uniform(0.5, 1.2))
+
+            # Ottiene le dimensioni della pagina
+            total_height = await page.evaluate("document.body.scrollHeight")
+            viewport_height = await page.evaluate("window.innerHeight")
+            
+            if not total_height or total_height <= viewport_height:
+                return
+
+            current_scroll = 0
+            steps = random.randint(3, 6)
+            
+            for _ in range(steps):
+                if current_scroll >= total_height - viewport_height:
+                    break
+                
+                # Passo di scorrimento casuale e asimmetrico
+                scroll_step = random.randint(180, 420)
+                current_scroll += scroll_step
+                
+                # Esegue lo scorrimento smooth tramite JavaScript
+                await page.evaluate(f"window.scrollTo({{top: {current_scroll}, behavior: 'smooth'}})")
+                
+                # Simula una pausa di lettura casuale
+                await asyncio.sleep(random.uniform(0.6, 1.5))
+                
+                # Micro-esitazione comportamentale: 20% di possibilità di tornare leggermente indietro per simulare la lettura
+                if random.random() < 0.20 and current_scroll > 150:
+                    back_step = random.randint(40, 90)
+                    current_scroll -= back_step
+                    await page.evaluate(f"window.scrollTo({{top: {current_scroll}, behavior: 'smooth'}})")
+                    await asyncio.sleep(random.uniform(0.3, 0.7))
+                    current_scroll += back_step  # Riprende lo scorrimento
+
+            # Ritorno graduale all'inizio della pagina prima di prelevare il codice finale
+            await page.evaluate("window.scrollTo({top: 0, behavior: 'smooth'})")
+            await asyncio.sleep(random.uniform(0.5, 1.0))
+        except Exception as e:
+            logger.debug(f"Errore durante l'emulazione dell'interazione umana: {e}")
+
 
     def _detect_js_shell(self, html: str) -> bool:
         """
