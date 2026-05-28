@@ -1,4 +1,4 @@
-# `<p align="center">`🎯 Lead Hunter V3`</p>`
+<h1 align="center">🎯 Lead Hunter V3</h1>
 
 <p align="center">
   <strong>Enterprise-Grade AI-Powered B2B Lead Generation & Web Auditing Agent</strong>
