@@ -87,3 +87,7 @@ SOCIAL_MEDIA_DOMAINS: Final[List[str]] = [
     "x.com", "tiktok.com", "youtube.com", "pinterest.com", 
     "wa.me", "linktr.ee", "msha.ke", "lnk.bio"
 ]
+
+# --- OUTPUT CONFIGURATION ---
+OUTPUT_DIR: Final[str] = "outputs"
+

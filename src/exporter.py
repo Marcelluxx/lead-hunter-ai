@@ -5,10 +5,12 @@ Export duale:
   - Modalità "with_website": colonne estese con audit sito web
 """
 
+import os
 from typing import Union, List, Dict
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+
 
 
 class DataExporter:
@@ -46,6 +48,11 @@ class DataExporter:
         if not leads:
             print("[Exporter] Nessun lead da esportare.")
             return
+
+        # Assicurati che la cartella di destinazione esista
+        dir_name = os.path.dirname(filename)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
 
         leads_list = list(leads.values()) if isinstance(leads, dict) else leads
 

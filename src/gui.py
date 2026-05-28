@@ -24,6 +24,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from config import (
     GRID_SIZE, GRID_STEP_KM, RADIUS_M, LAT_DEGREE_KM,
     MIN_RATING, MAX_REVIEWS, MIN_BUSINESS_AGE_YEARS, MAX_CRAWL_PAGES,
+    OUTPUT_DIR,
 )
 from main import LeadHunterOrchestrator
 from exporter import DataExporter
@@ -451,13 +452,14 @@ if start_btn:
                 )
                 date_str = datetime.now().strftime("%d_%m_%Y")
                 filename = f"Lead_Hunter_{city}_{date_str}.xlsx"
-                DataExporter.export_to_excel(results, mode=mode_key, filename=filename)
+                filepath = os.path.join(OUTPUT_DIR, filename)
+                DataExporter.export_to_excel(results, mode=mode_key, filename=filepath)
 
                 st.markdown("### 💎 Database Lead Premium")
                 df = pd.DataFrame(results)
                 st.dataframe(df, use_container_width=True)
 
-                with open(filename, "rb") as f:
+                with open(filepath, "rb") as f:
                     st.download_button(
                         label=f"📥 SCARICA REPORT: {filename}",
                         data=f,

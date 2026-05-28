@@ -5,6 +5,7 @@ Supporta due modalità operative:
   - "with_website": Lead con sito web + crawling + audit AI completo
 """
 
+import os
 import sys
 import asyncio
 import argparse
@@ -28,7 +29,7 @@ from src.filters import (
 from src.config import (
     MIN_RATING, MAX_REVIEWS, MIN_BUSINESS_AGE_YEARS,
     MAX_CRAWL_PAGES, TOKEN_MODE, ECOMMERCE_INDICATORS, KNOWN_FRANCHISES,
-    SOCIAL_MEDIA_DOMAINS,
+    SOCIAL_MEDIA_DOMAINS, OUTPUT_DIR,
 )
 
 
@@ -421,6 +422,10 @@ if __name__ == "__main__":
         date_str = datetime.now().strftime("%d_%m_%Y")
         out_file = f"Lead_Hunter_{city}_{date_str}.xlsx"
 
+    # Prepend OUTPUT_DIR if it's a bare filename
+    if not os.path.dirname(out_file):
+        out_file = os.path.join(OUTPUT_DIR, out_file)
+
     try:
         if args.mode == "with_website":
             results = orchestrator.run(
@@ -444,8 +449,9 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n⚠️ Interrotto. Esporto dati parziali...")
         if orchestrator.all_leads:
+            emergency_file = os.path.join(OUTPUT_DIR, "salvataggio_emergenza.xlsx")
             DataExporter.export_to_excel(
                 list(orchestrator.all_leads.values()),
                 mode=args.mode,
-                filename="salvataggio_emergenza.xlsx"
+                filename=emergency_file
             )
