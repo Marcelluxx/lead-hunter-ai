@@ -35,6 +35,7 @@ FIELD_MASK: Final[str] = (
     "places.id,"
     "places.displayName,"
     "places.formattedAddress,"
+    "places.addressComponents,"
     "places.nationalPhoneNumber,"
     "places.websiteUri,"
     "places.rating,"

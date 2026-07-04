@@ -11,6 +11,11 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
+try:
+    from .filters import clean_and_translate_categories, extract_address_details
+except (ImportError, ValueError):
+    from filters import clean_and_translate_categories, extract_address_details
+
 
 
 class DataExporter:
@@ -130,7 +135,7 @@ class DataExporter:
     @staticmethod
     def _get_no_website_columns() -> list:
         return [
-            "Business Name", "Category", "Address", "Phone",
+            "Business Name", "Category", "Address", "Paese", "Phone",
             "Rating", "Reviews", "Top Competitor",
             "Business Summary", "Key Weakness"
         ]
@@ -138,7 +143,7 @@ class DataExporter:
     @staticmethod
     def _get_website_columns() -> list:
         return [
-            "Business Name", "Category", "Address", "Phone",
+            "Business Name", "Category", "Address", "Paese", "Phone",
             "Rating", "Reviews", "Website",
             "Extracted Email", "Website Score",
             "Diagnosis", "Site Brief", "Cold Message"
@@ -148,14 +153,14 @@ class DataExporter:
     def _format_no_website_rows(leads: List[Dict]) -> List[list]:
         rows = []
         for lead in leads:
-            raw_types = lead.get("types", [])[:2]
-            category = ", ".join([t.replace("_", " ").title() for t in raw_types])
-            search_kw = lead.get("search_keyword", "").title()
+            category = clean_and_translate_categories(lead.get("types", []), lead.get("search_keyword", ""))
+            via_e_civico, paese = extract_address_details(lead)
 
             rows.append([
                 lead.get("displayName", {}).get("text", "N/A"),
-                category or search_kw or "N/A",
-                lead.get("formattedAddress", "N/A"),
+                category,
+                via_e_civico,
+                paese,
                 lead.get("nationalPhoneNumber", "N/A"),
                 lead.get("rating", "N/A"),
                 lead.get("userRatingCount", "N/A"),
@@ -169,9 +174,8 @@ class DataExporter:
     def _format_website_rows(leads: List[Dict]) -> List[list]:
         rows = []
         for lead in leads:
-            raw_types = lead.get("types", [])[:2]
-            category = ", ".join([t.replace("_", " ").title() for t in raw_types])
-            search_kw = lead.get("search_keyword", "").title()
+            category = clean_and_translate_categories(lead.get("types", []), lead.get("search_keyword", ""))
+            via_e_civico, paese = extract_address_details(lead)
 
             # Email: preferisci quella estratta dal crawler, fallback su Google Places
             extracted_email = lead.get("extracted_email", "")
@@ -180,8 +184,9 @@ class DataExporter:
 
             rows.append([
                 lead.get("displayName", {}).get("text", "N/A"),
-                category or search_kw or "N/A",
-                lead.get("formattedAddress", "N/A"),
+                category,
+                via_e_civico,
+                paese,
                 lead.get("nationalPhoneNumber", "N/A"),
                 lead.get("rating", "N/A"),
                 lead.get("userRatingCount", "N/A"),

@@ -10,5 +10,6 @@ streamlit-folium
 beautifulsoup4
 playwright
 python-whois
+whois
 html2text
 playwright-stealth

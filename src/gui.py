@@ -456,7 +456,13 @@ if start_btn:
                 DataExporter.export_to_excel(results, mode=mode_key, filename=filepath)
 
                 st.markdown("### 💎 Database Lead Premium")
-                df = pd.DataFrame(results)
+                if mode_key == "with_website":
+                    cols = DataExporter._get_website_columns()
+                    rows = DataExporter._format_website_rows(results)
+                else:
+                    cols = DataExporter._get_no_website_columns()
+                    rows = DataExporter._format_no_website_rows(results)
+                df = pd.DataFrame(rows, columns=cols)
                 st.dataframe(df, use_container_width=True)
 
                 with open(filepath, "rb") as f:

@@ -12,6 +12,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 from urllib.parse import urlparse
+import whois
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,6 @@ def filter_by_business_age(domain: str, html_text: str = "", min_years: int = 5)
 def _check_whois_age(domain: str, cutoff_year: int) -> Optional[bool]:
     """WHOIS lookup. Returns True/False/None."""
     try:
-        import whois
         w = whois.whois(domain)
         creation_date = w.creation_date
         if creation_date is None:
@@ -197,3 +197,219 @@ def extract_domain(url: str) -> str:
         return domain
     except Exception:
         return url
+
+
+# --- TRADUZIONE E UNIFICAZIONE CATEGORIE ---
+CATEGORY_TRANSLATIONS = {
+    "restaurant": "Ristorante",
+    "italian_restaurant": "Ristorante Italiano",
+    "pizza_restaurant": "Pizzeria",
+    "pizza": "Pizzeria",
+    "pizzeria": "Pizzeria",
+    "bar": "Bar",
+    "bar_or_pub": "Bar",
+    "pub": "Pub/Bar",
+    "cafe": "Bar",
+    "cafe_or_coffee_shop": "Bar",
+    "coffee_shop": "Bar",
+    "gelateria": "Gelateria",
+    "ice_cream_parlor": "Gelateria",
+    "bakery": "Panificio/Pasticceria",
+    "bakery_or_pastry_shop": "Panificio/Pasticceria",
+    "pastry_shop": "Pasticceria",
+    "dentist": "Dentista",
+    "dental_clinic": "Studio Dentistico",
+    "lawyer": "Avvocato",
+    "plumber": "Idraulico",
+    "electrician": "Elettricista",
+    "beauty_salon": "Centro Estetico",
+    "hair_care": "Parrucchiere",
+    "hair_salon": "Parrucchiere",
+    "spa": "Centro Benessere",
+    "gym": "Palestra",
+    "fitness_center": "Palestra",
+    "hotel": "Hotel",
+    "lodging": "Hotel/Alloggio",
+    "store": "Negozio",
+    "clothing_store": "Negozio di Abbigliamento",
+    "supermarket": "Supermercato",
+    "grocery_or_supermarket": "Supermercato",
+    "pharmacy": "Farmacia",
+    "drugstore": "Farmacia",
+    "medical_clinic": "Poliambulatorio",
+    "doctor": "Medico",
+    "physiotherapist": "Fisioterapista",
+    "veterinary_care": "Veterinario",
+    "real_estate_agency": "Agenzia Immobiliare",
+    "travel_agency": "Agenzia di Viaggi",
+    "car_repair": "Officina Meccanica",
+    "car_dealer": "Concessionario Auto",
+    "car_wash": "Autolavaggio",
+    "car_rental": "Noleggio Auto",
+    "laundry": "Lavanderia",
+    "dry_cleaning": "Lavanderia",
+    "florist": "Fioraio",
+    "jewelry_store": "Gioielleria",
+    "book_store": "Libreria",
+    "pet_store": "Negozio per Animali",
+    "electronics_store": "Negozio di Elettronica",
+    "furniture_store": "Negozio di Mobili",
+    "hardware_store": "Ferramenta",
+    "bicycle_store": "Negozio di Biciclette",
+    "school": "Scuola",
+    "university": "Università",
+    "amusement_park": "Parco Divertimenti",
+    "art_gallery": "Galleria d'Arte",
+    "museum": "Museo",
+    "night_club": "Discoteca",
+    "cinema": "Cinema",
+    "movie_theater": "Cinema",
+    "stadium": "Stadio",
+    "accounting": "Studio Commercialista",
+    "insurance_agency": "Agenzia Assicurativa",
+    "bank": "Banca",
+    "finance": "Servizi Finanziari",
+    "post_office": "Ufficio Postale",
+    "police": "Polizia",
+    "hospital": "Ospedale",
+    "funeral_home": "Impresa Funebre",
+    "moving_company": "Ditta di Traslochi",
+    "painter": "Imbianchino",
+    "roofing_contractor": "Coperture Edili",
+    "locksmith": "Fabbro",
+    "park": "Parco",
+    "parking": "Parcheggio",
+    "cemetery": "Cimitero",
+    "church": "Chiesa",
+    "place_of_worship": "Luogo di Culto",
+}
+
+IGNORED_TYPES = {
+    "point_of_interest",
+    "establishment",
+    "food",
+    "store",
+    "health",
+    "general_contractor",
+    "local_business",
+    "political",
+    "finance",
+    "lodging",
+}
+
+
+def clean_and_translate_categories(raw_types: list, search_kw: str = "") -> str:
+    """
+    Pulisce e traduce le categorie in italiano.
+    Ritorna una stringa di tag separati da virgola.
+    """
+    clean_tags = []
+    seen = set()
+    
+    # Processa i tipi di Google Maps
+    for t in raw_types:
+        t_lower = t.lower()
+        if t_lower in IGNORED_TYPES:
+            continue
+            
+        # Se è nella mappa delle traduzioni, lo traduciamo
+        if t_lower in CATEGORY_TRANSLATIONS:
+            tag = CATEGORY_TRANSLATIONS[t_lower]
+        else:
+            # Altrimenti facciamo una pulizia di base
+            tag = t_lower.replace("_", " ").title()
+            
+        if tag not in seen:
+            seen.add(tag)
+            clean_tags.append(tag)
+            
+    search_kw_clean = search_kw.strip().title() if search_kw else ""
+    
+    # Se non abbiamo nessun tag, usiamo la keyword di ricerca
+    if not clean_tags and search_kw_clean:
+        clean_tags.append(search_kw_clean)
+        
+    # Limitiamo al massimo a 2 tag per non affollare Excel
+    return ", ".join(clean_tags[:2]) if clean_tags else "N/A"
+
+
+def extract_address_details(lead: dict) -> tuple:
+    """
+    Estrae 'via_e_civico' e 'paese' (località) da un lead.
+    Ritorna una tupla (via_e_civico, paese).
+    """
+    address_components = lead.get("addressComponents", [])
+    
+    route = ""
+    street_number = ""
+    locality = ""
+    
+    for comp in address_components:
+        types = comp.get("types", [])
+        if "route" in types:
+            route = comp.get("longText", "")
+        elif "street_number" in types:
+            street_number = comp.get("longText", "")
+        elif "locality" in types:
+            locality = comp.get("longText", "")
+            
+    # Se abbiamo trovato la route tramite i componenti strutturati
+    if route:
+        if street_number:
+            via_e_civico = f"{route}, {street_number}"
+        else:
+            via_e_civico = route
+    else:
+        # Fallback se non ci sono addressComponents strutturati
+        formatted_address = lead.get("formattedAddress", "")
+        if formatted_address and formatted_address != "N/A":
+            parts = [p.strip() for p in formatted_address.split(",")]
+            if len(parts) >= 2:
+                p1 = parts[1]
+                is_civico = (len(p1) <= 8 and (any(c.isdigit() for c in p1) or p1.lower() in ["snc", "s.n.c."]))
+                if is_civico:
+                    via_e_civico = f"{parts[0]}, {p1}"
+                else:
+                    via_e_civico = parts[0]
+            else:
+                via_e_civico = formatted_address
+        else:
+            via_e_civico = "N/A"
+            
+    # Per la località (Paese/Città)
+    if not locality:
+        formatted_address = lead.get("formattedAddress", "")
+        if formatted_address and formatted_address != "N/A":
+            parts = [p.strip() for p in formatted_address.split(",")]
+            candidate = ""
+            for p in parts:
+                p_clean = p.lower()
+                if "italia" in p_clean or "italy" in p_clean:
+                    continue
+                if re.search(r'\b\d{5}\b', p):
+                    candidate = p
+                    break
+            
+            if candidate:
+                city_clean = re.sub(r'\b\d{5}\b', '', candidate).strip()
+                city_clean = re.sub(r'\b[A-Z]{2}\b', '', city_clean).strip()
+                city_clean = re.sub(r'\([A-Z]{2}\)', '', city_clean).strip()
+                locality = city_clean
+            elif len(parts) >= 2:
+                last_part = parts[-1].lower()
+                if last_part in ["italia", "italy"] and len(parts) >= 3:
+                    locality = parts[-2]
+                else:
+                    locality = parts[-1]
+                    
+    # Pulizia finale della località
+    if locality:
+        locality = re.sub(r'\b\d{5}\b', '', locality).strip()
+        locality = re.sub(r'\b[A-Z]{2}\b', '', locality).strip()
+        locality = re.sub(r'\([A-Z]{2}\)', '', locality).strip()
+        locality = locality.strip(", ")
+        
+    if not locality or locality.lower() == "n/a":
+        locality = lead.get("search_keyword", "N/A").title()
+        
+    return via_e_civico, locality

@@ -25,6 +25,7 @@ from src.filters import (
     filter_franchise,
     extract_domain,
     filter_social_media,
+    clean_and_translate_categories,
 )
 from src.config import (
     MIN_RATING, MAX_REVIEWS, MIN_BUSINESS_AGE_YEARS,
@@ -211,9 +212,7 @@ class LeadHunterOrchestrator:
                 p_id = place.get("id")
                 website = place.get("websiteUri", "")
                 name = place.get("displayName", {}).get("text", "?")
-                raw_types = place.get("types", [])[:2]
-                category = ", ".join([t.replace("_", " ").title() for t in raw_types])
-                search_kw = place.get("search_keyword", "").title()
+                category = clean_and_translate_categories(place.get("types", []), place.get("search_keyword", ""))
                 
                 # Update Crawl Progress
                 if on_crawl_progress:
@@ -253,7 +252,7 @@ class LeadHunterOrchestrator:
                     audit_payload = {
                         "crawl_pages": crawl_res.pages,
                         "business_name": name,
-                        "category": category or search_kw,
+                        "category": category,
                         "rating": place.get("rating", 0),
                         "review_count": place.get("userRatingCount", 0),
                     }
