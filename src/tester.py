@@ -187,6 +187,7 @@ def run_url_test(
         log_both("\n🤖 RISPOSTA AI AUDIT:")
         log_both("=" * 60)
         log_both(f"📊 website_score: {audit_res.get('website_score')}/10")
+        log_both(f"🛠️ framework: {audit_res.get('framework')}")
         log_both(f"🔬 diagnosis: {audit_res.get('diagnosis')}")
         log_both(f"📝 site_brief: {audit_res.get('site_brief')}")
         log_both(f"💬 cold_message (hook): {audit_res.get('cold_message')}")
@@ -223,6 +224,7 @@ def run_url_test(
             "website_score": audit_res.get("website_score"),
             "diagnosis": audit_res.get("diagnosis"),
             "site_brief": audit_res.get("site_brief"),
+            "framework": audit_res.get("framework"),
             "cold_message": audit_res.get("cold_message"),
         }
         json_path = os.path.join(output_dir, "ai_audit_test.json")

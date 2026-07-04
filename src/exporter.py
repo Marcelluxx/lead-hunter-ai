@@ -145,7 +145,7 @@ class DataExporter:
         return [
             "Business Name", "Category", "Address", "Paese", "Phone",
             "Rating", "Reviews", "Website",
-            "Extracted Email", "Website Score",
+            "Extracted Email", "Website Score", "Framework",
             "Diagnosis", "Site Brief", "Cold Message"
         ]
 
@@ -193,6 +193,7 @@ class DataExporter:
                 lead.get("websiteUri", "N/A"),
                 extracted_email or "N/A",
                 lead.get("website_score", "N/A"),
+                lead.get("framework", "N/A"),
                 lead.get("diagnosis", "N/A"),
                 lead.get("site_brief", "N/A"),
                 lead.get("cold_message", "N/A"),
