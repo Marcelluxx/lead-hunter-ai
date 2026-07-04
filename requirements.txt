@@ -13,3 +13,4 @@ python-whois
 whois
 html2text
 playwright-stealth
+crawl4ai

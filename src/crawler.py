@@ -1,37 +1,17 @@
 """
-Lead Hunter V3 — Hybrid Web Crawler
-Two-pass architecture:
-  1. Static fetch (httpx + BeautifulSoup) — fast, low resource
-  2. Dynamic fallback (Playwright headless) — for JS-rendered sites
-Includes multi-page crawling, email extraction, and token-mode content preparation.
+Lead Hunter V3 — Crawl4AI Web Crawler
+Replaces custom HybridCrawler with Crawl4AI, providing clean semantic Markdown
+for LLM ingestion, advanced WAF/stealth bypass, and structured link extraction.
 """
 
 import re
-import json
 import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urljoin, urlparse
-import random
 
-try:
-    from playwright_stealth import Stealth
-    _has_modern_stealth = True
-except ImportError:
-    try:
-        from playwright_stealth import stealth_async
-        _has_modern_stealth = False
-    except ImportError:
-        _has_modern_stealth = None
-
-
-import httpx
 from bs4 import BeautifulSoup
-from openai import OpenAI
-
-from .config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, LLM_MODEL_FREE
-from .prompts import SYSTEM_LINK_DISCOVERY, build_link_discovery_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -62,444 +42,188 @@ EMAIL_BLACKLIST_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', 
 class CrawlResult:
     """Risultato del crawling di un sito web."""
     url: str
-    pages: Dict[str, str] = field(default_factory=dict)   # URL -> contenuto pulito
+    pages: Dict[str, str] = field(default_factory=dict)   # URL -> contenuto pulito (markdown)
     emails: List[str] = field(default_factory=list)
     raw_html_home: str = ""                                 # HTML grezzo homepage (per filtri)
-    is_dynamic: bool = False
+    is_dynamic: bool = True
     error: Optional[str] = None
 
 
 class HybridCrawler:
-    """Crawler ibrido: prima tenta fetch statico, poi fallback Playwright."""
+    """Crawler basato su Crawl4AI per estrazione di Markdown semantico ottimizzato per LLM."""
 
     def __init__(self, max_pages: int = 5, token_mode: str = "high_fidelity", headless: bool = True):
         self.max_pages = max_pages
         self.token_mode = token_mode
         self.headless = headless
-        self._http_client: Optional[httpx.AsyncClient] = None
-        self.client = OpenAI(
-            base_url=OPENROUTER_BASE_URL,
-            api_key=OPENROUTER_API_KEY,
-        )
-        self.model_free = LLM_MODEL_FREE
-
-    async def _get_client(self) -> httpx.AsyncClient:
-        if self._http_client is None or self._http_client.is_closed:
-            self._http_client = httpx.AsyncClient(
-                timeout=httpx.Timeout(15.0),
-                follow_redirects=True,
-                headers={
-                    "User-Agent": (
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                        "AppleWebKit/537.36 (KHTML, like Gecko) "
-                        "Chrome/120.0.0.0 Safari/537.36"
-                    )
-                }
-            )
-        return self._http_client
+        self._crawler = None
 
     async def crawl(self, url: str) -> CrawlResult:
         """
-        Entry point principale. Crawla un sito fino a max_pages pagine.
-        Restituisce un CrawlResult con contenuto, email ed errori.
+        Crawla la homepage e le pagine interne prioritarie utilizzando Crawl4AI.
+        Restituisce un CrawlResult con la mappa delle pagine pulite ed email.
         """
         result = CrawlResult(url=url)
         all_emails: Set[str] = set()
 
         try:
-            # --- PASS 1: Static fetch homepage ---
-            html, is_shell = await self._static_fetch(url)
+            # Importa i moduli di Crawl4AI
+            from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, BrowserConfig, CacheMode
+            from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
+            from crawl4ai.content_filter_strategy import PruningContentFilter
 
-            if is_shell:
-                # --- PASS 2: Playwright fallback ---
-                logger.info(f"Shell JS rilevata per {url}, attivo Playwright...")
-                result.is_dynamic = True
-                html = await self._dynamic_fetch(url)
+            # Configura il filtro dei contenuti (rimuove menu, footer, cookie banner, ecc.)
+            content_filter = PruningContentFilter(
+                threshold=0.45,
+                min_word_threshold=15
+            )
+            markdown_generator = DefaultMarkdownGenerator(
+                content_filter=content_filter,
+                options={"ignore_links": True, "ignore_images": True}
+            )
 
-            if not html:
-                result.error = "Impossibile recuperare contenuto HTML"
+            # Configura la sessione di crawling
+            run_config = CrawlerRunConfig(
+                cache_mode=CacheMode.BYPASS,
+                markdown_generator=markdown_generator,
+                wait_until="networkidle",
+                page_timeout=25000
+            )
+
+            # Configura il browser
+            browser_config = BrowserConfig(
+                headless=self.headless,
+                java_script_enabled=True
+            )
+
+            # Inizializza il crawler se non è già attivo
+            if self._crawler is None:
+                self._crawler = AsyncWebCrawler(config=browser_config)
+                await self._crawler.start()
+
+            logger.info(f"Crawl4AI: avvio crawling homepage per '{url}'")
+            home_result = await self._crawler.arun(url, config=run_config)
+
+            if not home_result or not home_result.success:
+                result.error = home_result.error_message if home_result else "Errore sconosciuto durante il crawl."
+                logger.error(f"Crawl4AI: crawl homepage fallito per '{url}': {result.error}")
                 return result
 
-            result.raw_html_home = html
-            soup = BeautifulSoup(html, "html.parser")
+            # Estrai l'HTML grezzo della homepage (necessario per alcuni filtri di età/e-commerce)
+            result.raw_html_home = home_result.html or ""
 
-            # Processa homepage
-            prepared_content = self._prepare_content(html)
-            result.pages[url] = prepared_content
-            all_emails.update(self._extract_emails(html))
-
-            # --- Crawl pagine interne ---
-            priority_links = self._discover_priority_links(url, soup)
-            all_links = list(priority_links)
-            pages_crawled = 1 + len(all_links)
-
-            # Se abbiamo ancora spazio per altre pagine, usa l'LLM intelligente per scoprire altri link rilevanti
-            if pages_crawled < self.max_pages:
-                needed_count = self.max_pages - pages_crawled
-                logger.info(f"Ricerca intelligente link via LLM necessaria: mancano {needed_count} pagine...")
-                llm_links = await self._discover_links_with_llm(
-                    base_url=url,
-                    soup=soup,
-                    needed_count=needed_count,
-                    exclude_urls=set(all_links)
-                )
-                for l_url in llm_links:
-                    if l_url not in all_links and len(all_links) < (self.max_pages - 1):
-                        all_links.append(l_url)
-
-            # Esegui crawling effettivo di tutte le pagine trovate (sia statiche che da LLM)
-            pages_crawled = 1
-            for link_url in all_links:
-                if pages_crawled >= self.max_pages:
-                    break
-                try:
-                    if result.is_dynamic:
-                        page_html = await self._dynamic_fetch(link_url)
+            # Ottieni il markdown fit (semantico pulito) o quello predefinito in caso di assenza
+            fit_md = ""
+            if home_result.markdown:
+                if hasattr(home_result.markdown, "fit_markdown") and home_result.markdown.fit_markdown:
+                    fit_md = home_result.markdown.fit_markdown
+                
+                # Se il fit_markdown è assente o eccessivamente corto, ripiega su raw_markdown
+                if len(fit_md.strip()) < 100:
+                    if hasattr(home_result.markdown, "raw_markdown") and home_result.markdown.raw_markdown:
+                        fit_md = home_result.markdown.raw_markdown
                     else:
-                        page_html, _ = await self._static_fetch(link_url)
+                        fit_md = str(home_result.markdown)
 
-                    if page_html:
-                        result.pages[link_url] = self._prepare_content(page_html)
-                        all_emails.update(self._extract_emails(page_html))
-                        pages_crawled += 1
+            result.pages[url] = self._clean_whitespace(fit_md)
+            all_emails.update(self._extract_emails_from_text_and_html(home_result.html or "", fit_md))
 
-                except Exception as e:
-                    logger.debug(f"Errore crawling {link_url}: {e}")
+            # --- SCOPERTA LINK INTERNI ---
+            internal_links_raw = []
+            if home_result.links and "internal" in home_result.links:
+                for l in home_result.links["internal"]:
+                    href = l.get("href", "")
+                    if href:
+                        # Risolve percorsi relativi
+                        full_link_url = urljoin(url, href)
+                        internal_links_raw.append(full_link_url)
+
+            parsed_base = urlparse(url)
+            base_domain = parsed_base.netloc
+
+            priority_links = []
+            seen_links = {url}
+
+            for l_url in internal_links_raw:
+                parsed_link = urlparse(l_url)
+                # Solo link interni dello stesso dominio
+                if parsed_link.netloc and parsed_link.netloc != base_domain:
+                    continue
+                if parsed_link.scheme and parsed_link.scheme not in ("http", "https"):
                     continue
 
+                clean_link = f"{parsed_link.scheme}://{parsed_link.netloc}{parsed_link.path}"
+                if clean_link in seen_links:
+                    continue
+
+                # Match con i pattern dei percorsi prioritari
+                path_lower = parsed_link.path.lower()
+                for pattern in PRIORITY_PATH_PATTERNS:
+                    if re.search(pattern, path_lower):
+                        priority_links.append(clean_link)
+                        seen_links.add(clean_link)
+                        break
+
+            # Limita al numero di pagine rimanenti
+            priority_links = priority_links[:self.max_pages - 1]
+
+            # --- CRAWLING PAGINE INTERNE ---
+            pages_crawled = 1
+            for p_url in priority_links:
+                if pages_crawled >= self.max_pages:
+                    break
+                logger.info(f"Crawl4AI: avvio crawling pagina interna '{p_url}'")
+                try:
+                    page_result = await self._crawler.arun(p_url, config=run_config)
+                    if page_result and page_result.success:
+                        page_fit_md = ""
+                        if page_result.markdown:
+                            if hasattr(page_result.markdown, "fit_markdown") and page_result.markdown.fit_markdown:
+                                page_fit_md = page_result.markdown.fit_markdown
+                            
+                            # Se il fit_markdown è assente o eccessivamente corto, ripiega su raw_markdown
+                            if len(page_fit_md.strip()) < 100:
+                                if hasattr(page_result.markdown, "raw_markdown") and page_result.markdown.raw_markdown:
+                                    page_fit_md = page_result.markdown.raw_markdown
+                                else:
+                                    page_fit_md = str(page_result.markdown)
+
+                        result.pages[p_url] = self._clean_whitespace(page_fit_md)
+                        all_emails.update(self._extract_emails_from_text_and_html(page_result.html or "", page_fit_md))
+                        pages_crawled += 1
+                except Exception as e:
+                    logger.debug(f"Errore durante il crawling di '{p_url}': {e}")
+
             result.emails = sorted(all_emails)
-            logger.info(f"Crawling completato: {url} — {len(result.pages)} pagine, {len(result.emails)} email")
 
         except Exception as e:
             result.error = str(e)
-            logger.error(f"Errore critico crawling {url}: {e}")
+            logger.error(f"Errore critico durante il crawling di '{url}': {e}")
 
         return result
 
-    async def _static_fetch(self, url: str) -> Tuple[str, bool]:
-        """
-        Fetch statico con httpx + BeautifulSoup.
-        Returns (html_content, is_dynamic_shell).
-        """
-        try:
-            client = await self._get_client()
-            response = await client.get(url)
-            response.raise_for_status()
-            html = response.text
+    def _clean_whitespace(self, text: str) -> str:
+        """Pulisce gli spazi consecutivi e i ritorni a capo eccessivi per ottimizzare i token."""
+        # 1. Rimuove gli spazi bianchi finali da ogni singola riga
+        text = "\n".join(line.rstrip() for line in text.splitlines())
+        # 2. Sostituisce 3 o più ritorni a capo consecutivi con al massimo 2
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        # 3. Sostituisce 3 o più spazi consecutivi con un singolo spazio
+        text = re.sub(r' {3,}', ' ', text)
+        return text.strip()
 
-            # Rileva shell JS (SPA senza contenuto server-side)
-            is_shell = self._detect_js_shell(html)
-            return html, is_shell
-
-        except Exception as e:
-            logger.debug(f"Static fetch fallito per {url}: {e}")
-            return "", True  # Consideriamo come shell -> triggera Playwright
-
-    async def _dynamic_fetch(self, url: str) -> str:
-        """
-        Fallback asincrono con Playwright.
-        Applica una strategia a due tentativi per bypassare i blocchi WAF:
-        1. Primo tentativo in Headless con Stealth, custom viewport, locale e timezone.
-        2. In caso di errore 403 (Forbidden), esegue un fallback in Headed (senza Stealth) come ultima risorsa.
-        """
-        try:
-            from playwright.async_api import async_playwright
-
-            async def _run_fetch(p, is_headless: bool) -> tuple[str, int]:
-                # Ritardo casuale per ridurre i picchi di traffico e tracciamento
-                await asyncio.sleep(random.uniform(0.5, 1.5))
-                
-                browser = await p.chromium.launch(headless=is_headless)
-                context = await browser.new_context(
-                    viewport={"width": 1280, "height": 800},
-                    locale="it-IT",
-                    timezone_id="Europe/Rome",
-                    java_script_enabled=True,
-                    user_agent=(
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                        "AppleWebKit/537.36 (KHTML, like Gecko) "
-                        "Chrome/120.0.0.0 Safari/537.36"
-                    )
-                )
-
-                # Applica stealth in headless per camuffare i parametri di automazione
-                if is_headless and _has_modern_stealth is True:
-                    stealth = Stealth()
-                    await stealth.apply_stealth_async(context)
-
-                page = await context.new_page()
-
-                if is_headless and _has_modern_stealth is False:
-                    await stealth_async(page)
-
-                try:
-                    resp = await page.goto(url, wait_until="networkidle", timeout=25000)
-                    status_code = resp.status if resp else 0
-                    
-                    # Simula interazione umana (scroll, pause) per far caricare contenuti dinamici
-                    await self._emulate_human_interaction(page)
-                    
-                    html_content = await page.content()
-                    return html_content, status_code
-                finally:
-                    await context.close()
-                    await browser.close()
-
-            async with async_playwright() as p:
-                if self.headless:
-                    # Tentativo 1: Headless con Stealth
-                    html, status = await _run_fetch(p, is_headless=True)
-                    
-                    # Se otteniamo 403 o la pagina contiene indicatori di blocco/forbidden, tentiamo il fallback headed
-                    is_blocked = (
-                        status == 403 or 
-                        "403 Forbidden" in html or 
-                        "403 - Forbidden" in html or
-                        "Access to this page is forbidden" in html
-                    )
-                    
-                    if is_blocked:
-                        logger.info(f"Rilevato blocco 403 in modalità headless per {url}. Tentativo di fallback in modalità HEADED...")
-                        html, status = await _run_fetch(p, is_headless=False)
-                else:
-                    # Avvia direttamente in modalità headed
-                    logger.info(f"Modalità HEADED richiesta dall'utente. Avvio diretto in modalità headed per {url}...")
-                    html, status = await _run_fetch(p, is_headless=False)
-                    
-                return html
-
-        except Exception as e:
-            logger.error(f"Playwright fallito per {url}: {e}")
-            return ""
-
-    async def _emulate_human_interaction(self, page) -> None:
-        """Simula uno scorrimento umano non lineare per ridurre i sospetti di automazione e forzare il rendering dei contenuti dinamici."""
-        try:
-            # Attesa casuale prima di iniziare l'interazione
-            await asyncio.sleep(random.uniform(0.5, 1.2))
-
-            # Ottiene le dimensioni della pagina
-            total_height = await page.evaluate("document.body.scrollHeight")
-            viewport_height = await page.evaluate("window.innerHeight")
-            
-            if not total_height or total_height <= viewport_height:
-                return
-
-            current_scroll = 0
-            steps = random.randint(3, 6)
-            
-            for _ in range(steps):
-                if current_scroll >= total_height - viewport_height:
-                    break
-                
-                # Passo di scorrimento casuale e asimmetrico
-                scroll_step = random.randint(180, 420)
-                current_scroll += scroll_step
-                
-                # Esegue lo scorrimento smooth tramite JavaScript
-                await page.evaluate(f"window.scrollTo({{top: {current_scroll}, behavior: 'smooth'}})")
-                
-                # Simula una pausa di lettura casuale
-                await asyncio.sleep(random.uniform(0.6, 1.5))
-                
-                # Micro-esitazione comportamentale: 20% di possibilità di tornare leggermente indietro per simulare la lettura
-                if random.random() < 0.20 and current_scroll > 150:
-                    back_step = random.randint(40, 90)
-                    current_scroll -= back_step
-                    await page.evaluate(f"window.scrollTo({{top: {current_scroll}, behavior: 'smooth'}})")
-                    await asyncio.sleep(random.uniform(0.3, 0.7))
-                    current_scroll += back_step  # Riprende lo scorrimento
-
-            # Ritorno graduale all'inizio della pagina prima di prelevare il codice finale
-            await page.evaluate("window.scrollTo({top: 0, behavior: 'smooth'})")
-            await asyncio.sleep(random.uniform(0.5, 1.0))
-        except Exception as e:
-            logger.debug(f"Errore durante l'emulazione dell'interazione umana: {e}")
-
-
-    def _detect_js_shell(self, html: str) -> bool:
-        """
-        Rileva se l'HTML è una shell vuota per SPA/JS frameworks.
-        Controlla: mount points vuoti, rapporto testo/script basso.
-        """
-        soup = BeautifulSoup(html, "html.parser")
-        body = soup.find("body")
-        if not body:
-            return True
-
-        body_text = body.get_text(separator=" ", strip=True)
-
-        # Shell indicators: div#app, div#root con poco testo
-        shell_ids = {"app", "root", "__next", "__nuxt", "gatsby-focus-wrapper"}
-        for div in body.find_all("div", id=True):
-            if div.get("id", "").lower() in shell_ids:
-                # Se il body ha pochissimo testo, è probabilmente una shell
-                if len(body_text) < 200:
-                    return True
-
-        # Rapporto script vs testo: troppi script, poco testo
-        scripts = soup.find_all("script")
-        if len(scripts) > 5 and len(body_text) < 100:
-            return True
-
-        return False
-
-    def _discover_priority_links(self, base_url: str, soup: BeautifulSoup) -> List[str]:
-        """Scopre link interni prioritari (contatti, chi siamo, servizi, privacy...)."""
-        parsed_base = urlparse(base_url)
-        base_domain = parsed_base.netloc
-        found: Set[str] = set()
-
-        for a_tag in soup.find_all("a", href=True):
-            href = a_tag["href"]
-            full_url = urljoin(base_url, href)
-            parsed = urlparse(full_url)
-
-            # Solo link interni (stesso dominio)
-            if parsed.netloc and parsed.netloc != base_domain:
-                continue
-
-            # Ignora ancoraggi, file, e link esterni
-            if parsed.scheme and parsed.scheme not in ("http", "https"):
-                continue
-
-            path_lower = parsed.path.lower()
-
-            # Match con pattern prioritari
-            for pattern in PRIORITY_PATH_PATTERNS:
-                if re.search(pattern, path_lower):
-                    clean_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-                    if clean_url != base_url and clean_url not in found:
-                        found.add(clean_url)
-                    break
-
-        return list(found)[:self.max_pages - 1]  # -1 perché la homepage è già inclusa
-
-    async def _discover_links_with_llm(
-        self,
-        base_url: str,
-        soup: BeautifulSoup,
-        needed_count: int,
-        exclude_urls: Set[str],
-        max_retries: int = 3
-    ) -> List[str]:
-        """
-        Analizza tutti i link interni trovati sulla pagina che non corrispondono alle regole statiche,
-        e interroga LLM_MODEL_FREE per selezionare i link più rilevanti (es. servizi, portfolio, etc.)
-        al fine di riempire gli slot di crawling rimasti vuoti.
-        """
-        parsed_base = urlparse(base_url)
-        base_domain = parsed_base.netloc
-        
-        # Raccogli tutti i link interni validi
-        candidate_links = []
-        seen_hrefs = set()
-        
-        for a_tag in soup.find_all("a", href=True):
-            href = a_tag["href"].strip()
-            if not href:
-                continue
-                
-            full_url = urljoin(base_url, href)
-            parsed = urlparse(full_url)
-            
-            # Solo link interni (stesso dominio)
-            if parsed.netloc and parsed.netloc != base_domain:
-                continue
-                
-            # Ignora ancoraggi, file, e link esterni
-            if parsed.scheme and parsed.scheme not in ("http", "https"):
-                continue
-                
-            # Ignora url di base, url già scartati o già inclusi nei prioritari
-            clean_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-            if clean_url == base_url or clean_url in exclude_urls or clean_url in seen_hrefs:
-                continue
-                
-            # Ignora privacy, cookie e contatti generici (se per caso non sono già prioritari)
-            path_lower = parsed.path.lower()
-            if any(p in path_lower for p in ["privacy", "cookie", "legal", "logout"]):
-                continue
-                
-            # Ottieni l'etichetta del link (anchor text)
-            label = a_tag.get_text(separator=" ", strip=True)
-            if not label:
-                # Controlla se c'è un attributo title o alt
-                label = a_tag.get("title", "").strip() or a_tag.get("alt", "").strip()
-            
-            # Riduci spazi bianchi consecutivi all'interno della label
-            label = re.sub(r'\s+', ' ', label)
-            if len(label) > 100:
-                label = label[:100] + "..."
-                
-            # Se la label è ancora vuota o è solo caratteri speciali, usa il nome del file
-            if not label or label in [">", "<", "-", "_", "|", "»", "«"]:
-                label = parsed.path.split("/")[-1] or "Collegamento"
-                
-            seen_hrefs.add(clean_url)
-            candidate_links.append({
-                "url": clean_url,
-                "label": label
-            })
-            
-        if not candidate_links:
-            logger.info("Nessun link candidato trovato per la ricerca intelligente.")
-            return []
-            
-        # Filtriamo al massimo 40 link per non sovraccaricare il contesto del modello free
-        candidate_links = candidate_links[:40]
-        
-        links_json = json.dumps(candidate_links, ensure_ascii=False, indent=2)
-        prompt = build_link_discovery_prompt(needed_count, links_json)
-        
-        for attempt in range(max_retries):
-            try:
-                # Chiamata bloccante eseguita in un thread asincrono per non bloccare l'event loop
-                loop = asyncio.get_event_loop()
-                response = await loop.run_in_executor(
-                    None,
-                    lambda: self.client.chat.completions.create(
-                        model=self.model_free,
-                        messages=[
-                            {"role": "system", "content": SYSTEM_LINK_DISCOVERY},
-                            {"role": "user", "content": prompt}
-                        ],
-                        temperature=0.1
-                    )
-                )
-                raw_response = response.choices[0].message.content
-                if not raw_response:
-                    continue
-                    
-                # Pulisce ed estrae l'array JSON
-                match = re.search(r'\[.*\]', raw_response, re.DOTALL)
-                if match:
-                    json_str = match.group(0)
-                    selected_urls = json.loads(json_str)
-                    if isinstance(selected_urls, list):
-                        # Assicuriamoci che siano stringhe e rimuoviamo duplicati mantenendo l'ordine
-                        cleaned_selected = []
-                        for u in selected_urls:
-                            if isinstance(u, str) and u not in cleaned_selected:
-                                cleaned_selected.append(u)
-                        logger.info(f"Ricerca intelligente completata. Selezionati {len(cleaned_selected)} link: {cleaned_selected}")
-                        return cleaned_selected[:needed_count]
-            except Exception as e:
-                logger.error(f"Errore durante la ricerca intelligente dei link (tentativo {attempt+1}): {e}")
-                
-        return []
-
-    def _extract_emails(self, html: str) -> Set[str]:
-        """Estrae email dal testo HTML e dagli attributi mailto."""
+    def _extract_emails_from_text_and_html(self, html: str, markdown: str) -> Set[str]:
+        """Estrae email dall'HTML, dal Markdown e dai tag mailto."""
         emails: Set[str] = set()
-        soup = BeautifulSoup(html, "html.parser")
 
-        # 1. Regex sul testo visibile
-        text = soup.get_text(separator=" ")
-        for match in EMAIL_REGEX.findall(text):
+        # 1. Regex su HTML e Markdown
+        for match in EMAIL_REGEX.findall(html):
+            emails.add(match.lower())
+        for match in EMAIL_REGEX.findall(markdown):
             emails.add(match.lower())
 
-        # 2. href="mailto:..." 
+        # 2. Mailto link in HTML
+        soup = BeautifulSoup(html, "html.parser")
         for a_tag in soup.find_all("a", href=True):
             href = a_tag["href"]
             if href.startswith("mailto:"):
@@ -507,10 +231,13 @@ class HybridCrawler:
                 if EMAIL_REGEX.match(email):
                     emails.add(email)
 
-        # Filtra falsi positivi
+        # Filtra email non valide o di sistema
         filtered = set()
         for email in emails:
-            domain = email.split("@")[1] if "@" in email else ""
+            parts = email.split("@")
+            if len(parts) != 2:
+                continue
+            domain = parts[1]
             if domain in EMAIL_BLACKLIST_DOMAINS:
                 continue
             ext = "." + email.rsplit(".", 1)[-1] if "." in email else ""
@@ -520,128 +247,8 @@ class HybridCrawler:
 
         return filtered
 
-    def _prepare_content(self, html: str) -> str:
-        """
-        Prepara il contenuto HTML per l'invio all'LLM in base al token_mode.
-        - high_fidelity: HTML semantico con classi CSS layout
-        - optimized: Markdown pulito, solo testo e headers
-        """
-        if self.token_mode == "optimized":
-            content = self._prepare_optimized(html)
-        else:
-            content = self._prepare_high_fidelity(html)
-
-        # Compattamento degli spazi e dei caratteri a capo per massimizzare l'efficienza dei token
-        # 1. Rimuove gli spazi bianchi finali da ogni singola riga
-        content = "\n".join(line.rstrip() for line in content.splitlines())
-        # 2. Sostituisce 3 o più ritorni a capo consecutivi con al massimo 2 (\n\n)
-        content = re.sub(r'\n{3,}', '\n\n', content)
-        # 3. Sostituisce 3 o più spazi consecutivi con un singolo spazio
-        content = re.sub(r' {3,}', ' ', content)
-        # 4. Rimuove spazi e ritorni a capo all'inizio e alla fine dell'intero testo
-        return content.strip()
-
-    def _prepare_high_fidelity(self, html: str) -> str:
-        """
-        High-Fidelity: preserva struttura HTML semantica, classi CSS framework
-        (Tailwind, Bootstrap), meta tags, heading hierarchy.
-        """
-        soup = BeautifulSoup(html, "html.parser")
-
-        # Rimuovi script e style content (ma preserva tag semantici)
-        for tag in soup.find_all(["script", "style", "noscript", "iframe"]):
-            tag.decompose()
-
-        # Preserva solo classi CSS rilevanti al layout
-        layout_patterns = re.compile(
-            r'(flex|grid|col-|row-|container|hidden|block|inline|'
-            r'md:|lg:|sm:|xl:|justify|items-|gap-|space-|'
-            r'text-|font-|bg-|p-|m-|w-|h-|rounded|shadow|border)',
-            re.IGNORECASE
-        )
-
-        for tag in soup.find_all(True):
-            classes = tag.get("class", [])
-            if classes:
-                relevant = [c for c in classes if layout_patterns.search(c)]
-                if relevant:
-                    tag["class"] = relevant
-                else:
-                    del tag["class"]
-
-            # Rimuovi attributi non utili
-            attrs_to_keep = {"class", "id", "href", "src", "alt", "title", "name", "content"}
-            for attr in list(tag.attrs.keys()):
-                if attr not in attrs_to_keep:
-                    del tag[attr]
-
-        # Estrai meta tags utili
-        meta_info = []
-        for meta in soup.find_all("meta"):
-            name = meta.get("name", "") or meta.get("property", "")
-            content = meta.get("content", "")
-            if name and content and name.lower() in (
-                "description", "keywords", "og:title", "og:description",
-                "author", "generator"
-            ):
-                meta_info.append(f'<meta name="{name}" content="{content}">')
-
-        body = soup.find("body")
-        body_html = str(body) if body else str(soup)
-
-        # Limita dimensione output
-        if len(body_html) > 80000:
-            body_html = body_html[:80000] + "\n<!-- [TRONCATO] -->"
-
-        header = "\n".join(meta_info) if meta_info else ""
-        return f"<!-- META -->\n{header}\n<!-- BODY -->\n{body_html}"
-
-    def _prepare_optimized(self, html: str) -> str:
-        """
-        Optimized: converte in markdown pulito, solo headers + testo + metadata.
-        Minimizza i token consumati.
-        """
-        try:
-            import html2text
-            h = html2text.HTML2Text()
-            h.ignore_links = False
-            h.ignore_images = True
-            h.ignore_emphasis = False
-            h.body_width = 0  # No wrap
-
-            soup = BeautifulSoup(html, "html.parser")
-
-            # Rimuovi script, style, nav duplicati
-            for tag in soup.find_all(["script", "style", "noscript", "iframe"]):
-                tag.decompose()
-
-            # Estrai title e meta description
-            title = ""
-            title_tag = soup.find("title")
-            if title_tag:
-                title = title_tag.get_text(strip=True)
-
-            desc = ""
-            meta_desc = soup.find("meta", attrs={"name": "description"})
-            if meta_desc:
-                desc = meta_desc.get("content", "")
-
-            body = soup.find("body")
-            markdown = h.handle(str(body) if body else str(soup))
-
-            # Limita dimensione
-            if len(markdown) > 50000:
-                markdown = markdown[:50000] + "\n\n[...TRONCATO...]"
-
-            header = f"# {title}\n> {desc}\n\n" if title else ""
-            return header + markdown
-
-        except ImportError:
-            # Fallback se html2text non installato
-            soup = BeautifulSoup(html, "html.parser")
-            return soup.get_text(separator="\n", strip=True)[:8000]
-
     async def close(self):
-        """Chiudi il client HTTP."""
-        if self._http_client and not self._http_client.is_closed:
-            await self._http_client.aclose()
+        """Chiude la sessione attiva del browser Crawl4AI."""
+        if self._crawler:
+            await self._crawler.close()
+            self._crawler = None
