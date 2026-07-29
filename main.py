@@ -85,15 +85,10 @@ class LeadHunterOrchestrator:
             print("⚠️ Nessun lead senza sito web trovato.")
             return []
 
-        print(f"\n🧠 --- FASE 2: AI Auditing ({len(raw_leads_to_audit)} lead) ---")
-        audit_map = self.auditor.audit_leads_batch(raw_leads_to_audit, max_workers=5)
-
         for item in raw_leads_to_audit:
             p_id = item["id"]
-            if p_id in audit_map:
-                self.all_leads[p_id].update(audit_map[p_id])
-                self.all_leads[p_id]["competitor"] = item["competitor"]
-                self.all_leads[p_id]["search_keyword"] = item["keyword"]
+            self.all_leads[p_id]["competitor"] = item["competitor"]
+            self.all_leads[p_id]["search_keyword"] = item["keyword"]
 
         print("\n✅ Tutte le fasi completate.")
         return list(self.all_leads.values())

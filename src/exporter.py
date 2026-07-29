@@ -136,8 +136,7 @@ class DataExporter:
     def _get_no_website_columns() -> list:
         return [
             "Business Name", "Category", "Address", "Paese", "Phone",
-            "Rating", "Reviews", "Top Competitor",
-            "Business Summary", "Key Weakness"
+            "Rating", "Reviews", "Top Competitor"
         ]
 
     @staticmethod
@@ -165,8 +164,6 @@ class DataExporter:
                 lead.get("rating", "N/A"),
                 lead.get("userRatingCount", "N/A"),
                 lead.get("competitor", "N/A"),
-                lead.get("business_summary", "N/A"),
-                lead.get("key_weakness", "N/A"),
             ])
         return rows
 

@@ -338,11 +338,6 @@ if start_btn:
                     update_elapsed()
 
                 def on_kw_progress(kw, current, total):
-                    if kw == "AI_AUDIT":
-                        render_phase_card(phase_placeholder, "🧠", f"AI Auditing — {total} lead da analizzare", format_elapsed(time.time() - pipeline_start))
-                        progress_bar.progress(0, text=f"AI Auditing: 0/{total}")
-                        update_log(f"🧠 <b>FASE 2:</b> AI Auditing per {total} lead...")
-                        return
                     pct = current / total if total > 0 else 0
                     progress_bar.progress(pct, text=f"Keyword: {kw} — Zona {current}/{total}")
                     render_kw_card(kw_placeholders[kw], kw, 0, "running", f"Zona {current}/{total}")
@@ -355,7 +350,7 @@ if start_btn:
 
                 render_phase_card(phase_placeholder, "🔍", "FASE 1: Scraping Google Maps", "0s")
 
-                with st.spinner("Pipeline AI in esecuzione..."):
+                with st.spinner("Scraping in corso..."):
                     results = orchestrator.run(
                         st.session_state.target_coords["lat"],
                         st.session_state.target_coords["lng"],

@@ -19,5 +19,13 @@ venv/
 .vscode/
 .idea/
 
-docs
+docs/info_progetto_Lead_Hunter_V3.md
+docs/SINCRONIZZAZIONE_GITHUB_E_IMPATTO_GRAPHIFY.md
 test_output/
+
+# Graphify: commit only portable final outputs and query memory.
+graphify-out/.graphify_python
+graphify-out/cache/
+graphify-out/pre-sync-*/
+graphify-out/manifest.json
+graphify-out/cost.json

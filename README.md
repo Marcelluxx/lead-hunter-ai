@@ -228,7 +228,7 @@ python main.py --mode with_website \
 | `--lat`         | *Required*          | Floating latitude coordinate representing scanning focal point.      |
 | `--lng`         | *Required*          | Floating longitude coordinate representing scanning focal point.     |
 | `--keywords`    | *Required*          | Space-separated list of target industries or search keywords.        |
-| `--out`         | `leads_output.xlsx` | Output filename. Automatically placed inside `outputs/`.           |
+| `--out`         | `leads_output.xlsx` | Output filename. Automatically placed inside`outputs/`.            |
 | `--min-rating`  | `3.9`               | Excludes leads below this minimum rating.                            |
 | `--max-reviews` | `100`               | Excludes massive national franchises or corporate giants.            |
 | `--min-age`     | `5`                 | Requires target domain registry to exist for a minimum of N years.   |
