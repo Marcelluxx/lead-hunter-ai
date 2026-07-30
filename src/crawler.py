@@ -7,11 +7,17 @@ for LLM ingestion, advanced WAF/stealth bypass, and structured link extraction.
 import re
 import asyncio
 import logging
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple
+from typing import List, Optional, Set
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
+from .domain import (
+    CrawlEvidenceError,
+    CrawlResult,
+    CrawlStatus,
+    PageEvidence,
+    ensure_auditable_pages,
+)
 from .security import SafeUrlPolicy, UrlPolicyError
 
 logger = logging.getLogger(__name__)
@@ -37,17 +43,6 @@ EMAIL_BLACKLIST_DOMAINS = {
 
 # Estensioni file da escludere dalle email (immagini, asset)
 EMAIL_BLACKLIST_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico'}
-
-
-@dataclass
-class CrawlResult:
-    """Risultato del crawling di un sito web."""
-    url: str
-    pages: Dict[str, str] = field(default_factory=dict)   # URL -> contenuto pulito (markdown)
-    emails: List[str] = field(default_factory=list)
-    raw_html_home: str = ""                                 # HTML grezzo homepage (per filtri)
-    is_dynamic: bool = True
-    error: Optional[str] = None
 
 
 class HybridCrawler:
@@ -95,12 +90,36 @@ class HybridCrawler:
         await self.url_policy.validate_async(url)
         return page
 
+    @staticmethod
+    def _page_metadata(provider_result) -> tuple[Optional[int], str]:
+        raw_status = (
+            getattr(provider_result, "redirected_status_code", None)
+            or getattr(provider_result, "status_code", None)
+        )
+        try:
+            status_code = int(raw_status) if raw_status is not None else None
+        except (TypeError, ValueError):
+            status_code = None
+
+        headers = getattr(provider_result, "response_headers", None) or {}
+        content_type = ""
+        if isinstance(headers, dict):
+            content_type = next(
+                (
+                    str(value)
+                    for key, value in headers.items()
+                    if str(key).lower() == "content-type"
+                ),
+                "",
+            )
+        return status_code, content_type
+
     async def crawl(self, url: str) -> CrawlResult:
         """
         Crawla la homepage e le pagine interne prioritarie utilizzando Crawl4AI.
         Restituisce un CrawlResult con la mappa delle pagine pulite ed email.
         """
-        result = CrawlResult(url=url)
+        result = CrawlResult(url=url, requested_url=url)
         all_emails: Set[str] = set()
 
         try:
@@ -154,6 +173,13 @@ class HybridCrawler:
             home_result = await self._crawler.arun(safe_url, config=run_config)
 
             if not home_result or not home_result.success:
+                result.blocked_request_codes = list(self._blocked_requests)
+                if result.blocked_request_codes:
+                    result.status = CrawlStatus.BLOCKED
+                    result.error_code = result.blocked_request_codes[-1]
+                else:
+                    result.status = CrawlStatus.FAILED
+                    result.error_code = "homepage_fetch_failed"
                 result.error = home_result.error_message if home_result else "Errore sconosciuto durante il crawl."
                 logger.error(f"Crawl4AI: crawl homepage fallito per '{url}': {result.error}")
                 return result
@@ -179,7 +205,26 @@ class HybridCrawler:
                         fit_md = str(home_result.markdown)
 
             result.url = final_decision.normalized_url
-            result.pages[result.url] = self._clean_whitespace(fit_md)
+            home_content = self._clean_whitespace(fit_md)
+            home_status, home_content_type = self._page_metadata(home_result)
+            home_evidence = PageEvidence.from_content(
+                requested_url=safe_url,
+                final_url=result.url,
+                status_code=home_status,
+                content_type=home_content_type,
+                content=home_content,
+            )
+            result.evidence.append(home_evidence)
+            if not home_evidence.valid:
+                result.status = (
+                    CrawlStatus.EMPTY
+                    if home_evidence.failure_code == "content_too_short"
+                    else CrawlStatus.INVALID_RESPONSE
+                )
+                result.error_code = home_evidence.failure_code
+                result.error = "Homepage priva di evidenza valida per l'audit."
+                return result
+            result.pages[result.url] = home_content
             all_emails.update(self._extract_emails_from_text_and_html(home_result.html or "", fit_md))
 
             # --- SCOPERTA LINK INTERNI ---
@@ -238,6 +283,10 @@ class HybridCrawler:
                 try:
                     page_result = await self._crawler.arun(p_url, config=run_config)
                     if page_result and page_result.success:
+                        page_final_url = getattr(page_result, "url", None) or p_url
+                        page_decision = await self.url_policy.validate_async(
+                            page_final_url, allowed_hosts=allowed_internal_hosts
+                        )
                         page_fit_md = ""
                         if page_result.markdown:
                             if hasattr(page_result.markdown, "fit_markdown") and page_result.markdown.fit_markdown:
@@ -250,15 +299,70 @@ class HybridCrawler:
                                 else:
                                     page_fit_md = str(page_result.markdown)
 
-                        result.pages[p_url] = self._clean_whitespace(page_fit_md)
+                        page_content = self._clean_whitespace(page_fit_md)
+                        page_status, page_content_type = self._page_metadata(page_result)
+                        page_evidence = PageEvidence.from_content(
+                            requested_url=p_url,
+                            final_url=page_decision.normalized_url,
+                            status_code=page_status,
+                            content_type=page_content_type,
+                            content=page_content,
+                        )
+                        result.evidence.append(page_evidence)
+                        if not page_evidence.valid:
+                            continue
+                        result.pages[page_decision.normalized_url] = page_content
                         all_emails.update(self._extract_emails_from_text_and_html(page_result.html or "", page_fit_md))
                         pages_crawled += 1
+                    else:
+                        failed_status, failed_content_type = self._page_metadata(page_result)
+                        result.evidence.append(
+                            PageEvidence.from_content(
+                                requested_url=p_url,
+                                final_url=p_url,
+                                status_code=failed_status,
+                                content_type=failed_content_type,
+                                content="",
+                                failure_code="page_fetch_failed",
+                            )
+                        )
                 except Exception as e:
+                    result.evidence.append(
+                        PageEvidence.from_content(
+                            requested_url=p_url,
+                            final_url=p_url,
+                            status_code=None,
+                            content_type="",
+                            content="",
+                            failure_code="page_exception",
+                        )
+                    )
                     logger.debug(f"Errore durante il crawling di '{p_url}': {e}")
 
             result.emails = sorted(all_emails)
+            result.blocked_request_codes = list(self._blocked_requests)
+            try:
+                ensure_auditable_pages(result.pages)
+            except CrawlEvidenceError as exc:
+                result.status = CrawlStatus.EMPTY
+                result.error_code = str(exc)
+                result.error = "Contenuto insufficiente per produrre un audit attendibile."
+                return result
+            result.status = (
+                CrawlStatus.PARTIAL
+                if result.blocked_request_codes
+                or any(not item.valid for item in result.evidence)
+                else CrawlStatus.SUCCESS
+            )
 
+        except UrlPolicyError as e:
+            result.status = CrawlStatus.BLOCKED
+            result.error_code = e.code
+            result.error = str(e)
+            logger.warning(f"Crawl bloccato dalla URL policy per '{url}': {e.code}")
         except Exception as e:
+            result.status = CrawlStatus.FAILED
+            result.error_code = "crawler_exception"
             result.error = str(e)
             logger.error(f"Errore critico durante il crawling di '{url}': {e}")
 

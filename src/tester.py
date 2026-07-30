@@ -71,8 +71,10 @@ def run_url_test(
     finally:
         loop.close()
 
-    if not crawl_res.pages:
-        log_both("❌ Nessuna pagina recuperata dal crawler.")
+    if not crawl_res.is_auditable:
+        log_both("❌ Il crawl non contiene evidenze sufficienti per un audit.")
+        log_both(f"   Stato: {crawl_res.status.value}")
+        log_both(f"   Motivo: {crawl_res.audit_rejection_reason}")
         if crawl_res.error:
             log_both(f"   Errore: {crawl_res.error}")
         return

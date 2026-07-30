@@ -20,7 +20,11 @@ from openai import OpenAI
 import openai
 
 from .config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, LLM_MODEL, LLM_MODEL_FREE
-from .domain import AuditValidationError, WebsiteAuditResult
+from .domain import (
+    AuditValidationError,
+    WebsiteAuditResult,
+    ensure_auditable_pages,
+)
 from .prompts import (
     SYSTEM_NO_WEBSITE,
     SYSTEM_WEBSITE_AUDIT,
@@ -194,6 +198,8 @@ class LeadAuditor:
         Audit completo del sito web tramite LLM.
         Output: website_score, diagnosis, site_brief, cold_message.
         """
+        ensure_auditable_pages(crawl_pages)
+
         # Pulisci le pagine in parallelo usando ThreadPoolExecutor
         cleaned_crawl_pages = {}
         if crawl_pages:
