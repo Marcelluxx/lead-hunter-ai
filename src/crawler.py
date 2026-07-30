@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
+from .security import SafeUrlPolicy, UrlPolicyError
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +53,47 @@ class CrawlResult:
 class HybridCrawler:
     """Crawler basato su Crawl4AI per estrazione di Markdown semantico ottimizzato per LLM."""
 
-    def __init__(self, max_pages: int = 5, token_mode: str = "high_fidelity", headless: bool = True):
+    def __init__(
+        self,
+        max_pages: int = 5,
+        token_mode: str = "high_fidelity",
+        headless: bool = True,
+        url_policy: Optional[SafeUrlPolicy] = None,
+    ):
         self.max_pages = max_pages
         self.token_mode = token_mode
         self.headless = headless
+        self.url_policy = url_policy or SafeUrlPolicy()
         self._crawler = None
+        self._blocked_requests: List[str] = []
+
+    async def _secure_route(self, route) -> None:
+        """Blocca redirect e richieste browser dirette a reti non pubbliche."""
+
+        request = route.request
+        try:
+            await self.url_policy.validate_async(request.url)
+            redirect_depth = 0
+            previous = getattr(request, "redirected_from", None)
+            while previous is not None:
+                redirect_depth += 1
+                previous = getattr(previous, "redirected_from", None)
+            if redirect_depth > self.url_policy.max_redirects:
+                raise UrlPolicyError("too_many_redirects", "Troppi redirect consecutivi.")
+        except UrlPolicyError as exc:
+            self._blocked_requests.append(exc.code)
+            logger.warning("Richiesta browser bloccata dalla URL policy: %s", exc.code)
+            await route.abort("blockedbyclient")
+            return
+        await route.continue_()
+
+    async def _install_network_guard(self, page, context, **kwargs):
+        await context.route("**", self._secure_route)
+        return page
+
+    async def _validate_navigation(self, page, context, url, **kwargs):
+        await self.url_policy.validate_async(url)
+        return page
 
     async def crawl(self, url: str) -> CrawlResult:
         """
@@ -67,6 +104,12 @@ class HybridCrawler:
         all_emails: Set[str] = set()
 
         try:
+            self.url_policy.reset_dns_pins()
+            self._blocked_requests.clear()
+            initial_decision = await self.url_policy.validate_async(url)
+            safe_url = initial_decision.normalized_url
+            result.url = safe_url
+
             # Importa i moduli di Crawl4AI
             from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, BrowserConfig, CacheMode
             from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
@@ -99,15 +142,25 @@ class HybridCrawler:
             # Inizializza il crawler se non è già attivo
             if self._crawler is None:
                 self._crawler = AsyncWebCrawler(config=browser_config)
+                self._crawler.crawler_strategy.set_hook(
+                    "on_page_context_created", self._install_network_guard
+                )
+                self._crawler.crawler_strategy.set_hook(
+                    "before_goto", self._validate_navigation
+                )
                 await self._crawler.start()
 
-            logger.info(f"Crawl4AI: avvio crawling homepage per '{url}'")
-            home_result = await self._crawler.arun(url, config=run_config)
+            logger.info(f"Crawl4AI: avvio crawling homepage per '{safe_url}'")
+            home_result = await self._crawler.arun(safe_url, config=run_config)
 
             if not home_result or not home_result.success:
                 result.error = home_result.error_message if home_result else "Errore sconosciuto durante il crawl."
                 logger.error(f"Crawl4AI: crawl homepage fallito per '{url}': {result.error}")
                 return result
+
+            final_url = getattr(home_result, "url", None) or safe_url
+            final_decision = await self.url_policy.validate_async(final_url)
+            allowed_internal_hosts = {initial_decision.hostname, final_decision.hostname}
 
             # Estrai l'HTML grezzo della homepage (necessario per alcuni filtri di età/e-commerce)
             result.raw_html_home = home_result.html or ""
@@ -125,7 +178,8 @@ class HybridCrawler:
                     else:
                         fit_md = str(home_result.markdown)
 
-            result.pages[url] = self._clean_whitespace(fit_md)
+            result.url = final_decision.normalized_url
+            result.pages[result.url] = self._clean_whitespace(fit_md)
             all_emails.update(self._extract_emails_from_text_and_html(home_result.html or "", fit_md))
 
             # --- SCOPERTA LINK INTERNI ---
@@ -135,24 +189,32 @@ class HybridCrawler:
                     href = l.get("href", "")
                     if href:
                         # Risolve percorsi relativi
-                        full_link_url = urljoin(url, href)
+                        full_link_url = urljoin(result.url, href)
                         internal_links_raw.append(full_link_url)
 
-            parsed_base = urlparse(url)
+            parsed_base = urlparse(result.url)
             base_domain = parsed_base.netloc
 
             priority_links = []
-            seen_links = {url}
+            seen_links = {result.url}
 
             for l_url in internal_links_raw:
-                parsed_link = urlparse(l_url)
+                try:
+                    link_decision = await self.url_policy.validate_async(
+                        l_url, allowed_hosts=allowed_internal_hosts
+                    )
+                except UrlPolicyError as exc:
+                    logger.debug("Link interno scartato dalla URL policy: %s", exc.code)
+                    continue
+
+                parsed_link = urlparse(link_decision.normalized_url)
                 # Solo link interni dello stesso dominio
                 if parsed_link.netloc and parsed_link.netloc != base_domain:
                     continue
                 if parsed_link.scheme and parsed_link.scheme not in ("http", "https"):
                     continue
 
-                clean_link = f"{parsed_link.scheme}://{parsed_link.netloc}{parsed_link.path}"
+                clean_link = link_decision.normalized_url
                 if clean_link in seen_links:
                     continue
 
