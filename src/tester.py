@@ -5,10 +5,8 @@ i passaggi intermedi già prodotti dal crawler protetto e dall'Audit AI.
 """
 
 import os
-import re
 import json
 import asyncio
-from typing import Dict, Any
 from urllib.parse import urlparse
 
 import sys
@@ -24,7 +22,6 @@ logger = logging.getLogger(__name__)
 from src.crawler import HybridCrawler
 from src.auditor import LeadAuditor
 from src.filters import extract_domain
-from src.prompts import SYSTEM_WEBSITE_AUDIT, build_website_audit_prompt
 
 def run_url_test(
     url: str,
@@ -142,33 +139,8 @@ def run_url_test(
         log_both(f"💬 cold_message (hook): {audit_res.get('cold_message')}")
         log_both("=" * 60)
 
-        # Salva il prompt compilato reale comprensivo di impaginazione e pulizia LLM
-        full_prompt = audit_res.get("full_prompt", "")
-        prompt_path = os.path.join(output_dir, "ai_prompt_sent.txt")
-        with open(prompt_path, "w", encoding="utf-8") as f:
-            f.write(full_prompt)
-        log_both(f"💾 Prompt completo reale inviato a LLM (con XML e pulizia) salvato in: {prompt_path}")
-
-        # Salva la risposta grezza dell'AI
-        raw_resp = audit_res.get("raw_response", "")
-        raw_path = os.path.join(output_dir, "ai_raw_response.txt")
-        with open(raw_path, "w", encoding="utf-8") as f:
-            f.write(raw_resp)
-        log_both(f"💾 Risposta AI grezza salvata in: {raw_path}")
-
-        # Salva i testi puliti dall'LLM gratuito per diagnostica
-        cleaned_pages = audit_res.get("cleaned_pages", {})
-        c_idx = 1
-        for page_url, clean_text in cleaned_pages.items():
-            parsed_page = urlparse(page_url)
-            page_name = parsed_page.path.strip("/").replace("/", "_") or "homepage"
-            cleaned_txt_path = os.path.join(proc_dir, f"page_{c_idx}_{page_name}_cleaned.txt")
-            with open(cleaned_txt_path, "w", encoding="utf-8") as f:
-                f.write(clean_text)
-            log_both(f"   💾 Testo pulito da LLM salvato in: {cleaned_txt_path}")
-            c_idx += 1
-
-        # Salva l'audit in JSON (escludendo i campi di debug interni)
+        # Salva esclusivamente il DTO pubblico validato; prompt proprietari,
+        # risposte grezze e contenuti intermedi non lasciano il boundary AI.
         audit_export = {
             "website_score": audit_res.get("website_score"),
             "diagnosis": audit_res.get("diagnosis"),
