@@ -1,8 +1,8 @@
 # Lead Hunter V3 — Audit tecnico, vendibilità e roadmap “stato dell’arte”
 
 **Data dell’analisi:** 30 luglio 2026
-**Stato analizzato:** commit `62e5d9a` sincronizzato da `origin/main`, più le modifiche locali preservate nel working tree e gli artefatti `graphify-out/` rigenerati
-**Base di evidenza:** grafo Graphify post-sincronizzazione (304 nodi, 473 archi, 19 comunità), delta completo dei commit `78ffe58`, `e7afdbd` e `62e5d9a`, lettura del codice, compilazione statica, verifica dell’ambiente Python, artefatti diagnostici e fonti ufficiali aggiornate.
+**Stato analizzato:** branch `codex/p0-secure-crawl-evidence`, commit applicativi fino a `39541fc`, derivato da `main` al commit `7a0d441`
+**Base di evidenza:** grafo Graphify del branch corrente (353 nodi, 456 archi, 50 comunità, incluse comunità sottili), lettura del codice, 19 test automatici dei confini di sicurezza, compilazione statica, scansione Gitleaks 8.30.1 della cronologia e dei file staged, artefatti diagnostici e fonti ufficiali aggiornate.
 
 > Questo documento è un audit tecnico e di prodotto, non un parere legale. Prima della commercializzazione servono una verifica contrattuale su Google Maps Platform e un parere privacy/comunicazioni commerciali specifico per i mercati serviti.
 
@@ -26,6 +26,24 @@ Il delta remoto complessivo è di **9 file, 405 inserimenti e 564 rimozioni**. L
 - `token_mode` e `is_dynamic` sono rimasti nell’interfaccia ma non rappresentano più un comportamento reale.
 - Il rilevamento framework/CMS non è implementato nel prompt e non è supportato da detector deterministici.
 - È stata rilevata una chiave OpenRouter in chiaro in un file locale ignorato. Il file non è tracciato e non compare nella cronologia Git esaminata, ma la chiave deve comunque essere ruotata.
+
+### Aggiornamento — prima macrocategoria P0
+
+Il branch `codex/p0-secure-crawl-evidence` introduce quattro commit tematici:
+
+| Commit | P0 | Risultato |
+|---|---|---|
+| `ac05ccf` | P0-01 | URL policy fail-closed, blocco IP non pubblici, route guard del browser, limite redirect e test di DNS rebinding simulato |
+| `71a4a96` | P0-02 | boundary `UNTRUSTED_WEB_DATA`, sanitizzazione prima/dopo l’LLM, DTO di output in allowlist e rimozione dei prompt dagli output |
+| `3044ce7` | P0-06 | modello tipizzato di evidenza, status/content-type/hash/timestamp e doppio rifiuto dell’audit senza evidenza |
+| `39541fc` | P0-10 | Gitleaks pre-commit e CI, regola OpenRouter, ignore difensivi e procedura di risposta |
+
+Esito della macrocategoria:
+
+- **P0-06 è risolto a livello applicativo.**
+- **P0-01 è fortemente mitigato nel processo applicativo**, ma in produzione deve essere completato da egress firewall/container isolation: una policy Python non elimina da sola ogni rischio TOCTOU del DNS.
+- **P0-02 è mitigato con difese stratificate**, non “matematicamente risolto”: detector euristici e istruzioni LLM richiedono red-team test continui.
+- **P0-10 resta parzialmente aperto per decisione del proprietario:** la cronologia Git è pulita e le nuove esposizioni sono bloccate, ma la chiave locale non è stata ruotata né rimossa.
 
 ## 1. Verdetto esecutivo
 
@@ -97,6 +115,8 @@ La versione attuale non soddisfa ancora questi criteri.
 
 ### P0-01 — SSRF e navigazione arbitraria
 
+**Stato sul branch `codex/p0-secure-crawl-evidence`: MITIGATO — requisito infrastrutturale ancora aperto.**
+
 **Evidenza**
 
 - `src/crawler.py:61-105` passa l’URL direttamente a `AsyncWebCrawler.arun()` senza bloccare IP privati, loopback, link-local o metadata cloud.
@@ -137,6 +157,8 @@ Seguire le difese indicate da [OWASP SSRF Prevention](https://cheatsheetseries.o
 Una suite automatica deve bloccare il 100% dei payload SSRF noti, compresi redirect verso IP privati, IPv6, DNS rebinding simulato e URL LLM non candidati.
 
 ### P0-02 — Prompt injection indiretta e fuga dei prompt proprietari
+
+**Stato sul branch `codex/p0-secure-crawl-evidence`: MITIGATO — mantenere red-team e regression corpus.**
 
 **Evidenza**
 
@@ -253,6 +275,8 @@ Fonti:
 
 ### P0-06 — Crawl fallito o vuoto può produrre un audit come se fosse valido
 
+**Stato sul branch `codex/p0-secure-crawl-evidence`: RISOLTO a livello applicativo.**
+
 **Evidenza**
 
 - `src/crawler.py:107-110` restituisce correttamente un errore quando Crawl4AI dichiara il crawl fallito.
@@ -353,6 +377,8 @@ Leak di prompt proprietari, PII, email, contenuto dei siti e dati di localizzazi
 - Inventario dei sub-responsabili e data flow map.
 
 ### P0-10 — Chiave OpenRouter in chiaro in configurazione locale
+
+**Stato sul branch `codex/p0-secure-crawl-evidence`: PARZIALE — prevenzione implementata, rotazione rinviata su indicazione del proprietario.**
 
 **Evidenza**
 
