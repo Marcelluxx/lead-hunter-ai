@@ -1,8 +1,8 @@
 # Lead Hunter V3 — Audit tecnico, vendibilità e roadmap “stato dell’arte”
 
-**Data dell’analisi:** 30 luglio 2026
-**Stato analizzato:** branch `codex/p0-secure-crawl-evidence`, commit applicativi fino a `39541fc`, derivato da `main` al commit `7a0d441`
-**Base di evidenza:** grafo Graphify del branch corrente (353 nodi, 456 archi, 50 comunità, incluse comunità sottili), lettura del codice, 19 test automatici dei confini di sicurezza, compilazione statica, scansione Gitleaks 8.30.1 della cronologia e dei file staged, artefatti diagnostici e fonti ufficiali aggiornate.
+**Data dell’analisi:** 1 agosto 2026
+**Stato analizzato:** branch `codex/p0-data-output-hardening`, commit applicativi fino a `71e5f47`, derivato da `develop` al merge commit `6e7fae1`
+**Base di evidenza:** grafo Graphify del branch corrente (393 nodi, 545 archi, 28 comunità), lettura del codice, 29 test automatici dei confini di sicurezza e privacy, compilazione statica, scansione Gitleaks 8.30.1 della cronologia e dei file staged, artefatti diagnostici e fonti ufficiali aggiornate.
 
 > Questo documento è un audit tecnico e di prodotto, non un parere legale. Prima della commercializzazione servono una verifica contrattuale su Google Maps Platform e un parere privacy/comunicazioni commerciali specifico per i mercati serviti.
 
@@ -44,6 +44,22 @@ Esito della macrocategoria:
 - **P0-01 è fortemente mitigato nel processo applicativo**, ma in produzione deve essere completato da egress firewall/container isolation: una policy Python non elimina da sola ogni rischio TOCTOU del DNS.
 - **P0-02 è mitigato con difese stratificate**, non “matematicamente risolto”: detector euristici e istruzioni LLM richiedono red-team test continui.
 - **P0-10 resta parzialmente aperto per decisione del proprietario:** la cronologia Git è pulita e le nuove esposizioni sono bloccate, ma la chiave locale non è stata ruotata né rimossa.
+
+### Aggiornamento — seconda macrocategoria P0
+
+Il branch `codex/p0-data-output-hardening`, basato sul `develop` aggiornato, introduce tre commit tematici:
+
+| Commit | P0 | Risultato |
+|---|---|---|
+| `8db14c9` | P0-03 | valori dinamici escapati nelle card, log su widget testuale nativo ed eccezioni grezze rimosse dalla GUI |
+| `89fe7fa` | P0-08 | neutralizzazione centralizzata delle formule, celle testuali esplicite e verifica del file XLSX riaperto |
+| `71e5f47` | P0-09 | geolocalizzazione HTTPS opt-in, redazione log e artefatti diagnostici disabilitati per default con retention |
+
+Esito della macrocategoria:
+
+- **P0-03 è risolto a livello applicativo.** La CSP resta un controllo del deployment/reverse proxy, non del rendering dinamico Streamlit.
+- **P0-08 è risolto per l’export XLSX attuale.** Non viene offerto un export CSV; se verrà aggiunto dovrà riusare la stessa policy.
+- **P0-09 è risolto per i percorsi applicativi correnti e mitigato in prospettiva SaaS:** prompt e risposte grezze non attraversano il DTO pubblico, la geolocalizzazione non parte senza consenso e i dump diagnostici richiedono opt-in. Crittografia at-rest, RBAC, isolamento tenant e inventario sub-responsabili restano gate infrastrutturali prima dell’esposizione pubblica.
 
 ## 1. Verdetto esecutivo
 
@@ -192,7 +208,9 @@ Riferimento: [OWASP LLM Prompt Injection Prevention](https://cheatsheetseries.ow
 
 ### P0-03 — XSS nella GUI Streamlit
 
-**Evidenza**
+**Stato sul branch `codex/p0-data-output-hardening`: RISOLTO a livello applicativo (`8db14c9`).**
+
+**Evidenza originaria**
 
 - `src/gui.py:105-111` inserisce `keyword` in HTML con `unsafe_allow_html=True`.
 - `src/gui.py:190-192` permette keyword personalizzate.
@@ -210,6 +228,13 @@ Un nome attività, una keyword o un messaggio di errore contenente HTML può ess
 - Definire una CSP nel frontend di produzione.
 - Non renderizzare eccezioni grezze all’utente.
 - Aggiungere test con payload `<img onerror=...>`, SVG e attributi malformati.
+
+**Implementazione verificata**
+
+- `src/security/presentation.py` centralizza escaping HTML, classi di stato consentite e normalizzazione dei log.
+- `src/gui.py` usa `st.code` per i log dinamici e non mostra più il testo grezzo delle eccezioni.
+- `tests/test_presentation_security.py` copre tag immagine, SVG, script, quote e caratteri di controllo.
+- L’HTML residuo con `unsafe_allow_html=True` è statico oppure riceve esclusivamente valori già escapati. La CSP resta un requisito del frontend/reverse proxy di produzione.
 
 ### P0-04 — Google Places: storage, attribuzione e uso con la mappa
 
@@ -337,7 +362,9 @@ Streamlit va mantenuto come console interna. Per il prodotto:
 
 ### P0-08 — Formula injection negli Excel
 
-**Evidenza**
+**Stato sul branch `codex/p0-data-output-hardening`: RISOLTO per l’export XLSX (`89fe7fa`).**
+
+**Evidenza originaria**
 
 `src/exporter.py:83-88` scrive direttamente in celle valori provenienti da Google, siti e LLM. Valori che iniziano con `=`, `+`, `-` o `@` possono essere interpretati come formule.
 
@@ -352,15 +379,23 @@ Un dato malevolo può diventare una formula quando il cliente apre il file, con 
 - Aggiungere test con payload formula/DDE.
 - Offrire CSV solo con la stessa protezione.
 
+**Implementazione verificata**
+
+- `src/security/spreadsheet.py` preserva i valori numerici intenzionali e neutralizza i testi che, anche dopo whitespace, iniziano con `=`, `+`, `-` o `@`.
+- `src/exporter.py` forza esplicitamente il tipo stringa per i valori non numerici.
+- `tests/test_spreadsheet_security.py` riapre il file prodotto con `openpyxl` e verifica che nessuna cella controllata sia di tipo formula.
+- È stato corretto anche il crash post-salvataggio causato dalle emoji su console Windows CP1252.
+
 ### P0-09 — Dati sensibili e prompt completi esposti o conservati
 
-**Evidenza**
+**Stato sul branch `codex/p0-data-output-hardening`: RISOLTO nei percorsi applicativi correnti; restano gate infrastrutturali SaaS (`71e5f47`).**
 
-- `src/auditor.py:229-231` restituisce prompt completo, pagine pulite e risposta grezza.
-- `src/gui.py:453-455` mostra l’intero oggetto.
-- `src/tester.py:113-151` salva HTML e CSS.
-- `src/tester.py:195-230` salva prompt e risposta.
-- `src/gui.py:146-159` invia l’IP dell’utente a `ip-api.com` via HTTP, senza consenso esplicito.
+**Evidenza originaria e delta**
+
+- La restituzione di prompt completo, pagine pulite e risposta grezza era già stata eliminata nel commit `71a4a96`: `WebsiteAuditResult.to_public_dict()` applica un’allowlist e la GUI mostra solo il DTO pubblico.
+- Il tester salvava HTML e testi elaborati automaticamente in `test_output/`.
+- La GUI contattava automaticamente `ip-api.com` via HTTP durante l’inizializzazione, senza un’azione esplicita dell’utente.
+- I log della pipeline potevano contenere email, IP o credenziali incluse in errori e URL.
 
 **Impatto**
 
@@ -375,6 +410,17 @@ Leak di prompt proprietari, PII, email, contenuto dei siti e dati di localizzazi
 - Accesso diagnostico solo a ruoli autorizzati.
 - Geolocalizzazione opt-in via browser o inserimento manuale; non usare endpoint HTTP di terzi.
 - Inventario dei sub-responsabili e data flow map.
+
+**Implementazione verificata**
+
+- La GUI parte da coordinate locali modificabili e contatta il provider soltanto dopo il pulsante esplicito “Usa la mia posizione approssimativa”.
+- `src/security/geolocation.py` impone HTTPS, URL policy pubblica, redirect disabilitati, timeout, limite di risposta e range delle coordinate; restituisce solo latitudine e longitudine.
+- Il provider predefinito è `https://ipwho.is/`, configurabile con `IP_GEOLOCATION_URL`; la documentazione corrente dichiara HTTPS e uso commerciale anche sul piano gratuito. Prima della vendita va comunque inserito nell’inventario dei sub-responsabili o sostituito con un provider contrattualizzato.
+- `src/security/privacy.py` redige email, IP e credenziali dai log applicativi.
+- `--test-url` non crea più dump per default. `--save-diagnostic-artifacts` abilita esplicitamente HTML/testi e `--diagnostic-retention-hours` applica la cancellazione dei file scaduti.
+- `tests/test_privacy_controls.py` verifica redazione, HTTPS-only, assenza dell’IP dal DTO e retention contenuta nella directory diagnostica.
+
+Riferimenti provider: [documentazione IPWhois](https://ipwhois.io/documentation), [piani e uso commerciale](https://ipwhois.io/pricing).
 
 ### P0-10 — Chiave OpenRouter in chiaro in configurazione locale
 
@@ -1020,6 +1066,8 @@ Solo dopo aver consolidato:
 
 ### Sprint 0 — 1–2 settimane: rendere il prototipo onesto e sicuro per uso interno
 
+Stato al 1 agosto 2026 per le attività già affrontate: P0-01/P0-02/P0-03/P0-06/P0-08 sono chiusi o mitigati come indicato nelle rispettive sezioni; P0-09 è chiuso nei percorsi applicativi ma richiede i gate SaaS; P0-10 mantiene intenzionalmente aperta la rotazione della chiave.
+
 1. Ruotare la chiave OpenRouter esposta nella configurazione locale e introdurre secret scanning.
 2. Correggere filtro età.
 3. Collegare o rimuovere audit “no website”.
@@ -1027,9 +1075,9 @@ Solo dopo aver consolidato:
 5. Correggere filtro social.
 6. Bloccare SSRF.
 7. Validare errori/status/redirect del crawl e impedire audit senza evidenza.
-8. Rimuovere prompt completi dalla GUI.
-9. Escapare HTML.
-10. Neutralizzare formule Excel.
+8. Rimuovere prompt completi dalla GUI. **Completato (`71a4a96`).**
+9. Escapare HTML e rendere testuali i log dinamici. **Completato (`8db14c9`).**
+10. Neutralizzare formule Excel. **Completato (`89fe7fa`).**
 11. Aggiungere timeout Google.
 12. Scegliere un solo provider WHOIS e bloccare le dipendenze.
 13. Correggere `token_mode`, `is_dynamic`, categorie/località e framework detection.

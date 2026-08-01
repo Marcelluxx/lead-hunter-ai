@@ -13,8 +13,10 @@ from openpyxl.utils import get_column_letter
 
 try:
     from .filters import clean_and_translate_categories, extract_address_details
+    from .security.spreadsheet import is_text_cell, sanitize_spreadsheet_value
 except (ImportError, ValueError):
     from filters import clean_and_translate_categories, extract_address_details
+    from security.spreadsheet import is_text_cell, sanitize_spreadsheet_value
 
 
 
@@ -88,7 +90,10 @@ class DataExporter:
             # --- DATA ROWS ---
             for row_idx, row_data in enumerate(rows, 2):
                 for col_idx, value in enumerate(row_data, 1):
-                    cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                    safe_value = sanitize_spreadsheet_value(value)
+                    cell = ws.cell(row=row_idx, column=col_idx, value=safe_value)
+                    if is_text_cell(safe_value):
+                        cell.data_type = "s"
                     cell.font = DataExporter.DATA_FONT
                     cell.alignment = DataExporter.DATA_ALIGNMENT
 
@@ -125,12 +130,12 @@ class DataExporter:
             ws.auto_filter.ref = ws.dimensions
 
             wb.save(filename)
-            print(f"\n✅ [OK] Esportazione premium completata: {len(leads_list)} lead in '{filename}'")
+            print(f"\n[OK] Esportazione premium completata: {len(leads_list)} lead in '{filename}'")
 
         except PermissionError:
-            print(f"❌ [Errore] Il file '{filename}' è aperto in un altro programma. Chiudilo e riprova.")
+            print(f"[Errore] Il file '{filename}' è aperto in un altro programma. Chiudilo e riprova.")
         except Exception as e:
-            print(f"❌ [Errore] Eccezione durante l'esportazione: {e}")
+            print(f"[Errore] Eccezione durante l'esportazione: {e}")
 
     @staticmethod
     def _get_no_website_columns() -> list:

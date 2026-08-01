@@ -37,8 +37,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Install isolated test dependency
-        run: python -m pip install "beautifulsoup4>=4.12,<5"
+      - name: Install isolated test dependencies
+        run: >-
+          python -m pip install
+          "beautifulsoup4>=4.12,<5"
+          "requests>=2.31,<3"
+          "openpyxl>=3.1,<4"
+          "python-whois>=0.9,<1"
 
       - name: Compile source
         run: python -m compileall -q src tests main.py
