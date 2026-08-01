@@ -217,7 +217,12 @@ class LeadHunterOrchestrator:
                 
                 try:
                     crawl_res = loop.run_until_complete(crawler.crawl(website))
-                    
+
+                    if not crawl_res.is_auditable:
+                        reason = crawl_res.audit_rejection_reason or "evidenza_insufficiente"
+                        log(f"      ❌ Audit non accodato: crawl non valido ({reason})")
+                        continue
+
                     if crawl_res.emails:
                         log(f"      📧 Email: {', '.join(crawl_res.emails[:3])}")
                     if crawl_res.is_dynamic:
