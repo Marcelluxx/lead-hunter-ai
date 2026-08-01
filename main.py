@@ -12,37 +12,47 @@ import argparse
 import textwrap
 import subprocess
 from datetime import datetime
-from typing import Dict, List, Any, Callable, Optional
+from typing import Dict, List, Callable, Optional
 
 from src.scraper import LeadScraper
 from src.auditor import LeadAuditor
+from src.application.container import ApplicationContainer
+from src.application.provenance import build_verified_lead
+from src.domain.discovery import TransientCandidate
+from src.domain.provenance import VerifiedLead
 from src.exporter import DataExporter
-from src.crawler import HybridCrawler, CrawlResult
+from src.crawler import HybridCrawler
 from src.security.privacy import redact_sensitive_text
 from src.filters import (
-    filter_by_reviews,
     filter_by_business_age,
     filter_ecommerce,
     filter_franchise,
     extract_domain,
     filter_social_media,
-    clean_and_translate_categories,
 )
 from src.config import (
     MIN_RATING, MAX_REVIEWS, MIN_BUSINESS_AGE_YEARS,
-    MAX_CRAWL_PAGES, TOKEN_MODE, ECOMMERCE_INDICATORS, KNOWN_FRANCHISES,
+    MAX_CRAWL_PAGES, DEFAULT_TOKEN_MODE, ECOMMERCE_INDICATORS, KNOWN_FRANCHISES,
     SOCIAL_MEDIA_DOMAINS, OUTPUT_DIR,
 )
+from src.settings import ApplicationSettings, SettingsError
 
 
 class LeadHunterOrchestrator:
     """Core Engine disaccoppiato dalla UI. Può essere invocato da CLI, GUI o API esterne."""
 
-    def __init__(self, mode: str = "no_website"):
+    def __init__(
+        self,
+        mode: str,
+        *,
+        scraper: LeadScraper,
+        auditor: Optional[LeadAuditor] = None,
+    ):
         self.mode = mode
-        self.scraper = LeadScraper()
-        self.auditor = LeadAuditor()
-        self.all_leads: Dict[str, Dict[str, Any]] = {}
+        self.scraper = scraper
+        self.auditor = auditor
+        self.all_leads: Dict[str, VerifiedLead] = {}
+        self.transient_results: List[TransientCandidate] = []
 
     # ==========================================
     # MODALITÀ 1: LEAD SENZA SITO WEB
@@ -51,9 +61,10 @@ class LeadHunterOrchestrator:
         self,
         lat: float, lng: float, keywords: List[str],
         on_kw_start=None, on_kw_progress=None, on_kw_end=None
-    ) -> List[Dict[str, Any]]:
-        """Pipeline originale per lead senza sito web."""
-        raw_leads_to_audit = []
+    ) -> List[TransientCandidate]:
+        """Risultati transitori mostrabili solo con attribuzione provider."""
+        seen: set[tuple[str, str]] = set()
+        results: list[TransientCandidate] = []
 
         print("\n🔍 --- FASE 1: Scraping Google Maps ---")
         for keyword in keywords:
@@ -65,34 +76,24 @@ class LeadHunterOrchestrator:
                     on_kw_progress(keyword, current, total)
 
             places = self.scraper.scrape_entire_grid(keyword, lat, lng, on_progress=_grid_progress)
-            top_competitor = self.scraper.identify_top_competitor(places)
-
             new_count = 0
             for place in places:
-                place_id = place.get("id")
-                if place_id and not place.get("websiteUri") and place_id not in self.all_leads:
-                    self.all_leads[place_id] = place
-                    raw_leads_to_audit.append({
-                        "id": place_id, "place_data": place,
-                        "keyword": keyword, "competitor": top_competitor
-                    })
+                key = (place.provider, place.external_id)
+                if not place.website_url and key not in seen:
+                    seen.add(key)
+                    results.append(place)
                     new_count += 1
 
             if on_kw_end:
                 on_kw_end(keyword, new_count)
             print(f"✅ Trovati {new_count} nuovi lead per '{keyword}'.")
 
-        if not raw_leads_to_audit:
+        if not results:
             print("⚠️ Nessun lead senza sito web trovato.")
             return []
-
-        for item in raw_leads_to_audit:
-            p_id = item["id"]
-            self.all_leads[p_id]["competitor"] = item["competitor"]
-            self.all_leads[p_id]["search_keyword"] = item["keyword"]
-
+        self.transient_results = results
         print("\n✅ Tutte le fasi completate.")
-        return list(self.all_leads.values())
+        return results
 
     # ==========================================
     # MODALITÀ 2: LEAD CON SITO WEB + AUDIT
@@ -104,14 +105,14 @@ class LeadHunterOrchestrator:
         max_reviews: int = MAX_REVIEWS,
         min_age: int = MIN_BUSINESS_AGE_YEARS,
         max_pages: int = MAX_CRAWL_PAGES,
-        token_mode: str = TOKEN_MODE,
+        token_mode: str = DEFAULT_TOKEN_MODE,
         headless: bool = True,
         on_phase: Optional[Callable] = None,
         on_progress: Optional[Callable] = None,
         on_crawl_progress: Optional[Callable] = None,
         on_audit_progress: Optional[Callable] = None,
         on_log: Optional[Callable] = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> List[VerifiedLead]:
         """
         Pipeline completa per lead con sito web (Streaming Parallelo).
         on_phase: Callable[[str, str], None] — (fase_id, descrizione)
@@ -120,6 +121,9 @@ class LeadHunterOrchestrator:
         on_audit_progress: Callable[[int, int], None]
         on_log: Callable[[str], None] — messaggio di log
         """
+        if self.auditor is None:
+            raise RuntimeError("Auditor non configurato per la pipeline with_website.")
+
         def log(msg):
             safe_message = redact_sensitive_text(msg)
             print(safe_message)
@@ -131,7 +135,8 @@ class LeadHunterOrchestrator:
             on_phase("scraping", "Scraping Google Maps...")
         log("🔍 FASE 1: Scraping Google Maps")
 
-        all_places = []
+        all_places: list[tuple[TransientCandidate, str]] = []
+        seen_candidates: set[tuple[str, str]] = set()
         for keyword in keywords:
             log(f"   🏷️ Keyword: {keyword}")
 
@@ -143,11 +148,10 @@ class LeadHunterOrchestrator:
 
             valid_new = 0
             for place in places:
-                place_id = place.get("id")
-                if place_id and place.get("websiteUri") and place_id not in self.all_leads:
-                    place["search_keyword"] = keyword
-                    self.all_leads[place_id] = place
-                    all_places.append(place)
+                key = (place.provider, place.external_id)
+                if place.website_url and key not in seen_candidates:
+                    seen_candidates.add(key)
+                    all_places.append((place, keyword))
                     valid_new += 1
 
             log(f"   ✅ {len(places)} risultati unici per '{keyword}' -> Aggiunti {valid_new} nuovi lead (Totale parziale: {len(all_places)})")
@@ -156,25 +160,19 @@ class LeadHunterOrchestrator:
             log("⚠️ Nessun lead con sito web trovato.")
             return []
 
-        # --- FASE 2: Filtro Recensioni e Social Media ---
+        # --- FASE 2: Filtro URL social (rating e recensioni non richiesti) ---
         if on_phase:
-            on_phase("filtering_reviews", "Filtro recensioni e domini social...")
-        log(f"\n📊 FASE 2: Filtro Recensioni (rating > {min_rating}) e Social Media")
+            on_phase("filtering_reviews", "Filtro domini social...")
+        log("\n📊 FASE 2: Filtro domini social")
 
         filtered_places = []
-        for place in all_places:
-            website = place.get("websiteUri", "")
+        for place, keyword in all_places:
+            website = place.website_url or ""
             domain = extract_domain(website)
-            
-            # 1. Filtro Social Media
             if filter_social_media(domain, SOCIAL_MEDIA_DOMAINS):
-                name = place.get("displayName", {}).get("text", "?")
-                log(f"   ❌ Escluso (Social Media): {name} ({domain})")
+                log("   ❌ Escluso un risultato con dominio social")
                 continue
-                
-            # 2. Filtro Recensioni
-            if filter_by_reviews(place, min_rating, max_reviews):
-                filtered_places.append(place)
+            filtered_places.append((place, keyword))
 
         log(f"   ✅ {len(filtered_places)}/{len(all_places)} lead superano i filtri preliminari")
 
@@ -197,25 +195,21 @@ class LeadHunterOrchestrator:
         
         audit_executor = ThreadPoolExecutor(max_workers=6)
         audit_futures = {}
-        valid_leads = []
-        
-        all_names = [p.get("displayName", {}).get("text", "") for p in all_places]
+        valid_lead_ids: list[str] = []
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
         try:
-            for idx, place in enumerate(filtered_places, 1):
-                p_id = place.get("id")
-                website = place.get("websiteUri", "")
-                name = place.get("displayName", {}).get("text", "?")
-                category = clean_and_translate_categories(place.get("types", []), place.get("search_keyword", ""))
+            for idx, (place, keyword) in enumerate(filtered_places, 1):
+                p_id = place.external_id
+                website = place.website_url or ""
                 
                 # Update Crawl Progress
                 if on_crawl_progress:
                     on_crawl_progress(idx, total_to_crawl)
                 
-                log(f"   🌐 [{idx}/{total_to_crawl}] Crawling: {name} ({website})")
+                log(f"   🌐 [{idx}/{total_to_crawl}] Verifica sito ufficiale")
                 
                 try:
                     crawl_res = loop.run_until_complete(crawler.crawl(website))
@@ -226,78 +220,77 @@ class LeadHunterOrchestrator:
                         continue
 
                     if crawl_res.emails:
-                        log(f"      📧 Email: {', '.join(crawl_res.emails[:3])}")
+                        log(f"      📧 {len(crawl_res.emails)} email professionali rilevate")
                     if crawl_res.is_dynamic:
                         log(f"      ⚡ JS (Playwright)")
                         
                     # Fase 4: Filtro Età
-                    domain = extract_domain(website)
+                    verified = build_verified_lead(crawl_res, search_keyword=keyword)
+                    domain = extract_domain(verified.website)
                     if not filter_by_business_age(domain, crawl_res.raw_html_home, min_age):
-                        log(f"   ❌ Escluso (troppo recente): {name}")
+                        log("   ❌ Escluso: dominio troppo recente")
                         continue
                         
                     # Fase 5: Filtro Scala
                     # if filter_ecommerce(crawl_res.raw_html_home, ECOMMERCE_INDICATORS):
                     #     log(f"   ❌ Escluso (e-commerce): {name}")
                     #     continue
-                    if filter_franchise(name, all_names, KNOWN_FRANCHISES):
-                        log(f"   ❌ Escluso (franchise): {name}")
+                    if filter_franchise(verified.business_name, [], KNOWN_FRANCHISES):
+                        log("   ❌ Escluso: franchise noto")
                         continue
                         
                     # Superati tutti i filtri: accoda per l'AI Audit
-                    valid_leads.append(place)
+                    valid_lead_ids.append(p_id)
                     total_to_audit += 1
-                    
-                    if crawl_res.emails:
-                        self.all_leads[p_id]["extracted_email"] = crawl_res.emails
-                        
+
                     audit_payload = {
                         "crawl_pages": crawl_res.pages,
-                        "business_name": name,
-                        "category": category,
-                        "rating": place.get("rating", 0),
-                        "review_count": place.get("userRatingCount", 0),
+                        "business_name": verified.business_name,
+                        "category": verified.category,
+                        "rating": 0,
+                        "review_count": 0,
                     }
-                    
                     future = audit_executor.submit(self.auditor.audit_website, **audit_payload)
-                    audit_futures[future] = p_id
+                    audit_futures[future] = (p_id, crawl_res, keyword)
                     
                     if on_audit_progress:
                         on_audit_progress(audits_completed, total_to_audit)
                         
                 except Exception as e:
-                    log(f"      ❌ Errore crawling {name}: {e}")
+                    log(f"      ❌ Errore crawling ({type(e).__name__})")
 
                 # Poll per audit completati nel frattempo (non bloccante)
                 done_futures = [f for f in audit_futures if f.done()]
                 for f in done_futures:
-                    pid = audit_futures.pop(f)
+                    pid, crawl_res, keyword = audit_futures.pop(f)
                     try:
                         res = f.result()
-                        self.all_leads[pid].update(res)
+                        self.all_leads[pid] = build_verified_lead(
+                            crawl_res, search_keyword=keyword, audit=res
+                        )
                         audits_completed += 1
-                        log(f"   🧠 Audit completato: {self.all_leads[pid].get('displayName', {}).get('text')}")
+                        log("   🧠 Audit completato su dati del sito ufficiale")
                     except Exception as e:
                         log(f"   ❌ Errore Audit per {pid}: {e}")
                         audits_completed += 1
                     if on_audit_progress:
                         on_audit_progress(audits_completed, total_to_audit)
 
-            # Fine del crawling, attesa completamento audit rimasti
-            loop.run_until_complete(crawler.close())
-            
         finally:
+            loop.run_until_complete(crawler.close())
             loop.close()
             
         if audit_futures:
             log(f"\n⏳ Attesa completamento di {len(audit_futures)} audit AI in background...")
             for future in as_completed(audit_futures.keys()):
-                pid = audit_futures.pop(future)
+                pid, crawl_res, keyword = audit_futures.pop(future)
                 try:
                     res = future.result()
-                    self.all_leads[pid].update(res)
+                    self.all_leads[pid] = build_verified_lead(
+                        crawl_res, search_keyword=keyword, audit=res
+                    )
                     audits_completed += 1
-                    log(f"   🧠 Audit completato: {self.all_leads[pid].get('displayName', {}).get('text')}")
+                    log("   🧠 Audit completato su dati del sito ufficiale")
                 except Exception as e:
                     log(f"   ❌ Errore Audit per {pid}: {e}")
                     audits_completed += 1
@@ -305,15 +298,20 @@ class LeadHunterOrchestrator:
                 if on_audit_progress:
                     on_audit_progress(audits_completed, total_to_audit)
 
-        log(f"\n✅ Pipeline completata: {len(valid_leads)} lead qualificati su {len(all_places)}.")
-        return [self.all_leads[p.get("id")] for p in valid_leads if p.get("id") in self.all_leads]
+        audit_executor.shutdown(wait=True)
+        log(f"\n✅ Pipeline completata: {len(self.all_leads)} lead verificati su {len(all_places)}.")
+        return [self.all_leads[p_id] for p_id in valid_lead_ids if p_id in self.all_leads]
 
     # ==========================================
     # DISPATCHER PRINCIPALE
     # ==========================================
-    def run(self, lat: float, lng: float, keywords: List[str], **kwargs) -> List[Dict[str, Any]]:
+    def run(
+        self, lat: float, lng: float, keywords: List[str], **kwargs
+    ) -> List[VerifiedLead] | List[TransientCandidate]:
         """Dispatcher che smista alla pipeline corretta in base al mode."""
         if self.mode == "with_website":
+            if self.auditor is None:
+                raise RuntimeError("Auditor non configurato per la pipeline with_website.")
             return self.run_with_website(lat, lng, keywords, **kwargs)
         return self.run_no_website(
             lat, lng, keywords,
@@ -321,6 +319,21 @@ class LeadHunterOrchestrator:
             on_kw_progress=kwargs.get("on_kw_progress"),
             on_kw_end=kwargs.get("on_kw_end"),
         )
+
+
+def create_orchestrator(
+    mode: str,
+    settings: Optional[ApplicationSettings] = None,
+) -> LeadHunterOrchestrator:
+    """Build provider dependencies at an explicit application boundary."""
+    runtime_settings = settings or ApplicationSettings.from_environment()
+    runtime_settings.require_pipeline(mode)
+    container = ApplicationContainer(runtime_settings)
+    return LeadHunterOrchestrator(
+        mode=mode,
+        scraper=container.build_scraper(),
+        auditor=container.build_auditor() if mode == "with_website" else None,
+    )
 
 
 # ==========================================
@@ -351,6 +364,16 @@ def show_examples():
 
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+    try:
+        runtime_settings = ApplicationSettings.from_environment()
+    except SettingsError as exc:
+        print(f"Configurazione non valida: {exc}")
+        sys.exit(2)
     parser = argparse.ArgumentParser(
         prog="LeadHunter",
         description="Agente AI B2B per Scraping & Auditing di contatti commerciali.",
@@ -376,7 +399,8 @@ if __name__ == "__main__":
     parser.add_argument("--min-age", type=int, default=MIN_BUSINESS_AGE_YEARS,
                         help=f"Età minima attività in anni (default: {MIN_BUSINESS_AGE_YEARS})")
     parser.add_argument("--token-mode", type=str, choices=["high_fidelity", "optimized"],
-                        default=TOKEN_MODE, help=f"Modalità token LLM (default: {TOKEN_MODE})")
+                        default=runtime_settings.token_mode,
+                        help=f"Modalità token LLM (default: {runtime_settings.token_mode})")
     parser.add_argument("--max-pages", type=int, default=MAX_CRAWL_PAGES,
                         help=f"Max pagine da crawlare per sito (default: {MAX_CRAWL_PAGES})")
     parser.add_argument("--no-headless", action="store_true",
@@ -405,14 +429,20 @@ if __name__ == "__main__":
 
     if args.test_url:
         from src.tester import run_url_test
-        run_url_test(
-            args.test_url,
-            max_pages=args.max_pages,
-            token_mode=args.token_mode,
-            headless=not args.no_headless,
-            save_artifacts=args.save_diagnostic_artifacts,
-            retention_hours=args.diagnostic_retention_hours,
-        )
+        try:
+            container = ApplicationContainer(runtime_settings)
+            run_url_test(
+                args.test_url,
+                max_pages=args.max_pages,
+                token_mode=args.token_mode,
+                headless=not args.no_headless,
+                save_artifacts=args.save_diagnostic_artifacts,
+                retention_hours=args.diagnostic_retention_hours,
+                auditor=container.build_auditor(),
+            )
+        except SettingsError as exc:
+            print(f"Configurazione non valida: {exc}")
+            sys.exit(2)
         sys.exit(0)
 
     if args.gui:
@@ -430,10 +460,14 @@ if __name__ == "__main__":
         print("Usa 'python main.py --help' per assistenza.")
         sys.exit(1)
 
+    try:
+        orchestrator = create_orchestrator(args.mode, runtime_settings)
+    except SettingsError as exc:
+        print(f"Configurazione non valida: {exc}")
+        sys.exit(2)
+
     print(f"\n🚀 Avvio Lead Hunter V3 CLI — Modalità: {args.mode.upper()}")
     print(f"   Coordinate: {args.lat}, {args.lng}")
-
-    orchestrator = LeadHunterOrchestrator(mode=args.mode)
 
     out_file = args.out
     if out_file == "leads_output.xlsx":
@@ -459,15 +493,25 @@ if __name__ == "__main__":
         else:
             results = orchestrator.run(args.lat, args.lng, args.keywords)
 
-        if results:
+        if results and args.mode == "with_website":
             DataExporter.export_to_excel(results, mode=args.mode, filename=out_file)
             print(f"✅ Completato. {len(results)} leads esportati in {out_file}")
+        elif results:
+            attribution = orchestrator.scraper.attribution
+            print(f"✅ {len(results)} risultati transitori trovati — dati {attribution.label}.")
+            print(
+                "ℹ️ L'esportazione è disabilitata: i risultati senza sito possono "
+                "essere consultati solo durante questa sessione con attribuzione."
+            )
+            for candidate in results:
+                print(f"   • {candidate.display_name or 'Attività senza nome'}")
+            print(f"   Termini: {attribution.terms_url}")
         else:
             print("⚠️ Nessun lead utile trovato nell'area.")
 
     except KeyboardInterrupt:
         print("\n⚠️ Interrotto. Esporto dati parziali...")
-        if orchestrator.all_leads:
+        if args.mode == "with_website" and orchestrator.all_leads:
             emergency_file = os.path.join(OUTPUT_DIR, "salvataggio_emergenza.xlsx")
             DataExporter.export_to_excel(
                 list(orchestrator.all_leads.values()),

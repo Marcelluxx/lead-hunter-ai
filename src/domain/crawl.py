@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional
 
+from .contacts import ContactPoint
+
 
 MIN_AUDIT_PAGE_CHARS = 120
 MIN_AUDIT_TOTAL_CHARS = 200
@@ -79,7 +81,7 @@ class CrawlResult:
     requested_url: str = ""
     pages: Dict[str, str] = field(default_factory=dict)
     evidence: List[PageEvidence] = field(default_factory=list)
-    emails: List[str] = field(default_factory=list)
+    contacts: List[ContactPoint] = field(default_factory=list)
     raw_html_home: str = ""
     is_dynamic: bool = True
     status: CrawlStatus = CrawlStatus.PENDING
@@ -94,6 +96,12 @@ class CrawlResult:
     @property
     def valid_evidence(self) -> List[PageEvidence]:
         return [item for item in self.evidence if item.valid]
+
+    @property
+    def emails(self) -> List[str]:
+        """Presentation compatibility view; governance uses typed contacts."""
+
+        return [item.display_value for item in self.contacts if item.kind.value == "email"]
 
     @property
     def is_auditable(self) -> bool:

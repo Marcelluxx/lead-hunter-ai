@@ -7,11 +7,14 @@ for LLM ingestion, advanced WAF/stealth bypass, and structured link extraction.
 import re
 import asyncio
 import logging
-from typing import List, Optional, Set
+from datetime import datetime
+from typing import Dict, List, Optional, Set
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 from .domain import (
+    ContactExtractionMethod,
+    ContactPoint,
     CrawlEvidenceError,
     CrawlResult,
     CrawlStatus,
@@ -120,7 +123,7 @@ class HybridCrawler:
         Restituisce un CrawlResult con la mappa delle pagine pulite ed email.
         """
         result = CrawlResult(url=url, requested_url=url)
-        all_emails: Set[str] = set()
+        all_contacts: Dict[str, ContactPoint] = {}
 
         try:
             self.url_policy.reset_dns_pins()
@@ -225,7 +228,16 @@ class HybridCrawler:
                 result.error = "Homepage priva di evidenza valida per l'audit."
                 return result
             result.pages[result.url] = home_content
-            all_emails.update(self._extract_emails_from_text_and_html(home_result.html or "", fit_md))
+            self._merge_contacts(
+                all_contacts,
+                self._extract_contacts_from_text_and_html(
+                    home_result.html or "",
+                    fit_md,
+                    source_url=result.url,
+                    collected_at=datetime.fromisoformat(home_evidence.retrieved_at),
+                    evidence_sha256=home_evidence.content_sha256,
+                ),
+            )
 
             # --- SCOPERTA LINK INTERNI ---
             internal_links_raw = []
@@ -312,7 +324,16 @@ class HybridCrawler:
                         if not page_evidence.valid:
                             continue
                         result.pages[page_decision.normalized_url] = page_content
-                        all_emails.update(self._extract_emails_from_text_and_html(page_result.html or "", page_fit_md))
+                        self._merge_contacts(
+                            all_contacts,
+                            self._extract_contacts_from_text_and_html(
+                                page_result.html or "",
+                                page_fit_md,
+                                source_url=page_decision.normalized_url,
+                                collected_at=datetime.fromisoformat(page_evidence.retrieved_at),
+                                evidence_sha256=page_evidence.content_sha256,
+                            ),
+                        )
                         pages_crawled += 1
                     else:
                         failed_status, failed_content_type = self._page_metadata(page_result)
@@ -339,7 +360,9 @@ class HybridCrawler:
                     )
                     logger.debug(f"Errore durante il crawling di '{p_url}': {e}")
 
-            result.emails = sorted(all_emails)
+            result.contacts = sorted(
+                all_contacts.values(), key=lambda item: item.normalized_value
+            )
             result.blocked_request_codes = list(self._blocked_requests)
             try:
                 ensure_auditable_pages(result.pages)
@@ -378,15 +401,23 @@ class HybridCrawler:
         text = re.sub(r' {3,}', ' ', text)
         return text.strip()
 
-    def _extract_emails_from_text_and_html(self, html: str, markdown: str) -> Set[str]:
-        """Estrae email dall'HTML, dal Markdown e dai tag mailto."""
-        emails: Set[str] = set()
+    def _extract_contacts_from_text_and_html(
+        self,
+        html: str,
+        markdown: str,
+        *,
+        source_url: str,
+        collected_at: datetime,
+        evidence_sha256: str,
+    ) -> list[ContactPoint]:
+        """Extract typed contacts with per-page evidence and source."""
+        emails: dict[str, ContactExtractionMethod] = {}
 
         # 1. Regex su HTML e Markdown
         for match in EMAIL_REGEX.findall(html):
-            emails.add(match.lower())
+            emails.setdefault(match.lower(), ContactExtractionMethod.REGEX)
         for match in EMAIL_REGEX.findall(markdown):
-            emails.add(match.lower())
+            emails.setdefault(match.lower(), ContactExtractionMethod.REGEX)
 
         # 2. Mailto link in HTML
         soup = BeautifulSoup(html, "html.parser")
@@ -395,11 +426,11 @@ class HybridCrawler:
             if href.startswith("mailto:"):
                 email = href.replace("mailto:", "").split("?")[0].strip().lower()
                 if EMAIL_REGEX.match(email):
-                    emails.add(email)
+                    emails[email] = ContactExtractionMethod.MAILTO
 
         # Filtra email non valide o di sistema
-        filtered = set()
-        for email in emails:
+        contacts: list[ContactPoint] = []
+        for email, method in emails.items():
             parts = email.split("@")
             if len(parts) != 2:
                 continue
@@ -409,9 +440,28 @@ class HybridCrawler:
             ext = "." + email.rsplit(".", 1)[-1] if "." in email else ""
             if ext in EMAIL_BLACKLIST_EXTENSIONS:
                 continue
-            filtered.add(email)
+            try:
+                contacts.append(
+                    ContactPoint.from_email(
+                        email,
+                        source_url=source_url,
+                        collected_at=collected_at,
+                        extraction_method=method,
+                        evidence_sha256=evidence_sha256,
+                    )
+                )
+            except ValueError:
+                continue
+        return contacts
 
-        return filtered
+    @staticmethod
+    def _merge_contacts(
+        target: Dict[str, ContactPoint], contacts: list[ContactPoint]
+    ) -> None:
+        for contact in contacts:
+            existing = target.get(contact.normalized_value)
+            if existing is None or contact.confidence > existing.confidence:
+                target[contact.normalized_value] = contact
 
     async def close(self):
         """Chiude la sessione attiva del browser Crawl4AI."""

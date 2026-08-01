@@ -21,20 +21,21 @@ from datetime import datetime
 # Path setup per import dal progetto root
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from config import (
+from src.config import (
     GRID_SIZE, GRID_STEP_KM, RADIUS_M, LAT_DEGREE_KM,
     MIN_RATING, MAX_REVIEWS, MIN_BUSINESS_AGE_YEARS, MAX_CRAWL_PAGES,
     OUTPUT_DIR,
 )
-from main import LeadHunterOrchestrator
-from exporter import DataExporter
-from security.presentation import (
+from main import create_orchestrator
+from src.settings import ApplicationSettings, SettingsError
+from src.exporter import DataExporter
+from src.security.presentation import (
     build_keyword_card_html,
     build_phase_card_html,
     normalize_log_message,
 )
-from security.geolocation import GeolocationError, lookup_approximate_location
-from security.privacy import redact_sensitive_text
+from src.security.geolocation import GeolocationError, lookup_approximate_location
+from src.security.privacy import redact_sensitive_text
 
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,12 @@ st.set_page_config(
     layout="wide",
     page_icon="🎯"
 )
+
+try:
+    runtime_settings = ApplicationSettings.from_environment()
+except SettingsError as exc:
+    st.error(f"Configurazione non valida: {exc}")
+    st.stop()
 
 # --- CUSTOM CSS PREMIUM ---
 st.markdown("""
@@ -178,14 +185,12 @@ with col1:
     if mode_key == "with_website":
         st.markdown("<hr style='margin: 12px 0; border: none; border-top: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
         st.markdown("#### 🎯 Filtri Lead")
-
-        wm_col1, wm_col2 = st.columns(2)
-        with wm_col1:
-            min_rating = st.number_input("⭐ Rating minimo", min_value=1.0, max_value=5.0, value=MIN_RATING, step=0.1)
-            st.markdown('<p class="param-hint">Solo attività con rating superiore a questa soglia</p>', unsafe_allow_html=True)
-        with wm_col2:
-            max_reviews = st.number_input("📝 Max recensioni", min_value=1, max_value=500, value=MAX_REVIEWS, step=10)
-            st.markdown('<p class="param-hint">Esclude catene con centinaia di recensioni</p>', unsafe_allow_html=True)
+        min_rating = MIN_RATING
+        max_reviews = MAX_REVIEWS
+        st.caption(
+            "Rating e recensioni Google non vengono richiesti né usati. "
+            "La qualificazione si basa sul sito ufficiale verificato."
+        )
 
         min_age = st.number_input("📅 Età minima attività (anni)", min_value=1, max_value=30, value=MIN_BUSINESS_AGE_YEARS, step=1)
         st.markdown('<p class="param-hint">Verifica WHOIS e copywriting del sito (se nessun dato: passa)</p>', unsafe_allow_html=True)
@@ -249,6 +254,10 @@ with col1:
     start_btn = st.button("🚀 AVVIA LEAD HUNTER ENGINE", type="primary", use_container_width=True)
 
 with col2:
+    st.caption(
+        "Mappa indipendente OpenStreetMap/Folium usata solo per scegliere il centro; "
+        "non visualizza contenuti Google Places."
+    )
     m = folium.Map(
         location=[st.session_state.target_coords["lat"], st.session_state.target_coords["lng"]],
         zoom_start=13, control_scale=True
@@ -319,9 +328,8 @@ if start_btn:
         st.session_state.logs = []
         update_log("🚀 Inizializzazione Engine V3...")
 
-        orchestrator = LeadHunterOrchestrator(mode=mode_key)
-
         try:
+            orchestrator = create_orchestrator(mode_key, runtime_settings)
             if mode_key == "no_website":
                 # === PIPELINE NO WEBSITE ===
                 def on_kw_start(kw):
@@ -433,36 +441,47 @@ if start_btn:
                 st.balloons()
                 st.success(f"🎊 Pipeline completata! **{len(results)}** lead qualificati in **{total_elapsed}**.")
 
-                city = orchestrator.scraper.get_city_name(
-                    st.session_state.target_coords["lat"],
-                    st.session_state.target_coords["lng"]
-                )
-                date_str = datetime.now().strftime("%d_%m_%Y")
-                filename = f"Lead_Hunter_{city}_{date_str}.xlsx"
-                filepath = os.path.join(OUTPUT_DIR, filename)
-                DataExporter.export_to_excel(results, mode=mode_key, filename=filepath)
-
                 st.markdown("### 💎 Database Lead Premium")
                 if mode_key == "with_website":
                     cols = DataExporter._get_website_columns()
                     rows = DataExporter._format_website_rows(results)
+                    date_str = datetime.now().strftime("%d_%m_%Y")
+                    filename = f"Lead_Hunter_Report_{date_str}.xlsx"
+                    filepath = os.path.join(OUTPUT_DIR, filename)
+                    DataExporter.export_to_excel(results, mode=mode_key, filename=filepath)
                 else:
                     cols = DataExporter._get_no_website_columns()
                     rows = DataExporter._format_no_website_rows(results)
                 df = pd.DataFrame(rows, columns=cols)
                 st.dataframe(df, use_container_width=True)
 
-                with open(filepath, "rb") as f:
-                    st.download_button(
-                        label=f"📥 SCARICA REPORT: {filename}",
-                        data=f,
-                        file_name=filename,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
+                if mode_key == "with_website":
+                    with open(filepath, "rb") as f:
+                        st.download_button(
+                            label=f"📥 SCARICA REPORT: {filename}",
+                            data=f,
+                            file_name=filename,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True,
+                        )
+                else:
+                    attribution = orchestrator.scraper.attribution
+                    st.info(
+                        "Questi risultati sono transitori: non vengono salvati né "
+                        "esportati. Per ottenere un report persistente serve verificare "
+                        "i dati su una fonte indipendente."
+                    )
+                    st.markdown(
+                        f"Dati: **{attribution.label}** — "
+                        f"[Termini]({attribution.terms_url}) · "
+                        f"[Privacy]({attribution.privacy_url})"
                     )
             else:
                 st.warning("⚠️ La ricerca è terminata ma non sono stati trovati lead idonei in quest'area.")
 
+        except SettingsError as exc:
+            st.error(f"Configurazione non valida: {exc}")
+            update_log("CONFIGURAZIONE NON VALIDA: verifica le credenziali richieste")
         except Exception as exc:
             logger.error(
                 "Errore non gestito durante l'esecuzione della pipeline (%s)",

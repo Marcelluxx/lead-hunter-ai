@@ -1,11 +1,16 @@
 import os
 import tempfile
 import unittest
+from dataclasses import replace
 
 from openpyxl import load_workbook
 
+from src.application.export_policy import ExportPolicyError
+from src.domain.provenance import DataSource, FieldProvenance, VerifiedLead
+from src.domain.contacts import ContactExtractionMethod, ContactPoint
 from src.exporter import DataExporter
 from src.security.spreadsheet import sanitize_spreadsheet_value
+from datetime import datetime, timezone
 
 
 class SpreadsheetSecurityTests(unittest.TestCase):
@@ -31,19 +36,45 @@ class SpreadsheetSecurityTests(unittest.TestCase):
         self.assertEqual(sanitize_spreadsheet_value(True), "True")
 
     def test_exported_untrusted_cells_are_strings_not_formulas(self):
-        lead = {
-            "displayName": {"text": "=HYPERLINK(\"https://example.test\")"},
-            "types": [],
-            "formattedAddress": "+SUM(A1:A2)",
-            "nationalPhoneNumber": "+39 0123",
-            "rating": 4.5,
-            "userRatingCount": 12,
-            "competitor": "@malicious",
-        }
+        provenance = FieldProvenance(
+            source=DataSource.OFFICIAL_WEBSITE,
+            source_url="https://example.test",
+            collected_at=datetime.now(timezone.utc),
+            evidence_sha256="a" * 64,
+        )
+        lead = VerifiedLead(
+            business_name="=HYPERLINK(\"https://example.test\")",
+            category="+SUM(A1:A2)",
+            website="https://example.test",
+            contacts=(
+                replace(ContactPoint.from_email(
+                    "info@example.test",
+                    source_url="https://example.test",
+                    collected_at=provenance.collected_at,
+                    extraction_method=ContactExtractionMethod.MAILTO,
+                    evidence_sha256="a" * 64,
+                ), display_value="@malicious"),
+            ),
+            provenance={
+                "business_name": provenance,
+                "category": FieldProvenance(
+                    source=DataSource.USER_INPUT,
+                    source_url=None,
+                    collected_at=datetime.now(timezone.utc),
+                ),
+                "website": provenance,
+                "extracted_email": provenance,
+            },
+        )
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = os.path.join(temp_dir, "safe.xlsx")
-            DataExporter.export_to_excel([lead], mode="no_website", filename=path)
+            DataExporter.export_to_excel(
+                [lead],
+                mode="with_website",
+                filename=path,
+                suppression_checker=lambda _: False,
+            )
             workbook = load_workbook(path, data_only=False)
             sheet = workbook["Leads"]
 
@@ -51,10 +82,19 @@ class SpreadsheetSecurityTests(unittest.TestCase):
                 self.assertNotEqual(cell.data_type, "f")
 
             self.assertTrue(sheet["A2"].value.startswith("'="))
-            self.assertTrue(sheet["E2"].value.startswith("'+"))
-            self.assertEqual(sheet["F2"].value, 4.5)
-            self.assertEqual(sheet["G2"].value, 12)
-            self.assertTrue(sheet["H2"].value.startswith("'@"))
+            self.assertTrue(sheet["B2"].value.startswith("'+"))
+            self.assertTrue(sheet["D2"].value.startswith("'@"))
+
+    def test_no_website_provider_results_fail_closed(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = os.path.join(temp_dir, "forbidden.xlsx")
+            with self.assertRaises(ExportPolicyError):
+                DataExporter.export_to_excel(
+                    [{"displayName": {"text": "Provider content"}}],
+                    mode="no_website",
+                    filename=path,
+                )
+            self.assertFalse(os.path.exists(path))
 
 
 if __name__ == "__main__":
