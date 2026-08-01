@@ -26,7 +26,8 @@ from config import (
     MIN_RATING, MAX_REVIEWS, MIN_BUSINESS_AGE_YEARS, MAX_CRAWL_PAGES,
     OUTPUT_DIR,
 )
-from main import LeadHunterOrchestrator
+from main import create_orchestrator
+from src.settings import ApplicationSettings, SettingsError
 from exporter import DataExporter
 from security.presentation import (
     build_keyword_card_html,
@@ -45,6 +46,12 @@ st.set_page_config(
     layout="wide",
     page_icon="🎯"
 )
+
+try:
+    runtime_settings = ApplicationSettings.from_environment()
+except SettingsError as exc:
+    st.error(f"Configurazione non valida: {exc}")
+    st.stop()
 
 # --- CUSTOM CSS PREMIUM ---
 st.markdown("""
@@ -319,9 +326,8 @@ if start_btn:
         st.session_state.logs = []
         update_log("🚀 Inizializzazione Engine V3...")
 
-        orchestrator = LeadHunterOrchestrator(mode=mode_key)
-
         try:
+            orchestrator = create_orchestrator(mode_key, runtime_settings)
             if mode_key == "no_website":
                 # === PIPELINE NO WEBSITE ===
                 def on_kw_start(kw):
@@ -463,6 +469,9 @@ if start_btn:
             else:
                 st.warning("⚠️ La ricerca è terminata ma non sono stati trovati lead idonei in quest'area.")
 
+        except SettingsError as exc:
+            st.error(f"Configurazione non valida: {exc}")
+            update_log("CONFIGURAZIONE NON VALIDA: verifica le credenziali richieste")
         except Exception as exc:
             logger.error(
                 "Errore non gestito durante l'esecuzione della pipeline (%s)",

@@ -5,22 +5,32 @@ from typing import List, Dict, Any, Optional
 
 # Importazione relativa all'interno del package
 from .config import (
-    GOOGLE_API_KEY, 
-    GOOGLE_PLACES_V1_URL, 
-    FIELD_MASK, 
     LAT_DEGREE_KM, 
     GRID_STEP_KM, 
     GRID_SIZE, 
     RADIUS_M,
-    GOOGLE_GEOCODING_URL
 )
 
 class LeadScraper:
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        places_url: str,
+        geocoding_url: str,
+        field_mask: str,
+        http_client: Any = requests,
+    ):
+        if not api_key.strip():
+            raise ValueError("GOOGLE_API_KEY mancante.")
+        self.api_key = api_key.strip()
+        self.places_url = places_url
+        self.geocoding_url = geocoding_url
+        self.http_client = http_client
         self.headers = {
             "Content-Type": "application/json",
-            "X-Goog-Api-Key": GOOGLE_API_KEY,
-            "X-Goog-FieldMask": FIELD_MASK
+            "X-Goog-Api-Key": self.api_key,
+            "X-Goog-FieldMask": field_mask,
         }
 
     def _generate_grid(self, center_lat: float, center_lng: float) -> List[Dict[str, float]]:
@@ -60,7 +70,11 @@ class LeadScraper:
         }
 
         try:
-            response = requests.post(GOOGLE_PLACES_V1_URL, json=payload, headers=self.headers)
+            response = self.http_client.post(
+                self.places_url,
+                json=payload,
+                headers=self.headers,
+            )
             response.raise_for_status()
             return response.json().get("places", [])
             
@@ -129,12 +143,12 @@ class LeadScraper:
         """
         params = {
             "latlng": f"{lat},{lng}",
-            "key": GOOGLE_API_KEY,
+            "key": self.api_key,
             "language": "it",
             "result_type": "locality" # Cerchiamo specificamente la città/località
         }
         try:
-            response = requests.get(GOOGLE_GEOCODING_URL, params=params)
+            response = self.http_client.get(self.geocoding_url, params=params)
             response.raise_for_status()
             data = response.json()
             

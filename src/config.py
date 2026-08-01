@@ -1,18 +1,4 @@
-import os
-import sys
 from typing import Final, List
-from dotenv import load_dotenv
-
-# Carica variabili d'ambiente
-load_dotenv()
-
-# --- API KEYS (con Fail-Fast per robustezza) ---
-GOOGLE_API_KEY: Final[str] = os.getenv("GOOGLE_API_KEY", "")
-OPENROUTER_API_KEY: Final[str] = os.getenv("OPENROUTER_API_KEY", "")
-
-# Se mancano le chiavi, blocca l'app immediatamente invece di fallire durante le chiamate HTTP
-if not GOOGLE_API_KEY or not OPENROUTER_API_KEY:
-    sys.exit("CRITICAL ERROR: GOOGLE_API_KEY or OPENROUTER_API_KEY missing in .env file.")
 
 # --- API ENDPOINTS ---
 GOOGLE_PLACES_V1_URL: Final[str] = "https://places.googleapis.com/v1/places:searchText"
@@ -20,8 +6,8 @@ GOOGLE_GEOCODING_URL: Final[str] = "https://maps.googleapis.com/maps/api/geocode
 OPENROUTER_BASE_URL: Final[str] = "https://openrouter.ai/api/v1"
 
 # --- LLM CONFIG ---
-LLM_MODEL: Final[str] = os.getenv("LLM_MODEL", "meta-llama/llama-3.1-8b-instruct")
-LLM_MODEL_FREE: Final[str] = os.getenv("LLM_MODEL_FREE", "google/gemini-2.5-flash:free")
+DEFAULT_LLM_MODEL: Final[str] = "meta-llama/llama-3.1-8b-instruct"
+DEFAULT_LLM_MODEL_FREE: Final[str] = "google/gemini-2.5-flash:free"
 
 # --- GRID SEARCH CONFIG ---
 GRID_SIZE: Final[int] = 3            # Griglia 3x3
@@ -51,7 +37,7 @@ MIN_BUSINESS_AGE_YEARS: Final[int] = 5  # Età minima attività (anni)
 
 # --- CRAWLER CONFIG ---
 MAX_CRAWL_PAGES: Final[int] = 5      # Pagine interne max da esplorare
-TOKEN_MODE: Final[str] = os.getenv("TOKEN_MODE", "high_fidelity")  # "high_fidelity" | "optimized"
+DEFAULT_TOKEN_MODE: Final[str] = "high_fidelity"
 
 # --- INDICATORI E-COMMERCE (per esclusione automatica) ---
 ECOMMERCE_INDICATORS: Final[List[str]] = [

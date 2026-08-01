@@ -16,6 +16,7 @@ from typing import Dict, List, Any, Callable, Optional
 
 from src.scraper import LeadScraper
 from src.auditor import LeadAuditor
+from src.application.container import ApplicationContainer
 from src.exporter import DataExporter
 from src.crawler import HybridCrawler, CrawlResult
 from src.security.privacy import redact_sensitive_text
@@ -30,18 +31,25 @@ from src.filters import (
 )
 from src.config import (
     MIN_RATING, MAX_REVIEWS, MIN_BUSINESS_AGE_YEARS,
-    MAX_CRAWL_PAGES, TOKEN_MODE, ECOMMERCE_INDICATORS, KNOWN_FRANCHISES,
+    MAX_CRAWL_PAGES, DEFAULT_TOKEN_MODE, ECOMMERCE_INDICATORS, KNOWN_FRANCHISES,
     SOCIAL_MEDIA_DOMAINS, OUTPUT_DIR,
 )
+from src.settings import ApplicationSettings, SettingsError
 
 
 class LeadHunterOrchestrator:
     """Core Engine disaccoppiato dalla UI. Può essere invocato da CLI, GUI o API esterne."""
 
-    def __init__(self, mode: str = "no_website"):
+    def __init__(
+        self,
+        mode: str,
+        *,
+        scraper: LeadScraper,
+        auditor: Optional[LeadAuditor] = None,
+    ):
         self.mode = mode
-        self.scraper = LeadScraper()
-        self.auditor = LeadAuditor()
+        self.scraper = scraper
+        self.auditor = auditor
         self.all_leads: Dict[str, Dict[str, Any]] = {}
 
     # ==========================================
@@ -104,7 +112,7 @@ class LeadHunterOrchestrator:
         max_reviews: int = MAX_REVIEWS,
         min_age: int = MIN_BUSINESS_AGE_YEARS,
         max_pages: int = MAX_CRAWL_PAGES,
-        token_mode: str = TOKEN_MODE,
+        token_mode: str = DEFAULT_TOKEN_MODE,
         headless: bool = True,
         on_phase: Optional[Callable] = None,
         on_progress: Optional[Callable] = None,
@@ -120,6 +128,9 @@ class LeadHunterOrchestrator:
         on_audit_progress: Callable[[int, int], None]
         on_log: Callable[[str], None] — messaggio di log
         """
+        if self.auditor is None:
+            raise RuntimeError("Auditor non configurato per la pipeline with_website.")
+
         def log(msg):
             safe_message = redact_sensitive_text(msg)
             print(safe_message)
@@ -314,6 +325,8 @@ class LeadHunterOrchestrator:
     def run(self, lat: float, lng: float, keywords: List[str], **kwargs) -> List[Dict[str, Any]]:
         """Dispatcher che smista alla pipeline corretta in base al mode."""
         if self.mode == "with_website":
+            if self.auditor is None:
+                raise RuntimeError("Auditor non configurato per la pipeline with_website.")
             return self.run_with_website(lat, lng, keywords, **kwargs)
         return self.run_no_website(
             lat, lng, keywords,
@@ -321,6 +334,21 @@ class LeadHunterOrchestrator:
             on_kw_progress=kwargs.get("on_kw_progress"),
             on_kw_end=kwargs.get("on_kw_end"),
         )
+
+
+def create_orchestrator(
+    mode: str,
+    settings: Optional[ApplicationSettings] = None,
+) -> LeadHunterOrchestrator:
+    """Build provider dependencies at an explicit application boundary."""
+    runtime_settings = settings or ApplicationSettings.from_environment()
+    runtime_settings.require_pipeline(mode)
+    container = ApplicationContainer(runtime_settings)
+    return LeadHunterOrchestrator(
+        mode=mode,
+        scraper=container.build_scraper(),
+        auditor=container.build_auditor() if mode == "with_website" else None,
+    )
 
 
 # ==========================================
@@ -351,6 +379,16 @@ def show_examples():
 
 
 if __name__ == "__main__":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
+    try:
+        runtime_settings = ApplicationSettings.from_environment()
+    except SettingsError as exc:
+        print(f"Configurazione non valida: {exc}")
+        sys.exit(2)
     parser = argparse.ArgumentParser(
         prog="LeadHunter",
         description="Agente AI B2B per Scraping & Auditing di contatti commerciali.",
@@ -376,7 +414,8 @@ if __name__ == "__main__":
     parser.add_argument("--min-age", type=int, default=MIN_BUSINESS_AGE_YEARS,
                         help=f"Età minima attività in anni (default: {MIN_BUSINESS_AGE_YEARS})")
     parser.add_argument("--token-mode", type=str, choices=["high_fidelity", "optimized"],
-                        default=TOKEN_MODE, help=f"Modalità token LLM (default: {TOKEN_MODE})")
+                        default=runtime_settings.token_mode,
+                        help=f"Modalità token LLM (default: {runtime_settings.token_mode})")
     parser.add_argument("--max-pages", type=int, default=MAX_CRAWL_PAGES,
                         help=f"Max pagine da crawlare per sito (default: {MAX_CRAWL_PAGES})")
     parser.add_argument("--no-headless", action="store_true",
@@ -405,14 +444,20 @@ if __name__ == "__main__":
 
     if args.test_url:
         from src.tester import run_url_test
-        run_url_test(
-            args.test_url,
-            max_pages=args.max_pages,
-            token_mode=args.token_mode,
-            headless=not args.no_headless,
-            save_artifacts=args.save_diagnostic_artifacts,
-            retention_hours=args.diagnostic_retention_hours,
-        )
+        try:
+            container = ApplicationContainer(runtime_settings)
+            run_url_test(
+                args.test_url,
+                max_pages=args.max_pages,
+                token_mode=args.token_mode,
+                headless=not args.no_headless,
+                save_artifacts=args.save_diagnostic_artifacts,
+                retention_hours=args.diagnostic_retention_hours,
+                auditor=container.build_auditor(),
+            )
+        except SettingsError as exc:
+            print(f"Configurazione non valida: {exc}")
+            sys.exit(2)
         sys.exit(0)
 
     if args.gui:
@@ -430,10 +475,14 @@ if __name__ == "__main__":
         print("Usa 'python main.py --help' per assistenza.")
         sys.exit(1)
 
+    try:
+        orchestrator = create_orchestrator(args.mode, runtime_settings)
+    except SettingsError as exc:
+        print(f"Configurazione non valida: {exc}")
+        sys.exit(2)
+
     print(f"\n🚀 Avvio Lead Hunter V3 CLI — Modalità: {args.mode.upper()}")
     print(f"   Coordinate: {args.lat}, {args.lng}")
-
-    orchestrator = LeadHunterOrchestrator(mode=args.mode)
 
     out_file = args.out
     if out_file == "leads_output.xlsx":

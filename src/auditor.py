@@ -19,7 +19,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from openai import OpenAI
 import openai
 
-from .config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, LLM_MODEL, LLM_MODEL_FREE
 from .domain import (
     AuditValidationError,
     WebsiteAuditResult,
@@ -43,12 +42,23 @@ logger = logging.getLogger(__name__)
 
 
 class LeadAuditor:
-    def __init__(self):
-        self.client = OpenAI(
-            base_url=OPENROUTER_BASE_URL,
-            api_key=OPENROUTER_API_KEY,
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        base_url: str,
+        model: str,
+        model_free: str,
+        client: Any = None,
+    ):
+        if client is None and not api_key.strip():
+            raise ValueError("OPENROUTER_API_KEY mancante.")
+        self.client = client or OpenAI(
+            base_url=base_url,
+            api_key=api_key.strip(),
         )
-        self.model_free = LLM_MODEL_FREE
+        self.model = model
+        self.model_free = model_free
 
     def _clean_json_output(self, raw_content: str) -> str:
         """Estrae e ripulisce il JSON dal testo generato dall'LLM."""
@@ -87,7 +97,7 @@ class LeadAuditor:
         for attempt in range(max_retries):
             try:
                 response = self.client.chat.completions.create(
-                    model=LLM_MODEL,
+                    model=self.model,
                     messages=[
                         {
                             "role": "system",
@@ -251,7 +261,7 @@ class LeadAuditor:
         for attempt in range(max_retries):
             try:
                 response = self.client.chat.completions.create(
-                    model=LLM_MODEL,
+                    model=self.model,
                     messages=[
                         {
                             "role": "system",

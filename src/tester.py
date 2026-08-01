@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 
 import sys
 import logging
+from typing import Optional
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding='utf-8')
@@ -34,6 +35,7 @@ def run_url_test(
     headless: bool = True,
     save_artifacts: bool = False,
     retention_hours: int = 24,
+    auditor: Optional[LeadAuditor] = None,
 ) -> None:
     """
     Esegue un test diagnostico. Gli artefatti sensibili restano disabilitati
@@ -133,7 +135,8 @@ def run_url_test(
 
     # 4. Fase AI Website Audit
     log_both("🧠 FASE 2: Simulazione Audit AI tramite LLM...")
-    auditor = LeadAuditor()
+    if auditor is None:
+        raise ValueError("LeadAuditor deve essere fornito dal composition root.")
 
     # Prepara payload fittizio per l'auditor
     domain = extract_domain(url)
