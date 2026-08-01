@@ -30,6 +30,9 @@ class MigrationTests(unittest.TestCase):
                     self.assertIn("usage_ledger", tables)
                     self.assertIn("lead_attributes", tables)
                     self.assertIn("provider_references", tables)
+                    self.assertIn("contacts", tables)
+                    self.assertIn("suppression_entries", tables)
+                    self.assertIn("data_subject_requests", tables)
                 finally:
                     engine.dispose()
 

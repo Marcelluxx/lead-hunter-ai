@@ -8,12 +8,22 @@ from .crawl import (
     PageEvidence,
     ensure_auditable_pages,
 )
+from .contacts import (
+    ContactClassification,
+    ContactExtractionMethod,
+    ContactKind,
+    ContactPoint,
+)
 
 __all__ = [
     "AuditValidationError",
     "CrawlEvidenceError",
     "CrawlResult",
     "CrawlStatus",
+    "ContactClassification",
+    "ContactExtractionMethod",
+    "ContactKind",
+    "ContactPoint",
     "PageEvidence",
     "WebsiteAuditResult",
     "ensure_auditable_pages",

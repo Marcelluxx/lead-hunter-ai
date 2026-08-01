@@ -48,6 +48,35 @@ class ExportPolicyTests(unittest.TestCase):
         with self.assertRaises(ExportPolicyError):
             ExportPolicy.require_exportable([lead], "with_website")
 
+    def test_contact_export_requires_suppression_boundary(self):
+        from src.domain.contacts import ContactExtractionMethod, ContactPoint
+
+        now = datetime.now(timezone.utc)
+        contact = ContactPoint.from_email(
+            "info@example.test",
+            source_url="https://example.test",
+            collected_at=now,
+            extraction_method=ContactExtractionMethod.MAILTO,
+            evidence_sha256="a" * 64,
+        )
+        provenance = FieldProvenance(DataSource.OFFICIAL_WEBSITE, "https://example.test", now)
+        lead = VerifiedLead(
+            "Example",
+            "dentista",
+            "https://example.test",
+            contacts=(contact,),
+            provenance={"business_name": provenance, "website": provenance},
+        )
+        with self.assertRaises(ExportPolicyError):
+            ExportPolicy.require_exportable([lead], "with_website")
+        ExportPolicy.require_exportable(
+            [lead], "with_website", suppression_checker=lambda _: False
+        )
+        with self.assertRaises(ExportPolicyError):
+            ExportPolicy.require_exportable(
+                [lead], "with_website", suppression_checker=lambda _: True
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

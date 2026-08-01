@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from main import LeadHunterOrchestrator
 from src.domain.crawl import CrawlResult, CrawlStatus, PageEvidence
+from src.domain.contacts import ContactExtractionMethod, ContactPoint
 from src.domain.discovery import (
     DiscoveryBatch,
     ProviderAttribution,
@@ -50,7 +51,15 @@ class _Crawler:
             url="https://official.example.test/",
             pages={"https://official.example.test/": content},
             evidence=[evidence],
-            emails=["sales@official.example.test"],
+            contacts=[
+                ContactPoint.from_email(
+                    "sales@official.example.test",
+                    source_url="https://official.example.test/",
+                    collected_at=datetime.now(timezone.utc),
+                    extraction_method=ContactExtractionMethod.MAILTO,
+                    evidence_sha256=evidence.content_sha256,
+                )
+            ],
             raw_html_home="<html><head><title>Official Clinic</title></head><body></body></html>",
             status=CrawlStatus.SUCCESS,
             is_dynamic=False,

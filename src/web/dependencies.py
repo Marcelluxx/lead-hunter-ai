@@ -16,6 +16,9 @@ from ..application.authentication import (
 from ..application.budgets import BudgetService
 from ..application.jobs import JobService
 from ..application.secrets import CredentialService
+from ..application.data_subject_requests import DataSubjectRequestService
+from ..application.privacy_policy import WorkspacePrivacyPolicyService
+from ..application.suppression import SuppressionService
 from ..infrastructure.database import Database
 
 
@@ -27,6 +30,9 @@ class WebRuntime:
     budgets: BudgetService
     credentials: CredentialService
     rate_limiter: object | None = None
+    privacy_policies: WorkspacePrivacyPolicyService | None = None
+    suppression: SuppressionService | None = None
+    data_subject_requests: DataSubjectRequestService | None = None
 
 
 _bearer = HTTPBearer(auto_error=False)

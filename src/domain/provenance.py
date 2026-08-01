@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Mapping
 
+from .contacts import ContactPoint
+
 
 class DataSource(str, Enum):
     OFFICIAL_WEBSITE = "official_website"
@@ -36,7 +38,7 @@ class VerifiedLead:
     business_name: str
     category: str
     website: str
-    extracted_emails: tuple[str, ...] = ()
+    contacts: tuple[ContactPoint, ...] = ()
     website_score: int | str | None = None
     framework: str = ""
     diagnosis: str = ""
@@ -48,6 +50,10 @@ class VerifiedLead:
     def export_classification(self) -> str:
         return "verified_report"
 
+    @property
+    def extracted_emails(self) -> tuple[str, ...]:
+        return tuple(contact.display_value for contact in self.contacts)
+
     def to_export_record(self) -> dict[str, Any]:
         return {
             "export_classification": self.export_classification,
@@ -55,6 +61,7 @@ class VerifiedLead:
             "category": self.category,
             "website": self.website,
             "extracted_email": list(self.extracted_emails),
+            "contacts": list(self.contacts),
             "website_score": self.website_score,
             "framework": self.framework,
             "diagnosis": self.diagnosis,

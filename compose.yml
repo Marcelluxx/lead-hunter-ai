@@ -4,6 +4,7 @@ x-server-env: &server-env
   LEADHUNTER_DATABASE_URL: postgresql+psycopg://leadhunter_app:${LEADHUNTER_APP_DB_PASSWORD:?app database password required}@postgres:5432/leadhunter
   LEADHUNTER_REDIS_URL: redis://redis:6379/0
   LEADHUNTER_MASTER_KEY_BASE64: ${LEADHUNTER_MASTER_KEY_BASE64:?master key required}
+  LEADHUNTER_SUPPRESSION_HMAC_KEY_BASE64: ${LEADHUNTER_SUPPRESSION_HMAC_KEY_BASE64:?suppression HMAC key required}
   LEADHUNTER_JWT_PRIVATE_KEY_FILE: /run/secrets/jwt_private.pem
   LEADHUNTER_JWT_PUBLIC_KEY_FILE: /run/secrets/jwt_public.pem
 
@@ -67,6 +68,21 @@ services:
     volumes:
       - ./secrets:/run/secrets:ro
     command: ["dramatiq", "src.workers.runtime", "--processes", "1", "--threads", "4"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  retention-scheduler:
+    build: .
+    environment:
+      <<: *server-env
+      LEADHUNTER_DATABASE_URL: postgresql+psycopg://leadhunter_worker:${LEADHUNTER_WORKER_DB_PASSWORD:?worker database password required}@postgres:5432/leadhunter
+      LEADHUNTER_RETENTION_SCHEDULE_SECONDS: ${LEADHUNTER_RETENTION_SCHEDULE_SECONDS:-3600}
+    volumes:
+      - ./secrets:/run/secrets:ro
+    command: ["python", "-m", "src.workers.retention_scheduler"]
     depends_on:
       migrate:
         condition: service_completed_successfully

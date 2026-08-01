@@ -20,6 +20,10 @@ _ALLOWED_DETAIL_KEYS = frozenset(
         "old_limit",
         "new_limit",
         "source",
+        "scope",
+        "policy_version",
+        "request_type",
+        "classification",
     }
 )
 

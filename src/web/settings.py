@@ -17,6 +17,7 @@ class ServerSettings(BaseSettings):
     database_url: str
     redis_url: str = "redis://localhost:6379/0"
     master_key_base64: str
+    suppression_hmac_key_base64: str
     jwt_private_key_file: Path
     jwt_public_key_file: Path
     jwt_issuer: str = "lead-hunter"
@@ -33,6 +34,14 @@ class ServerSettings(BaseSettings):
         key = base64.urlsafe_b64decode(self.master_key_base64.encode("ascii"))
         if len(key) != 32:
             raise ValueError("LEADHUNTER_MASTER_KEY_BASE64 deve decodificare 32 byte.")
+        return key
+
+    def suppression_hmac_key(self) -> bytes:
+        key = base64.urlsafe_b64decode(self.suppression_hmac_key_base64.encode("ascii"))
+        if len(key) != 32:
+            raise ValueError(
+                "LEADHUNTER_SUPPRESSION_HMAC_KEY_BASE64 deve decodificare 32 byte."
+            )
         return key
 
     def private_key(self) -> bytes:

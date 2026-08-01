@@ -1,11 +1,13 @@
 import os
 import tempfile
 import unittest
+from dataclasses import replace
 
 from openpyxl import load_workbook
 
 from src.application.export_policy import ExportPolicyError
 from src.domain.provenance import DataSource, FieldProvenance, VerifiedLead
+from src.domain.contacts import ContactExtractionMethod, ContactPoint
 from src.exporter import DataExporter
 from src.security.spreadsheet import sanitize_spreadsheet_value
 from datetime import datetime, timezone
@@ -44,7 +46,15 @@ class SpreadsheetSecurityTests(unittest.TestCase):
             business_name="=HYPERLINK(\"https://example.test\")",
             category="+SUM(A1:A2)",
             website="https://example.test",
-            extracted_emails=("@malicious",),
+            contacts=(
+                replace(ContactPoint.from_email(
+                    "info@example.test",
+                    source_url="https://example.test",
+                    collected_at=provenance.collected_at,
+                    extraction_method=ContactExtractionMethod.MAILTO,
+                    evidence_sha256="a" * 64,
+                ), display_value="@malicious"),
+            ),
             provenance={
                 "business_name": provenance,
                 "category": FieldProvenance(
@@ -59,7 +69,12 @@ class SpreadsheetSecurityTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = os.path.join(temp_dir, "safe.xlsx")
-            DataExporter.export_to_excel([lead], mode="with_website", filename=path)
+            DataExporter.export_to_excel(
+                [lead],
+                mode="with_website",
+                filename=path,
+                suppression_checker=lambda _: False,
+            )
             workbook = load_workbook(path, data_only=False)
             sheet = workbook["Leads"]
 

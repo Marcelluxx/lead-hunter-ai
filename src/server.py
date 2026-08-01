@@ -8,6 +8,9 @@ from .application.authentication import AuthenticationService
 from .application.budgets import BudgetService
 from .application.jobs import JobService
 from .application.secrets import CredentialService
+from .application.data_subject_requests import DataSubjectRequestService
+from .application.privacy_policy import WorkspacePrivacyPolicyService
+from .application.suppression import SuppressionService
 from .infrastructure.crypto import AccessTokenService, PasswordService, SecretCipher
 from .infrastructure.database import Database
 from .infrastructure.redis import RedisRateLimiter
@@ -34,6 +37,7 @@ def create_server_app():
         cipher=cipher,
     )
     budgets = BudgetService()
+    suppression = SuppressionService(settings.suppression_hmac_key())
     return create_app(
         WebRuntime(
             database=database,
@@ -42,5 +46,8 @@ def create_server_app():
             budgets=budgets,
             credentials=CredentialService(cipher),
             rate_limiter=RedisRateLimiter(redis_client),
+            privacy_policies=WorkspacePrivacyPolicyService(),
+            suppression=suppression,
+            data_subject_requests=DataSubjectRequestService(suppression),
         )
     )

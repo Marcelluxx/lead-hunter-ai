@@ -1,8 +1,8 @@
 # Lead Hunter V3 — Audit tecnico, vendibilità e roadmap “stato dell’arte”
 
 **Data dell’analisi:** 1 agosto 2026
-**Stato analizzato:** branch `codex/p0-governance-compliance`, incluse le implementazioni P0-07 e P0-04, derivato da `develop` al merge commit `f76be20`
-**Base di evidenza:** grafo Graphify usato come baseline architetturale, lettura aggiornata del codice, suite automatica inclusi test PostgreSQL/RLS reali, compilazione statica, scansione Gitleaks 8.30.1 della cronologia e dei file staged, artefatti diagnostici e fonti ufficiali aggiornate. Il grafo dovrà essere rigenerato dopo il merge della macrocategoria per riflettere i nuovi boundary P0-07/P0-04.
+**Stato analizzato:** branch `codex/p0-governance-compliance`, incluse le implementazioni P0-07, P0-04 e P0-05, derivato da `develop` al merge commit `f76be20`
+**Base di evidenza:** grafo Graphify usato come baseline architetturale, lettura aggiornata del codice, migrazioni Alembic, compilazione statica, suite di 100 test eseguita anche su PostgreSQL 17 con ruoli runtime/RLS reali e scansione Gitleaks 8.30.1 dei file staged senza rilevazioni. Il grafo dovrà essere rigenerato dopo il merge della macrocategoria per riflettere i nuovi boundary P0-07/P0-04/P0-05.
 
 > Questo documento è un audit tecnico e di prodotto, non un parere legale. Prima della commercializzazione servono una verifica contrattuale su Google Maps Platform e un parere privacy/comunicazioni commerciali specifico per i mercati serviti.
 
@@ -60,6 +60,16 @@ Esito della macrocategoria:
 - **P0-03 è risolto a livello applicativo.** La CSP resta un controllo del deployment/reverse proxy, non del rendering dinamico Streamlit.
 - **P0-08 è risolto per l’export XLSX attuale.** Non viene offerto un export CSV; se verrà aggiunto dovrà riusare la stessa policy.
 - **P0-09 è risolto per i percorsi applicativi correnti e mitigato in prospettiva SaaS:** prompt e risposte grezze non attraversano il DTO pubblico, la geolocalizzazione non parte senza consenso e i dump diagnostici richiedono opt-in. Crittografia at-rest, RBAC, isolamento tenant e inventario sub-responsabili restano gate infrastrutturali prima dell’esposizione pubblica.
+
+### Aggiornamento — terza macrocategoria P0
+
+Il branch `codex/p0-governance-compliance` introduce un commit tematico per ciascun P0: P0-07 crea il core server multi-workspace, P0-04 separa i dati del provider dalla base persistente e P0-05 governa i contatti professionali. La suite corrente conta 100 test verdi su PostgreSQL 17 reale, inclusi concorrenza dei budget, ruoli runtime senza `BYPASSRLS`, isolamento dei nuovi record privacy e retention per workspace.
+
+Esito della macrocategoria sul branch:
+
+- **P0-07 è risolto per il core server**, con frontend dedicato, OIDC completo e billing rinviati alla fase commerciale.
+- **P0-04 è risolto a livello applicativo**, ma contratto e flusso Google richiedono revisione professionale prima della vendita.
+- **P0-05 è risolto per i controlli tecnici del core**: contatti tipizzati, policy Italia/UE, retention 90/365 giorni, suppression HMAC, diritti dell’interessato, audit, worker a batch e scheduler Docker orario con lock Redis. Informativa, DPA, sub-responsabili, data residency e base giuridica concreta restano responsabilità organizzative/legali.
 
 ## 1. Verdetto esecutivo
 
@@ -275,6 +285,16 @@ Fonti:
 Questo punto può cambiare radicalmente il modello dati e va risolto prima di vendere.
 
 ### P0-05 — Lead generation, email pubbliche e marketing in Italia
+
+**Stato sul branch `codex/p0-governance-compliance`: RISOLTO per i controlli tecnici del core; revisione legale e configurazione operativa restano obbligatorie prima dell’uso commerciale.**
+
+Il crawler non restituisce più semplici stringhe: ogni contatto porta valore normalizzato e di presentazione, URL sorgente, timestamp, metodo di estrazione, confidence, hash dell’evidenza, versione delle regole, classificazione e scadenza. Solo gli alias esplicitamente aziendali sono `generic_business`; i casi ambigui sono trattati prudentemente come `named_professional`. I default tecnici sono 12 mesi per i generici e massimo 90 giorni per i nominativi.
+
+I contatti nominativi non possono essere persistiti o esportati senza una policy workspace completa con finalità, base giuridica dichiarata dal titolare, referente privacy, mercato `IT_EU`, versione e retention non superiore a 90 giorni. La suppression usa un HMAC-SHA-256 con chiave separata, non conserva l’identificatore in chiaro ed è verificata prima di persistenza ed export. Esistono scope workspace e globale; PostgreSQL consente ai tenant di leggere i fingerprint globali per applicare il blocco, ma non di modificarli o cancellarli.
+
+Le API amministrative richiedono ruolo admin e MFA e supportano accesso controllato, rettifica, cancellazione e opposizione. Le richieste sono idempotenti, l’audit conserva UUID/fingerprint e conteggi ma non ricrea il dato eliminato. L’export server verifica membership e permesso, elimina gli scaduti, applica suppression e policy, poi registra attore, workspace, job opzionale, conteggio e versione della policy. Il worker di retention elabora batch limitati e riavviabili e accoda il batch successivo senza inserire PII nei log. Un servizio Compose pianifica automaticamente i workspace attivi ogni ora, usa un lock Redis per evitare duplicazioni tra repliche e mette in coda soltanto UUID. Non è presente alcun invio automatico o motore di campagne.
+
+La migrazione `0003_contact_privacy_governance` aggiunge policy, contatti, suppression e richieste dell’interessato con RLS fail-closed. I test verificano anche che un ruolo tenant non possa cancellare una suppression globale e che la retention di un workspace non tocchi quello adiacente.
 
 **Evidenza**
 
@@ -1076,7 +1096,7 @@ Solo dopo aver consolidato:
 
 ### Sprint 0 — 1–2 settimane: rendere il prototipo onesto e sicuro per uso interno
 
-Stato al 1 agosto 2026 per le attività già affrontate: P0-01/P0-02/P0-03/P0-04/P0-06/P0-07/P0-08 sono chiusi o mitigati come indicato nelle rispettive sezioni; P0-09 è chiuso nei percorsi applicativi ma richiede i gate SaaS; P0-10 mantiene intenzionalmente aperta la rotazione della chiave.
+Stato al 1 agosto 2026 per le attività già affrontate: P0-01/P0-02/P0-03/P0-04/P0-05/P0-06/P0-07/P0-08 sono chiusi o mitigati come indicato nelle rispettive sezioni; P0-09 è chiuso nei percorsi applicativi ma richiede i gate SaaS; P0-10 mantiene intenzionalmente aperta la rotazione della chiave.
 
 1. Ruotare la chiave OpenRouter esposta nella configurazione locale e introdurre secret scanning.
 2. Correggere filtro età.

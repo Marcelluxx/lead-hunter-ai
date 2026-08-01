@@ -6,7 +6,7 @@ Export duale:
 """
 
 import os
-from typing import Union, List, Dict
+from typing import Callable, Union, List, Dict, Any
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -14,10 +14,12 @@ from openpyxl.utils import get_column_letter
 try:
     from .application.export_policy import ExportPolicy
     from .domain.provenance import VerifiedLead
+    from .domain.privacy import WorkspacePrivacyPolicy
     from .security.spreadsheet import is_text_cell, sanitize_spreadsheet_value
 except (ImportError, ValueError):
     from src.application.export_policy import ExportPolicy
     from src.domain.provenance import VerifiedLead
+    from src.domain.privacy import WorkspacePrivacyPolicy
     from src.security.spreadsheet import is_text_cell, sanitize_spreadsheet_value
 
 
@@ -48,7 +50,9 @@ class DataExporter:
     def export_to_excel(
         leads: Union[List[Dict], Dict[str, Dict]],
         mode: str = "no_website",
-        filename: str = "leads_v3_premium.xlsx"
+        filename: str = "leads_v3_premium.xlsx",
+        privacy_policy: WorkspacePrivacyPolicy | None = None,
+        suppression_checker: Callable[[Any], bool] | None = None,
     ) -> None:
         """
         Esporta lead in Excel con formattazione professionale.
@@ -59,7 +63,9 @@ class DataExporter:
             return
 
         leads_list = list(leads.values()) if isinstance(leads, dict) else list(leads)
-        ExportPolicy.require_exportable(leads_list, mode)
+        ExportPolicy.require_exportable(
+            leads_list, mode, privacy_policy, suppression_checker
+        )
 
         # Assicurati che la cartella di destinazione esista
         dir_name = os.path.dirname(filename)

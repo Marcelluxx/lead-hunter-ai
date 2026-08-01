@@ -401,3 +401,134 @@ class RetentionEventModel(Base):
     ran_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
+
+
+class WorkspacePrivacyPolicyModel(TimestampMixin, Base):
+    __tablename__ = "workspace_privacy_policies"
+    __table_args__ = (
+        CheckConstraint("market = 'IT_EU'", name="ck_privacy_policy_market"),
+        CheckConstraint(
+            "named_contact_retention_days BETWEEN 1 AND 90",
+            name="ck_privacy_policy_named_retention",
+        ),
+    )
+
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), primary_key=True
+    )
+    purpose: Mapped[str] = mapped_column(String(500), nullable=False)
+    legal_basis: Mapped[str] = mapped_column(String(500), nullable=False)
+    privacy_contact: Mapped[str] = mapped_column(String(320), nullable=False)
+    market: Mapped[str] = mapped_column(String(20), nullable=False, default="IT_EU")
+    named_contact_retention_days: Mapped[int] = mapped_column(nullable=False, default=90)
+    policy_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL")
+    )
+
+
+class ContactModel(Base):
+    __tablename__ = "contacts"
+    __table_args__ = (
+        CheckConstraint("kind IN ('email','phone')", name="ck_contact_kind"),
+        CheckConstraint(
+            "source_type IN ('official_website','data_subject_request')",
+            name="ck_contact_source_type",
+        ),
+        CheckConstraint(
+            "classification IN ('generic_business','named_professional')",
+            name="ck_contact_classification",
+        ),
+        CheckConstraint(
+            "extraction_method IN ('regex','mailto','structured_data')",
+            name="ck_contact_extraction_method",
+        ),
+        CheckConstraint("confidence >= 0 AND confidence <= 1", name="ck_contact_confidence"),
+        Index("ix_contacts_workspace_expiry", "workspace_id", "expires_at"),
+        Index("ix_contacts_workspace_fingerprint", "workspace_id", "kind", "fingerprint"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    lead_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid, ForeignKey("leads.id", ondelete="CASCADE")
+    )
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    normalized_value: Mapped[str] = mapped_column(String(500), nullable=False)
+    display_value: Mapped[str] = mapped_column(String(500), nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_type: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="official_website"
+    )
+    source_url: Mapped[Optional[str]] = mapped_column(String(2048))
+    source_request_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid, ForeignKey("data_subject_requests.id", ondelete="SET NULL")
+    )
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    extraction_method: Mapped[str] = mapped_column(String(30), nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    classification: Mapped[str] = mapped_column(String(40), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    evidence_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    rules_version: Mapped[str] = mapped_column(String(80), nullable=False)
+
+
+class SuppressionEntryModel(Base):
+    __tablename__ = "suppression_entries"
+    __table_args__ = (
+        CheckConstraint("kind IN ('email','phone')", name="ck_suppression_kind"),
+        CheckConstraint("scope IN ('workspace','global')", name="ck_suppression_scope"),
+        UniqueConstraint("scope_key", "kind", "fingerprint"),
+        Index("ix_suppression_lookup", "kind", "fingerprint", "scope_key"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE")
+    )
+    scope: Mapped[str] = mapped_column(String(20), nullable=False)
+    scope_key: Mapped[str] = mapped_column(String(36), nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    reason: Mapped[str] = mapped_column(String(80), nullable=False)
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class DataSubjectRequestModel(Base):
+    __tablename__ = "data_subject_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "request_kind IN ('access','rectification','erasure','opposition')",
+            name="ck_data_subject_request_kind",
+        ),
+        CheckConstraint(
+            "status IN ('received','completed','rejected')",
+            name="ck_data_subject_request_status",
+        ),
+        Index("ix_dsr_workspace_requested", "workspace_id", "requested_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    actor_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL")
+    )
+    request_kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    identifier_kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    subject_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="received")
+    deleted_count: Mapped[int] = mapped_column(nullable=False, default=0)
+    requested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))

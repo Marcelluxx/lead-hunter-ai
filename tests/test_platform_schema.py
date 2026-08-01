@@ -42,6 +42,10 @@ class PlatformSchemaTests(unittest.TestCase):
             "lead_attributes",
             "provider_references",
             "retention_events",
+            "workspace_privacy_policies",
+            "contacts",
+            "suppression_entries",
+            "data_subject_requests",
         }
         self.assertEqual(set(Base.metadata.tables), expected)
 

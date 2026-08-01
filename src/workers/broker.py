@@ -23,6 +23,10 @@ def configure_broker(redis_url: str) -> RedisBroker:
     # them explicitly because the default broker may point to localhost.
     process_job.broker = broker
     broker.declare_actor(process_job)
+    from .retention import enforce_workspace_retention
+
+    enforce_workspace_retention.broker = broker
+    broker.declare_actor(enforce_workspace_retention)
     return broker
 
 

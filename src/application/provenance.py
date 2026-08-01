@@ -38,7 +38,6 @@ def build_verified_lead(
     provenance = {
         "business_name": site_provenance,
         "website": site_provenance,
-        "extracted_email": site_provenance,
         "category": user_provenance,
     }
     for field_name in ("website_score", "framework", "diagnosis", "site_brief", "cold_message"):
@@ -48,7 +47,7 @@ def build_verified_lead(
         business_name=business_name,
         category=search_keyword.strip(),
         website=official_url,
-        extracted_emails=tuple(crawl.emails),
+        contacts=tuple(crawl.contacts),
         website_score=audit_data.get("website_score"),
         framework=str(audit_data.get("framework") or ""),
         diagnosis=str(audit_data.get("diagnosis") or ""),

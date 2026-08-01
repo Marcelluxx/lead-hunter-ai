@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 
 from ..infrastructure.redis import RateLimitExceeded
 from .dependencies import WebRuntime
-from .routes import auth, jobs, usage, workspaces
+from .routes import auth, jobs, privacy, usage, workspaces
 
 
 def create_app(runtime: WebRuntime) -> FastAPI:
@@ -22,6 +22,7 @@ def create_app(runtime: WebRuntime) -> FastAPI:
 
     app.include_router(auth.router)
     app.include_router(jobs.router)
+    app.include_router(privacy.router)
     app.include_router(usage.router)
     app.include_router(workspaces.router)
     return app
