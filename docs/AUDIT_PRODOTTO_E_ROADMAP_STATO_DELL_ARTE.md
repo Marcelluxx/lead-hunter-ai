@@ -1,8 +1,8 @@
 # Lead Hunter V3 — Audit tecnico, vendibilità e roadmap “stato dell’arte”
 
 **Data dell’analisi:** 1 agosto 2026
-**Stato analizzato:** branch `codex/p0-data-output-hardening`, commit applicativi fino a `71e5f47`, derivato da `develop` al merge commit `6e7fae1`
-**Base di evidenza:** grafo Graphify del branch corrente (393 nodi, 545 archi, 28 comunità), lettura del codice, 29 test automatici dei confini di sicurezza e privacy, compilazione statica, scansione Gitleaks 8.30.1 della cronologia e dei file staged, artefatti diagnostici e fonti ufficiali aggiornate.
+**Stato analizzato:** branch `codex/p0-governance-compliance`, incluse le implementazioni P0-07 e P0-04, derivato da `develop` al merge commit `f76be20`
+**Base di evidenza:** grafo Graphify usato come baseline architetturale, lettura aggiornata del codice, suite automatica inclusi test PostgreSQL/RLS reali, compilazione statica, scansione Gitleaks 8.30.1 della cronologia e dei file staged, artefatti diagnostici e fonti ufficiali aggiornate. Il grafo dovrà essere rigenerato dopo il merge della macrocategoria per riflettere i nuovi boundary P0-07/P0-04.
 
 > Questo documento è un audit tecnico e di prodotto, non un parere legale. Prima della commercializzazione servono una verifica contrattuale su Google Maps Platform e un parere privacy/comunicazioni commerciali specifico per i mercati serviti.
 
@@ -238,7 +238,13 @@ Un nome attività, una keyword o un messaggio di errore contenente HTML può ess
 
 ### P0-04 — Google Places: storage, attribuzione e uso con la mappa
 
-**Evidenza**
+**Stato sul branch `codex/p0-governance-compliance`: RISOLTO a livello applicativo; restano revisione legale e scelta contrattuale del provider prima della vendita.**
+
+L’implementazione separa il provider dal prodotto persistente: il payload Google resta nella memoria dell’adapter, il field mask è ridotto a identificatore/nome/sito/attribuzione e non richiede più recensioni, rating, indirizzi o telefoni. La modalità `no_website` è consultabile solo in forma transitoria con attribution e non produce Excel. La modalità `with_website` crea report esclusivamente con attributi ri-estratti dal sito ufficiale e relativa evidenza; nessun nome, rating o review Google raggiunge l’LLM.
+
+Il database conserva solo riferimenti provider consentiti e attributi con provenienza, evidenza, classificazione, confidence e scadenza. La migrazione `0002_discovery_provenance` applica RLS per workspace; il servizio retention elimina gli attributi scaduti e registra soltanto il conteggio. API e worker rifiutano payload con forma Places nei parametri persistenti. La mappa Folium è dichiarata e usata soltanto come selettore OpenStreetMap indipendente.
+
+**Evidenza originaria**
 
 - `src/config.py:34-43` richiede dati Places, incluse recensioni.
 - `src/gui.py:257-274` mostra una mappa Folium/non-Google.
@@ -328,7 +334,11 @@ Nessun audit qualitativo viene prodotto quando l’unica evidenza è una pagina 
 
 ### P0-07 — Nessuna autenticazione, isolamento tenant o controllo costi
 
-**Evidenza**
+**Stato sul branch `codex/p0-governance-compliance`: RISOLTO per il core server; OIDC completo, billing commerciale e frontend dedicato restano evoluzioni enterprise.**
+
+Il nuovo boundary server introduce API FastAPI autenticata, password hashing, sessioni revocabili, MFA, ruoli per workspace, credenziali provider cifrate, job persistenti/idempotenti e coda Redis con soli UUID. PostgreSQL applica RLS fail-closed per workspace anche al ruolo worker. Budget, prenotazioni atomiche, hard limit e ledger impediscono l’avvio oltre soglia e rilasciano/contabilizzano i costi. Gli eventi sensibili sono registrati nell’audit log senza segreti. La console Streamlit resta intenzionalmente uno strumento interno e non è il frontend pubblico del prodotto.
+
+**Evidenza originaria**
 
 La GUI esegue direttamente l’intera pipeline usando chiavi condivise, filesystem condiviso e nomi file prevedibili. Non esistono:
 
@@ -1066,7 +1076,7 @@ Solo dopo aver consolidato:
 
 ### Sprint 0 — 1–2 settimane: rendere il prototipo onesto e sicuro per uso interno
 
-Stato al 1 agosto 2026 per le attività già affrontate: P0-01/P0-02/P0-03/P0-06/P0-08 sono chiusi o mitigati come indicato nelle rispettive sezioni; P0-09 è chiuso nei percorsi applicativi ma richiede i gate SaaS; P0-10 mantiene intenzionalmente aperta la rotazione della chiave.
+Stato al 1 agosto 2026 per le attività già affrontate: P0-01/P0-02/P0-03/P0-04/P0-06/P0-07/P0-08 sono chiusi o mitigati come indicato nelle rispettive sezioni; P0-09 è chiuso nei percorsi applicativi ma richiede i gate SaaS; P0-10 mantiene intenzionalmente aperta la rotazione della chiave.
 
 1. Ruotare la chiave OpenRouter esposta nella configurazione locale e introdurre secret scanning.
 2. Correggere filtro età.
@@ -1078,7 +1088,7 @@ Stato al 1 agosto 2026 per le attività già affrontate: P0-01/P0-02/P0-03/P0-06
 8. Rimuovere prompt completi dalla GUI. **Completato (`71a4a96`).**
 9. Escapare HTML e rendere testuali i log dinamici. **Completato (`8db14c9`).**
 10. Neutralizzare formule Excel. **Completato (`89fe7fa`).**
-11. Aggiungere timeout Google.
+11. Aggiungere timeout Google. **Completato nel P0-04.**
 12. Scegliere un solo provider WHOIS e bloccare le dipendenze.
 13. Correggere `token_mode`, `is_dynamic`, categorie/località e framework detection.
 14. Creare `pyproject.toml`, lockfile e bootstrap.

@@ -11,6 +11,7 @@ from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
 from ..domain.jobs import JobState, ensure_job_transition
+from ..domain.discovery import ensure_provider_payload_absent
 from ..domain.usage import normalized_cost
 from ..infrastructure.models import JobModel
 from .audit_log import append_audit_event
@@ -46,6 +47,7 @@ class JobService:
         key = idempotency_key.strip()
         if not key or len(key) > 128:
             raise ValueError("Chiave di idempotenza non valida.")
+        ensure_provider_payload_absent(parameters)
         existing = session.scalar(
             select(JobModel).where(
                 JobModel.workspace_id == workspace_id,

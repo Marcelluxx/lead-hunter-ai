@@ -37,6 +37,11 @@ class PlatformSchemaTests(unittest.TestCase):
             "usage_reservations",
             "usage_ledger",
             "audit_events",
+            "leads",
+            "lead_evidence",
+            "lead_attributes",
+            "provider_references",
+            "retention_events",
         }
         self.assertEqual(set(Base.metadata.tables), expected)
 

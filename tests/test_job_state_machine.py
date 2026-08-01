@@ -4,6 +4,7 @@ from src.application.budgets import BudgetService
 from src.application.jobs import JobService
 from src.application.workspaces import bootstrap_platform
 from src.domain.jobs import InvalidJobTransition, JobState
+from src.domain.discovery import ProviderPayloadError
 from src.infrastructure.models import JobModel
 from tests.platform_helpers import platform_fixture
 
@@ -75,6 +76,19 @@ class JobServiceTests(unittest.TestCase):
             with self.assertRaises(InvalidJobTransition):
                 self.service.transition(
                     session, job_id=created.job.id, target=JobState.COMPLETED
+                )
+
+    def test_provider_payload_cannot_enter_persistent_job_parameters(self):
+        with self.assertRaises(ProviderPayloadError):
+            with self.database.session() as session:
+                self.service.create(
+                    session,
+                    workspace_id=self.workspace.id,
+                    user_id=self.user.id,
+                    kind="audit",
+                    parameters={"places": [{"displayName": {"text": "Forbidden"}}]},
+                    estimated_cost="1",
+                    idempotency_key="provider-payload",
                 )
 
 

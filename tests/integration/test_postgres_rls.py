@@ -8,7 +8,7 @@ from sqlalchemy import delete, select, text
 from sqlalchemy.exc import ProgrammingError
 
 from src.infrastructure.database import resolve_job_workspace
-from src.infrastructure.models import JobModel, UserModel, WorkspaceModel
+from src.infrastructure.models import JobModel, LeadModel, UserModel, WorkspaceModel
 from tests.integration.postgres_helpers import (
     POSTGRES_AVAILABLE,
     databases,
@@ -46,6 +46,13 @@ class PostgresRlsTests(unittest.TestCase):
                     self._job(self.job_b, self.workspace_b, "b"),
                 ]
             )
+            session.flush()
+            session.add_all(
+                [
+                    LeadModel(workspace_id=self.workspace_a, job_id=self.job_a),
+                    LeadModel(workspace_id=self.workspace_b, job_id=self.job_b),
+                ]
+            )
 
     def tearDown(self):
         with self.owner.session() as session:
@@ -77,6 +84,9 @@ class PostgresRlsTests(unittest.TestCase):
             jobs = session.scalars(select(JobModel)).all()
             self.assertEqual([job.id for job in jobs], [self.job_a])
             self.assertIsNone(session.get(JobModel, self.job_b))
+            leads = session.scalars(select(LeadModel)).all()
+            self.assertEqual(len(leads), 1)
+            self.assertEqual(leads[0].workspace_id, self.workspace_a)
 
     def test_uuid_resolver_is_worker_only(self):
         with self.assertRaises(ProgrammingError):

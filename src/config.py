@@ -16,18 +16,13 @@ RADIUS_M: Final[float] = 2000.0      # Raggio per locationBias (obbligatorio per
 LAT_DEGREE_KM: Final[float] = 111.32 # Valore esatto per i calcoli GPS
 
 # --- GOOGLE PLACES CONFIG ---
-# Field Mask con userRatingCount per filtro recensioni (Places V1 API)
+# Minimo indispensabile per discovery transitoria. I contenuti non vengono
+# persistiti, accodati, inviati a LLM o esportati.
 FIELD_MASK: Final[str] = (
     "places.id,"
     "places.displayName,"
-    "places.formattedAddress,"
-    "places.addressComponents,"
-    "places.nationalPhoneNumber,"
     "places.websiteUri,"
-    "places.rating,"
-    "places.userRatingCount,"
-    "places.reviews,"
-    "places.types"
+    "places.attributions"
 )
 
 # --- FILTRI LEAD (Modalità "Con Sito Web") ---

@@ -15,6 +15,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Numeric,
+    Float,
     String,
     Text,
     UniqueConstraint,
@@ -298,5 +299,105 @@ class AuditEventModel(Base):
     details: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     correlation_id: Mapped[Optional[str]] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class LeadModel(TimestampMixin, Base):
+    __tablename__ = "leads"
+    __table_args__ = (Index("ix_leads_workspace_job", "workspace_id", "job_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="verified")
+
+
+class EvidenceModel(Base):
+    __tablename__ = "lead_evidence"
+    __table_args__ = (Index("ix_lead_evidence_workspace_lead", "workspace_id", "lead_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    lead_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("leads.id", ondelete="CASCADE"), nullable=False
+    )
+    source_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class LeadAttributeModel(Base):
+    __tablename__ = "lead_attributes"
+    __table_args__ = (
+        UniqueConstraint("lead_id", "field_name"),
+        CheckConstraint(
+            "source IN ('official_website','user_input')", name="ck_lead_attribute_source"
+        ),
+        Index("ix_lead_attributes_workspace_expiry", "workspace_id", "expires_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    lead_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("leads.id", ondelete="CASCADE"), nullable=False
+    )
+    evidence_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid, ForeignKey("lead_evidence.id", ondelete="SET NULL")
+    )
+    field_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    value_text: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String(30), nullable=False)
+    source_url: Mapped[Optional[str]] = mapped_column(String(2048))
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+    data_classification: Mapped[str] = mapped_column(
+        String(80), nullable=False, default="business_contact"
+    )
+
+
+class ProviderReferenceModel(Base):
+    __tablename__ = "provider_references"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "provider", "external_id"),
+        Index("ix_provider_references_refresh", "workspace_id", "refresh_after"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    lead_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid, ForeignKey("leads.id", ondelete="CASCADE")
+    )
+    provider: Mapped[str] = mapped_column(String(80), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(500), nullable=False)
+    last_verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    refresh_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class RetentionEventModel(Base):
+    __tablename__ = "retention_events"
+    __table_args__ = (Index("ix_retention_events_workspace_run", "workspace_id", "ran_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    entity_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    deleted_count: Mapped[int] = mapped_column(nullable=False)
+    ran_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
