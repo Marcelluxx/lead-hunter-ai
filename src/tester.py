@@ -22,38 +22,55 @@ logger = logging.getLogger(__name__)
 from src.crawler import HybridCrawler
 from src.auditor import LeadAuditor
 from src.filters import extract_domain
+from src.security.privacy import (
+    purge_expired_diagnostic_files,
+    redact_sensitive_text,
+)
 
 def run_url_test(
     url: str,
     max_pages: int = 5,
     token_mode: str = "high_fidelity",
     headless: bool = True,
+    save_artifacts: bool = False,
+    retention_hours: int = 24,
 ) -> None:
     """
-    Funzione principale che orchestra il test di un sito web e scrive i risultati
-    sia nel terminale che in file temporanei dentro 'test_output/'.
+    Esegue un test diagnostico. Gli artefatti sensibili restano disabilitati
+    finché l'operatore non li abilita esplicitamente.
     """
-    print(f"\n🧪 INIZIO TEST DI DIAGNOSTICA SITO: {url}")
+    print(redact_sensitive_text(f"\n🧪 INIZIO TEST DI DIAGNOSTICA SITO: {url}"))
     print(f"   Max Pagine: {max_pages} | Token Mode: {token_mode} | Headless: {headless}")
     print("=" * 60)
 
-    # 1. Setup Cartella di Output
+    # 1. Setup diagnostico: nessun file viene creato per impostazione predefinita.
     output_dir = "test_output"
     html_dir = os.path.join(output_dir, "html")
     proc_dir = os.path.join(output_dir, "processed")
-
-    os.makedirs(output_dir, exist_ok=True)
-    os.makedirs(html_dir, exist_ok=True)
-    os.makedirs(proc_dir, exist_ok=True)
+    if save_artifacts:
+        if retention_hours < 1:
+            raise ValueError("La retention diagnostica deve essere di almeno un'ora.")
+        os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(html_dir, exist_ok=True)
+        os.makedirs(proc_dir, exist_ok=True)
+        removed = purge_expired_diagnostic_files(output_dir, retention_hours)
+        print(
+            f"Artefatti diagnostici abilitati esplicitamente; retention "
+            f"{retention_hours}h, file scaduti rimossi: {removed}."
+        )
+    else:
+        print("Artefatti diagnostici disabilitati: nessun HTML o testo grezzo sarà salvato.")
 
     report_lines = []
     def log_both(msg: str):
-        print(msg)
-        report_lines.append(msg)
+        safe_message = redact_sensitive_text(msg)
+        print(safe_message)
+        report_lines.append(safe_message)
 
-    log_both(f"📁 Directory di output creata: {os.path.abspath(output_dir)}")
-    log_both(f"   - Pagine HTML grezze: {html_dir}")
-    log_both(f"   - Testo elaborato per LLM: {proc_dir}\n")
+    if save_artifacts:
+        log_both(f"📁 Directory diagnostica: {os.path.abspath(output_dir)}")
+        log_both(f"   - Pagine HTML grezze: {html_dir}")
+        log_both(f"   - Testo elaborato per LLM: {proc_dir}\n")
 
     # 2. Inizializzazione Crawler
     crawler = HybridCrawler(max_pages=max_pages, token_mode=token_mode, headless=headless)
@@ -92,14 +109,15 @@ def run_url_test(
         
         log_both(f"📄 Elaborazione Pagina [{page_idx}]: {page_url}")
 
-        # Salva testo processato per LLM
-        txt_path = os.path.join(proc_dir, f"page_{page_idx}_{page_name}_processed.txt")
-        with open(txt_path, "w", encoding="utf-8") as f:
-            f.write(processed_text)
-        log_both(f"   💾 Testo inviato a LLM salvato in: {txt_path}")
+        if save_artifacts:
+            # Il contenuto può includere PII: persistenza solo su opt-in operatore.
+            txt_path = os.path.join(proc_dir, f"page_{page_idx}_{page_name}_processed.txt")
+            with open(txt_path, "w", encoding="utf-8") as f:
+                f.write(processed_text)
+            log_both(f"   💾 Testo inviato a LLM salvato in: {txt_path}")
 
         # CrawlResult conserva l'HTML grezzo della sola homepage.
-        if page_idx == 1 and crawl_res.raw_html_home:
+        if save_artifacts and page_idx == 1 and crawl_res.raw_html_home:
             html_path = os.path.join(html_dir, f"page_{page_idx}_{page_name}.html")
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(crawl_res.raw_html_home)
@@ -108,9 +126,10 @@ def run_url_test(
         page_idx += 1
         print("-" * 40)
 
-    log_both(f"\n📂 Totale file salvati:")
-    log_both(f"   - HTML homepage: {'sì' if crawl_res.raw_html_home else 'no'}")
-    log_both(f"   - {page_idx - 1} File di testo pronti per l'LLM")
+    if save_artifacts:
+        log_both(f"\n📂 Totale file diagnostici salvati:")
+        log_both(f"   - HTML homepage: {'sì' if crawl_res.raw_html_home else 'no'}")
+        log_both(f"   - {page_idx - 1} file di testo pronti per l'LLM")
 
     # 4. Fase AI Website Audit
     log_both("🧠 FASE 2: Simulazione Audit AI tramite LLM...")
@@ -150,17 +169,18 @@ def run_url_test(
             "framework": audit_res.get("framework"),
             "cold_message": audit_res.get("cold_message"),
         }
-        json_path = os.path.join(output_dir, "ai_audit_test.json")
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(audit_export, f, indent=4, ensure_ascii=False)
-        log_both(f"\n💾 Risposta AI salvata in: {json_path}")
+        if save_artifacts:
+            json_path = os.path.join(output_dir, "ai_audit_test.json")
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(audit_export, f, indent=4, ensure_ascii=False)
+            log_both(f"\n💾 Risposta AI salvata in: {json_path}")
 
     except Exception as e:
         log_both(f"❌ Errore durante l'Audit AI: {e}")
 
-    # Salva il report di log completo in test_output/test_report.txt
-    report_path = os.path.join(output_dir, "test_report.txt")
-    with open(report_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(report_lines))
-    print(f"\n📜 Report completo di diagnostica salvato in: {os.path.abspath(report_path)}")
+    if save_artifacts:
+        report_path = os.path.join(output_dir, "test_report.txt")
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(report_lines))
+        print(f"\n📜 Report diagnostico salvato in: {os.path.abspath(report_path)}")
     print("=" * 60)

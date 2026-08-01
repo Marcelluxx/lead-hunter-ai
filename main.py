@@ -18,6 +18,7 @@ from src.scraper import LeadScraper
 from src.auditor import LeadAuditor
 from src.exporter import DataExporter
 from src.crawler import HybridCrawler, CrawlResult
+from src.security.privacy import redact_sensitive_text
 from src.filters import (
     filter_by_reviews,
     filter_by_business_age,
@@ -120,9 +121,10 @@ class LeadHunterOrchestrator:
         on_log: Callable[[str], None] — messaggio di log
         """
         def log(msg):
-            print(msg)
+            safe_message = redact_sensitive_text(msg)
+            print(safe_message)
             if on_log:
-                on_log(msg)
+                on_log(safe_message)
 
         # --- FASE 1: Scraping Google Maps ---
         if on_phase:
@@ -381,7 +383,18 @@ if __name__ == "__main__":
                         help="Disabilita la modalità headless di Playwright (esegue il browser visibile headed)")
 
     # Flag speciali
-    parser.add_argument("--test-url", type=str, help="Esegue un test diagnostico completo su un singolo URL (salva HTML/CSS/testi in test_output/)")
+    parser.add_argument("--test-url", type=str, help="Esegue un test diagnostico completo su un singolo URL")
+    parser.add_argument(
+        "--save-diagnostic-artifacts",
+        action="store_true",
+        help="Salva esplicitamente HTML e testi sensibili del test in test_output/",
+    )
+    parser.add_argument(
+        "--diagnostic-retention-hours",
+        type=int,
+        default=24,
+        help="Retention degli artefatti diagnostici espliciti (default: 24 ore)",
+    )
     parser.add_argument("--gui", action="store_true", help="Avvia l'interfaccia grafica Streamlit")
     parser.add_argument("--examples", action="store_true", help="Mostra gli esempi d'uso ed esci")
 
@@ -392,7 +405,14 @@ if __name__ == "__main__":
 
     if args.test_url:
         from src.tester import run_url_test
-        run_url_test(args.test_url, max_pages=args.max_pages, token_mode=args.token_mode, headless=not args.no_headless)
+        run_url_test(
+            args.test_url,
+            max_pages=args.max_pages,
+            token_mode=args.token_mode,
+            headless=not args.no_headless,
+            save_artifacts=args.save_diagnostic_artifacts,
+            retention_hours=args.diagnostic_retention_hours,
+        )
         sys.exit(0)
 
     if args.gui:

@@ -15,7 +15,6 @@ import pandas as pd
 import os
 import sys
 import time
-import requests
 import logging
 from datetime import datetime
 
@@ -34,6 +33,8 @@ from security.presentation import (
     build_phase_card_html,
     normalize_log_message,
 )
+from security.geolocation import GeolocationError, lookup_approximate_location
+from security.privacy import redact_sensitive_text
 
 
 logger = logging.getLogger(__name__)
@@ -139,23 +140,9 @@ def calculate_grid_circles(center_lat, center_lng):
 
 
 # --- SESSION STATE ---
-def get_approximate_location():
-    """Tenta di ottenere la posizione approssimativa dell'utente tramite IP."""
-    try:
-        # Timeout breve (3s) per non bloccare la GUI se non c'è rete o l'API è lenta
-        response = requests.get("http://ip-api.com/json/", timeout=3)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get("status") == "success":
-                return {"lat": data["lat"], "lng": data["lon"]}
-    except Exception:
-        pass
-    
-    # Fallback su Roma se fallisce
-    return {"lat": 41.9028, "lng": 12.4964}
-
 if "target_coords" not in st.session_state:
-    st.session_state.target_coords = get_approximate_location()
+    # Nessuna chiamata esterna automatica: Roma è un default modificabile.
+    st.session_state.target_coords = {"lat": 41.9028, "lng": 12.4964}
 
 # --- HEADER ---
 st.markdown("<h1 style='text-align: center; color: #1e293b; margin-bottom: 0;'>🎯 Lead Hunter V3</h1>", unsafe_allow_html=True)
@@ -244,7 +231,19 @@ with col1:
     coord_c1, coord_c2 = st.columns(2)
     coord_c1.metric("Latitudine", f"{st.session_state.target_coords['lat']:.5f}")
     coord_c2.metric("Longitudine", f"{st.session_state.target_coords['lng']:.5f}")
-    st.caption("💡 Clicca sulla mappa per aggiornare le coordinate.")
+    if st.button("📡 USA LA MIA POSIZIONE APPROSSIMATIVA", use_container_width=True):
+        with st.spinner("Rilevamento della posizione approssimativa..."):
+            try:
+                location = lookup_approximate_location()
+                st.session_state.target_coords = location.to_public_dict()
+                st.success("Posizione approssimativa aggiornata.")
+            except GeolocationError as exc:
+                st.warning(str(exc))
+    st.caption(
+        "Il rilevamento è facoltativo. Solo dopo il clic, il provider HTTPS "
+        "configurato riceve l'IP pubblico della connessione; IP e risposta grezza "
+        "non vengono salvati dall'app. Puoi sempre scegliere il punto sulla mappa."
+    )
     st.markdown("<br>", unsafe_allow_html=True)
 
     start_btn = st.button("🚀 AVVIA LEAD HUNTER ENGINE", type="primary", use_container_width=True)
@@ -309,7 +308,7 @@ if start_btn:
             if "logs" not in st.session_state:
                 st.session_state.logs = []
             elapsed = format_elapsed(time.time() - pipeline_start)
-            safe_message = normalize_log_message(msg)
+            safe_message = normalize_log_message(redact_sensitive_text(msg))
             st.session_state.logs.append(f"[{elapsed}] {safe_message}")
             log_container.code("\n".join(st.session_state.logs[::-1]), language=None)
 
@@ -464,7 +463,10 @@ if start_btn:
             else:
                 st.warning("⚠️ La ricerca è terminata ma non sono stati trovati lead idonei in quest'area.")
 
-        except Exception:
-            logger.exception("Errore non gestito durante l'esecuzione della pipeline")
+        except Exception as exc:
+            logger.error(
+                "Errore non gestito durante l'esecuzione della pipeline (%s)",
+                type(exc).__name__,
+            )
             st.error("❌ Errore interno durante l'esecuzione. Consulta i log applicativi.")
             update_log("ERRORE CRITICO: dettagli registrati lato server")
