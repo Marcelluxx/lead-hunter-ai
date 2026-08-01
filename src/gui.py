@@ -16,6 +16,7 @@ import os
 import sys
 import time
 import requests
+import logging
 from datetime import datetime
 
 # Path setup per import dal progetto root
@@ -28,6 +29,14 @@ from config import (
 )
 from main import LeadHunterOrchestrator
 from exporter import DataExporter
+from security.presentation import (
+    build_keyword_card_html,
+    build_phase_card_html,
+    normalize_log_message,
+)
+
+
+logger = logging.getLogger(__name__)
 
 # --- PAGE CONFIG ---
 st.set_page_config(
@@ -96,30 +105,17 @@ st.markdown("""
 
 # --- HELPERS ---
 def render_kw_card(placeholder, keyword, count, status, footer):
-    status_map = {"idle": "status-idle", "running": "status-running", "done": "status-success", "fail": "status-fail"}
-    if status == "done" and count == 0:
-        status = "fail"
-    color_class = status_map.get(status, "status-idle")
-    icons = {"done": "✅", "fail": "❌", "running": "🛰️"}
-    icon = icons.get(status, "⏳")
-    placeholder.markdown(f"""
-        <div class="keyword-card {color_class}">
-            <div class="card-title">{keyword}</div>
-            <div class="card-value">{count}</div>
-            <div class="card-footer">{icon} {footer}</div>
-        </div>
-    """, unsafe_allow_html=True)
+    placeholder.markdown(
+        build_keyword_card_html(keyword, count, status, footer),
+        unsafe_allow_html=True,
+    )
 
 
 def render_phase_card(placeholder, icon, text, elapsed_str=""):
-    time_html = f'<span class="phase-time">⏱️ {elapsed_str}</span>' if elapsed_str else ""
-    placeholder.markdown(f"""
-        <div class="phase-card">
-            <span class="phase-icon">{icon}</span>
-            <span class="phase-text">{text}</span>
-            {time_html}
-        </div>
-    """, unsafe_allow_html=True)
+    placeholder.markdown(
+        build_phase_card_html(icon, text, elapsed_str),
+        unsafe_allow_html=True,
+    )
 
 
 def format_elapsed(seconds: float) -> str:
@@ -313,16 +309,13 @@ if start_btn:
             if "logs" not in st.session_state:
                 st.session_state.logs = []
             elapsed = format_elapsed(time.time() - pipeline_start)
-            st.session_state.logs.append(f"<span style='color:#64748b'>[{elapsed}]</span> {msg}")
-            log_html = "<br>".join(st.session_state.logs[::-1])
-            log_container.markdown(f'<div class="log-container">{log_html}</div>', unsafe_allow_html=True)
+            safe_message = normalize_log_message(msg)
+            st.session_state.logs.append(f"[{elapsed}] {safe_message}")
+            log_container.code("\n".join(st.session_state.logs[::-1]), language=None)
 
         def update_elapsed():
             elapsed = format_elapsed(time.time() - pipeline_start)
-            elapsed_placeholder.markdown(
-                f"<p style='text-align:right; color:#64748b; font-size:0.85rem;'>⏱️ Tempo trascorso: <b>{elapsed}</b></p>",
-                unsafe_allow_html=True
-            )
+            elapsed_placeholder.caption(f"⏱️ Tempo trascorso: {elapsed}")
 
         st.session_state.logs = []
         update_log("🚀 Inizializzazione Engine V3...")
@@ -333,7 +326,7 @@ if start_btn:
             if mode_key == "no_website":
                 # === PIPELINE NO WEBSITE ===
                 def on_kw_start(kw):
-                    update_log(f"🔍 Scansione grid per: <b>{kw}</b>")
+                    update_log(f"🔍 Scansione grid per: {kw}")
                     render_kw_card(kw_placeholders[kw], kw, 0, "running", "Ricerca in corso...")
                     update_elapsed()
 
@@ -344,7 +337,7 @@ if start_btn:
                     update_elapsed()
 
                 def on_kw_end(kw, count):
-                    update_log(f"✅ {kw} → <b>{count}</b> lead trovati")
+                    update_log(f"✅ {kw} → {count} lead trovati")
                     render_kw_card(kw_placeholders[kw], kw, count, "done", "Completato" if count > 0 else "Nessun lead")
                     update_elapsed()
 
@@ -471,6 +464,7 @@ if start_btn:
             else:
                 st.warning("⚠️ La ricerca è terminata ma non sono stati trovati lead idonei in quest'area.")
 
-        except Exception as e:
-            st.error(f"❌ Errore durante l'esecuzione: {e}")
-            update_log(f"<span style='color:#ef4444'>CRITICAL ERROR: {str(e)}</span>")
+        except Exception:
+            logger.exception("Errore non gestito durante l'esecuzione della pipeline")
+            st.error("❌ Errore interno durante l'esecuzione. Consulta i log applicativi.")
+            update_log("ERRORE CRITICO: dettagli registrati lato server")
