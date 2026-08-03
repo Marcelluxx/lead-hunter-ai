@@ -4,7 +4,8 @@ Due modalità:
   1. "No Website" — analisi lead senza sito (rimossi ideal_product e sales_hook)
   2. "With Website" — audit completo sito web con LLM via OpenRouter
 
-I prompt di sistema sono centralizzati in src/prompts.py (escluso dal repo pubblico).
+I prompt proprietari sono caricati a runtime tramite il contratto pubblico
+src.prompting.AuditPromptProvider.
 """
 
 import json
@@ -24,14 +25,7 @@ from .domain import (
     WebsiteAuditResult,
     ensure_auditable_pages,
 )
-from .prompts import (
-    SYSTEM_NO_WEBSITE,
-    SYSTEM_WEBSITE_AUDIT,
-    SYSTEM_PAGE_CLEAN,
-    build_no_website_prompt,
-    build_website_audit_prompt,
-    build_page_clean_prompt,
-)
+from .prompting import AuditPromptProvider, load_prompt_provider
 from .security import (
     UNTRUSTED_DATA_SYSTEM_RULES,
     build_untrusted_pages_payload,
@@ -50,6 +44,7 @@ class LeadAuditor:
         model: str,
         model_free: str,
         client: Any = None,
+        prompt_provider: AuditPromptProvider | None = None,
     ):
         if client is None and not api_key.strip():
             raise ValueError("OPENROUTER_API_KEY mancante.")
@@ -59,6 +54,11 @@ class LeadAuditor:
         )
         self.model = model
         self.model_free = model_free
+        self.prompt_provider = (
+            prompt_provider
+            if prompt_provider is not None
+            else load_prompt_provider()
+        )
 
     def _clean_json_output(self, raw_content: str) -> str:
         """Estrae e ripulisce il JSON dal testo generato dall'LLM."""
@@ -90,7 +90,7 @@ class LeadAuditor:
         review_text = "\n".join([f"- {t}" for t in extracted_reviews]) if extracted_reviews else "Nessuna recensione."
         review_text = sanitize_untrusted_text(review_text, max_length=6000).text
 
-        prompt = build_no_website_prompt(
+        prompt = self.prompt_provider.build_no_website_prompt(
             business_name, safe_category, safe_competitor, review_text
         )
 
@@ -101,7 +101,7 @@ class LeadAuditor:
                     messages=[
                         {
                             "role": "system",
-                            "content": f"{SYSTEM_NO_WEBSITE}\n\n{UNTRUSTED_DATA_SYSTEM_RULES}",
+                            "content": f"{self.prompt_provider.system_no_website}\n\n{UNTRUSTED_DATA_SYSTEM_RULES}",
                         },
                         {"role": "user", "content": prompt}
                     ],
@@ -156,7 +156,11 @@ class LeadAuditor:
             ensure_ascii=False,
             separators=(",", ":"),
         )
-        user_prompt = build_page_clean_prompt(safe_url, label, untrusted_envelope)
+        user_prompt = self.prompt_provider.build_page_clean_prompt(
+            safe_url,
+            label,
+            untrusted_envelope,
+        )
 
         for attempt in range(max_retries):
             try:
@@ -165,7 +169,7 @@ class LeadAuditor:
                     messages=[
                         {
                             "role": "system",
-                            "content": f"{SYSTEM_PAGE_CLEAN}\n\n{UNTRUSTED_DATA_SYSTEM_RULES}",
+                            "content": f"{self.prompt_provider.system_page_clean}\n\n{UNTRUSTED_DATA_SYSTEM_RULES}",
                         },
                         {"role": "user", "content": user_prompt}
                     ],
@@ -250,7 +254,7 @@ class LeadAuditor:
         except (TypeError, ValueError):
             safe_review_count = 0
 
-        prompt = build_website_audit_prompt(
+        prompt = self.prompt_provider.build_website_audit_prompt(
             safe_business_name,
             safe_category,
             safe_rating,
@@ -265,7 +269,7 @@ class LeadAuditor:
                     messages=[
                         {
                             "role": "system",
-                            "content": f"{SYSTEM_WEBSITE_AUDIT}\n\n{UNTRUSTED_DATA_SYSTEM_RULES}",
+                            "content": f"{self.prompt_provider.system_website_audit}\n\n{UNTRUSTED_DATA_SYSTEM_RULES}",
                         },
                         {"role": "user", "content": prompt}
                     ],
