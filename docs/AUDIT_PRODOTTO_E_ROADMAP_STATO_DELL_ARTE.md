@@ -1,8 +1,8 @@
 # Lead Hunter V3 — Audit tecnico, vendibilità e roadmap “stato dell’arte”
 
-**Data dell’analisi:** 1 agosto 2026
-**Stato analizzato:** branch `codex/p0-governance-compliance`, incluse le implementazioni P0-07, P0-04 e P0-05, derivato da `develop` al merge commit `f76be20`
-**Base di evidenza:** grafo Graphify usato come baseline architetturale, lettura aggiornata del codice, migrazioni Alembic, compilazione statica, suite di 100 test eseguita anche su PostgreSQL 17 con ruoli runtime/RLS reali e scansione Gitleaks 8.30.1 dei file staged senza rilevazioni. Il grafo dovrà essere rigenerato dopo il merge della macrocategoria per riflettere i nuovi boundary P0-07/P0-04/P0-05.
+**Data dell’analisi:** 3 agosto 2026
+**Stato analizzato:** branch `codex/reproducible-ci-release`, derivato da `develop` al merge commit `1255714`, fino al commit `3dffd02`
+**Base di evidenza:** grafo Graphify rigenerato sul branch corrente, lettura del codice e dei workflow, lockfile `uv.lock`, build Docker reale, round trip Alembic su PostgreSQL 17 pulito, bootstrap dei ruoli runtime, smoke test API, 107 casi di test verdi (101 nella suite generale e 6 integrazioni PostgreSQL/RLS), SBOM CycloneDX 1.5, audit di 139 dipendenze senza vulnerabilità note e policy licenze applicata a 140 pacchetti runtime. Gitleaks resta un gate obbligatorio sulla cronologia completa in GitHub Actions.
 
 > Questo documento è un audit tecnico e di prodotto, non un parere legale. Prima della commercializzazione servono una verifica contrattuale su Google Maps Platform e un parere privacy/comunicazioni commerciali specifico per i mercati serviti.
 
@@ -71,6 +71,22 @@ Esito della macrocategoria sul branch:
 - **P0-04 è risolto a livello applicativo**, ma contratto e flusso Google richiedono revisione professionale prima della vendita.
 - **P0-05 è risolto per i controlli tecnici del core**: contatti tipizzati, policy Italia/UE, retention 90/365 giorni, suppression HMAC, diritti dell’interessato, audit, worker a batch e scheduler Docker orario con lock Redis. Informativa, DPA, sub-responsabili, data residency e base giuridica concreta restano responsabilità organizzative/legali.
 
+### Aggiornamento — riproducibilità, CI e release engineering
+
+Il branch `codex/reproducible-ci-release` aggiunge cinque commit tematici:
+
+| Commit | Ambito | Risultato |
+|---|---|---|
+| `46bc974` | ambiente riproducibile | `pyproject.toml`, `uv.lock`, Python supportato 3.10–3.13, immagini base pin-nate per digest e unica distribuzione `python-whois` |
+| `b8b7961` | gate Python/PostgreSQL | matrice Python dal lockfile e integrazioni PostgreSQL 17 obbligatorie, senza skip silenziosi |
+| `dada337` | gate container | build reale, bootstrap ruoli least-privilege, migrazioni `upgrade/downgrade/upgrade`, health API e teardown isolato |
+| `5763936` | portabilità Windows | log Unicode degradabili senza interrompere la pipeline su console CP1252 |
+| `3dffd02` | supply chain | SBOM CycloneDX, audit vulnerabilità con hash, inventario licenze, eccezioni versionate e artefatti conservati |
+
+Il collaudo Docker ha rilevato e corretto un difetto reale: lo script di inizializzazione PostgreSQL arrivava con CRLF e falliva con `/bin/sh^M`, lasciando il database senza ruoli applicativi. `.gitattributes` impone ora LF agli script e il CI verifica esplicitamente l’esistenza dei ruoli prima delle migrazioni.
+
+La baseline di release è quindi riproducibile e verificabile. Restano gate commerciali successivi: firma dell’immagine, provenienza/attestazioni, manifest di aggiornamento firmato, rollback automatizzato e revisione legale delle dipendenze LGPL/MPL.
+
 ## 1. Verdetto esecutivo
 
 ### L’applicazione può essere venduta?
@@ -87,20 +103,21 @@ La proposta più forte per Lead Hunter non è:
 
 ### È vendibile oggi?
 
-**Non ancora come SaaS pubblico o servizio automatizzato su larga scala.** La versione attuale è un buon prototipo tecnico, ma presenta blocker di sicurezza, accuratezza, compliance, riproducibilità e isolamento dei clienti.
+**Sì come vendita server/on-premise controllata e come servizio di report revisionati; non ancora come SaaS pubblico self-service su larga scala.** I P0 applicativi, il core multi-workspace e la baseline CI/release sono stati implementati. Prima dei primi contratti servono comunque revisione legale Google/privacy/licenze, documentazione operativa, backup/restore provato, osservabilità e un processo di aggiornamento firmato. Accuratezza dell’audit, benchmark e UX restano i principali limiti di prodotto, non più l’assenza delle fondamenta di sicurezza e riproducibilità.
 
 Valutazione sintetica:
 
 | Area | Valutazione attuale | Potenziale dopo roadmap |
 |---|---:|---:|
 | Idea e utilità commerciale | 8/10 | 9/10 |
-| Crawler come prototipo | 6.5/10 | 9/10 |
-| Accuratezza dell’audit | 4/10 | 9/10 |
-| Sicurezza applicativa | 2/10 | 9/10 |
-| Compliance e governance dati | 2/10 | 8.5/10 |
-| Scalabilità operativa | 3/10 | 9/10 |
-| Esperienza prodotto | 4/10 | 8.5/10 |
-| Prontezza alla vendita | 3/10 | 9/10 |
+| Crawler come prototipo | 7.5/10 | 9/10 |
+| Accuratezza dell’audit | 5/10 | 9/10 |
+| Sicurezza applicativa | 7.5/10 | 9/10 |
+| Compliance e governance dati | 7/10 | 8.5/10 |
+| Scalabilità operativa | 6.5/10 | 9/10 |
+| Esperienza prodotto | 5/10 | 8.5/10 |
+| Prontezza vendita server/report | 6.5/10 | 9/10 |
+| Prontezza SaaS pubblico | 4/10 | 9/10 |
 
 ### Il crawler è già “ottimo”?
 
@@ -125,7 +142,7 @@ Tuttavia, un crawler top di gamma non si misura dalla capacità di aggirare un 4
 - osservabilità, retry, caching e costi;
 - benchmark su un corpus reale.
 
-La versione attuale non soddisfa ancora questi criteri.
+La versione attuale soddisfa ora i principali criteri di sicurezza applicativa, evidenza e riproducibilità, ma non ancora benchmark su corpus reale, osservabilità/SLO, policy robots completa, controllo risorse del browser e accuratezza deterministica sufficienti per definirla “top di gamma”.
 
 ## 2. Punti di forza da preservare
 
@@ -670,11 +687,15 @@ Latitudine o longitudine `0.0` sono valide.
 
 ### P1-20 — Collisione tra `python-whois` e `whois`
 
+**Stato sul branch `codex/reproducible-ci-release`: RISOLTO.**
+
 **Evidenza:** `requirements.txt` installa entrambi i pacchetti non versionati; entrambi espongono storicamente un modulo importabile come `whois`, mentre `src/filters.py:15` importa genericamente `whois`.
 
 **Effetto:** il provider effettivo può dipendere dall’ordine di installazione e cambiare API o comportamento fra ambienti.
 
 **Fix:** scegliere un solo pacchetto, fissarne versione e hash, racchiuderlo in un adapter interno e testare date singole/multiple, privacy-redacted, timeout e TLD non supportati.
+
+`pyproject.toml` e `uv.lock` includono ora soltanto `python-whois==0.9.6`; la distribuzione concorrente `whois` non è più presente. Restano utili test aggiuntivi per timeout, TLD e formati data anomali, ma la collisione di import e installazione è eliminata.
 
 ### P1-21 — Normalizzazione categorie e località contiene rami incoerenti
 
@@ -689,6 +710,8 @@ Latitudine o longitudine `0.0` sono valide.
 ## 5. Debito P2 — ciò che impedisce di essere “enterprise”
 
 ### P2-01 — Ambiente non riproducibile
+
+**Stato sul branch `codex/reproducible-ci-release`: BASELINE RISOLTA.**
 
 Verifica effettuata:
 
@@ -708,9 +731,13 @@ Verifica effettuata:
 - container riproducibile;
 - SBOM e scansione vulnerabilità.
 
+Implementato con `pyproject.toml`, `uv.lock`, uv 0.11.15 vincolato, matrice Python 3.10–3.13, immagini Docker per digest, SBOM CycloneDX, audit vulnerabilità e policy licenze. Restano da aggiungere firma dell’immagine, attestazione di provenienza e manifest di aggiornamento firmato prima della distribuzione commerciale automatizzata.
+
 ### P2-02 — Nessuna test suite o CI
 
-Mancano `tests/`, pytest config, workflow CI, coverage e test di sicurezza.
+**Stato sul branch `codex/reproducible-ci-release`: BASELINE RISOLTA.**
+
+Nella baseline iniziale mancavano `tests/`, workflow CI, coverage e test di sicurezza; l’elenco seguente resta il riferimento per valutare la copertura, non lo stato corrente dell’infrastruttura.
 
 Test minimi:
 
@@ -728,7 +755,11 @@ Test minimi:
 
 Target iniziale: coverage significativo sulle decisioni critiche, non una percentuale cosmetica.
 
+Sono presenti 107 casi di test, workflow CI su quattro versioni Python, integrazioni PostgreSQL/RLS obbligatorie, build container, migrazioni reversibili, smoke API, Gitleaks e gate supply-chain. Restano aperti coverage misurata, gold set da siti reali, test browser end-to-end controllati e benchmark di regressione dell’accuratezza.
+
 ### P2-03 — Streamlit non è il prodotto finale
+
+**Stato: PARZIALMENTE SUPERATO.** Streamlit resta una console/demo, ma il core dispone ora di API FastAPI, autenticazione, RBAC, workspace, job persistenti, worker e audit log. Mancano ancora frontend prodotto, billing, SSO enterprise e SLA operativi.
 
 Streamlit è utile per demo e console interna, ma non offre da solo l’architettura necessaria per:
 
@@ -743,6 +774,8 @@ Streamlit è utile per demo e console interna, ma non offre da solo l’architet
 - SLA.
 
 ### P2-04 — Nessun database o modello di dominio persistente
+
+**Stato: RISOLTO PER IL CORE SERVER.** PostgreSQL, migrazioni Alembic, RLS fail-closed e modelli persistenti coprono identità, workspace, job, costi, audit, provenienza, privacy, contatti, suppression e richieste degli interessati. Evidence/findings e versionamento del report devono ancora evolvere per supportare benchmark e rescansioni commerciali.
 
 Excel è un output, non un sistema di record. Servono entità versionate:
 
@@ -764,6 +797,8 @@ Excel è un output, non un sistema di record. Servono entità versionate:
 - model/prompt version.
 
 ### P2-05 — Nessuna coda job, idempotenza o resume
+
+**Stato: PARZIALMENTE RISOLTO.** API, stato job persistente, idempotency key, Redis/Dramatiq e worker dedicati sono presenti. Restano dead-letter queue esplicita, cancellazione cooperativa, checkpoint per fase e resume completo del crawl/audit.
 
 Una campagna non deve vivere nel processo web. Servono:
 
@@ -1096,7 +1131,7 @@ Solo dopo aver consolidato:
 
 ### Sprint 0 — 1–2 settimane: rendere il prototipo onesto e sicuro per uso interno
 
-Stato al 1 agosto 2026 per le attività già affrontate: P0-01/P0-02/P0-03/P0-04/P0-05/P0-06/P0-07/P0-08 sono chiusi o mitigati come indicato nelle rispettive sezioni; P0-09 è chiuso nei percorsi applicativi ma richiede i gate SaaS; P0-10 mantiene intenzionalmente aperta la rotazione della chiave.
+Stato al 3 agosto 2026: P0-01/P0-02/P0-03/P0-04/P0-05/P0-06/P0-07/P0-08 sono chiusi o mitigati come indicato nelle rispettive sezioni; P0-09 è chiuso nei percorsi applicativi ma richiede i gate infrastrutturali; P0-10 mantiene intenzionalmente aperta soltanto la rotazione della chiave locale. Lockfile, CI, PostgreSQL obbligatorio, gate Docker, SBOM, vulnerability audit e policy licenze sono completati sul branch `codex/reproducible-ci-release`.
 
 1. Ruotare la chiave OpenRouter esposta nella configurazione locale e introdurre secret scanning.
 2. Correggere filtro età.
@@ -1109,12 +1144,14 @@ Stato al 1 agosto 2026 per le attività già affrontate: P0-01/P0-02/P0-03/P0-04
 9. Escapare HTML e rendere testuali i log dinamici. **Completato (`8db14c9`).**
 10. Neutralizzare formule Excel. **Completato (`89fe7fa`).**
 11. Aggiungere timeout Google. **Completato nel P0-04.**
-12. Scegliere un solo provider WHOIS e bloccare le dipendenze.
+12. Scegliere un solo provider WHOIS e bloccare le dipendenze. **Completato (`46bc974`).**
 13. Correggere `token_mode`, `is_dynamic`, categorie/località e framework detection.
-14. Creare `pyproject.toml`, lockfile e bootstrap.
-15. Aggiungere test P0.
+14. Creare `pyproject.toml`, lockfile e bootstrap. **Completato (`46bc974`).**
+15. Aggiungere test P0. **Completato come baseline: 107 casi, inclusi 6 PostgreSQL obbligatori (`b8b7961`).**
+16. Verificare container, migrazioni, ruoli e API in CI. **Completato (`dada337`).**
+17. Generare SBOM e bloccare vulnerabilità/licenze non conformi. **Completato (`3dffd02`).**
 
-**Gate:** uso interno controllato, non pubblico.
+**Gate:** superato per uso interno controllato e pilot server/report; non abilita da solo un SaaS pubblico.
 
 ### Fase 1 — 3–6 settimane: motore affidabile
 
@@ -1209,19 +1246,18 @@ Stato al 1 agosto 2026 per le attività già affrontate: P0-01/P0-02/P0-03/P0-04
 
 ## 12. Ordine di intervento raccomandato
 
-1. **Ruotare la chiave OpenRouter locale e bloccare future esposizioni di segreti.**
-2. **Stop a qualsiasi esposizione pubblica dell’attuale Streamlit.**
-3. **SSRF guard e validazione URL/status/redirect.**
-4. **Revisione Google Places e privacy/marketing.**
-5. **Rimozione prompt/dati sensibili dalla UI.**
-6. **XSS ed Excel injection.**
-7. **Correzione dei bug funzionali: età, no-website AI, e-commerce, social, crawl vuoto, token mode, categorie/località e framework.**
-8. **Test suite, dipendenza WHOIS univoca, lockfile e CI.**
-9. **Evidence schema e output LLM strutturato.**
-10. **Job architecture e storage multi-tenant.**
-11. **Audit deterministico Lighthouse/WCAG/security/SEO/technology detection.**
-12. **Pilot manuale con agenzie.**
-13. **Solo dopo: auth, billing e SaaS pubblico.**
+1. **Revisione professionale Google Places, privacy/marketing Italia-UE e licenze LGPL/MPL; predisporre DPA, informative e third-party notices.**
+2. **Firma immagine, provenance/SBOM associata alla release, manifest aggiornamenti firmato e rollback provato.**
+3. **Backup/restore PostgreSQL verificato, osservabilità, alert, runbook incidenti e SLO.**
+4. **Completare egress isolation, robots/takedown policy e limiti CPU/RAM/byte/browser-minute.**
+5. **Correggere i bug funzionali P1 ancora aperti: età, no-website AI, e-commerce, social, `token_mode`, categorie/località e framework detection.**
+6. **Audit deterministico Lighthouse/WCAG/security/SEO/technology detection con evidence per finding.**
+7. **Gold set e benchmark su almeno 200–500 siti, con human review e calibrazione degli score.**
+8. **Hardening operativo della coda: DLQ, cancellazione, checkpoint e resume per fase.**
+9. **Frontend prodotto e generazione report white-label; Streamlit rimane console interna.**
+10. **Pilot server/report con pochi design partner e contratti limitati, misurando costi e contestazioni.**
+11. **Ruotare la chiave locale quando il proprietario autorizzerà l’intervento; il secret scanning impedisce nuove esposizioni.**
+12. **Solo dopo i pilot: updater automatico firmato, billing/SSO e valutazione del SaaS pubblico.**
 
 ## 13. Decisione finale
 
