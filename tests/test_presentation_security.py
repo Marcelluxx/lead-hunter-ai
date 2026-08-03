@@ -4,6 +4,7 @@ from src.security.presentation import (
     build_keyword_card_html,
     build_phase_card_html,
     escape_dynamic_html,
+    normalize_console_text,
     normalize_log_message,
 )
 
@@ -33,6 +34,9 @@ class PresentationSecurityTests(unittest.TestCase):
 
     def test_escape_dynamic_html_escapes_quotes(self):
         self.assertEqual(escape_dynamic_html('"quoted"'), "&quot;quoted&quot;")
+
+    def test_console_text_degrades_unencodable_characters(self):
+        self.assertEqual(normalize_console_text("phase 🔍", encoding="cp1252"), "phase ?")
 
 
 if __name__ == "__main__":

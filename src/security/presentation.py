@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import re
+import sys
 from typing import Any
 
 
@@ -71,3 +72,10 @@ def normalize_log_message(value: Any, max_length: int = 2_000) -> str:
 
     text = _CONTROL_CHARACTERS.sub("", str(value))
     return text[:max_length]
+
+
+def normalize_console_text(value: Any, encoding: str | None = None) -> str:
+    """Return text that cannot fail when written to the active console."""
+
+    console_encoding = encoding or getattr(sys.stdout, "encoding", None) or "utf-8"
+    return str(value).encode(console_encoding, errors="replace").decode(console_encoding)
