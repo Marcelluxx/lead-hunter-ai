@@ -1,8 +1,8 @@
 # Lead Hunter V3 — Audit tecnico, vendibilità e roadmap “stato dell’arte”
 
 **Data dell’analisi:** 3 agosto 2026
-**Stato analizzato:** branch `codex/reproducible-ci-release`, derivato da `develop` al merge commit `1255714`, fino al commit `c2df7ad`
-**Base di evidenza:** grafo Graphify rigenerato sul branch corrente, lettura del codice e dei workflow, lockfile `uv.lock`, build Docker reale, round trip Alembic su PostgreSQL 17 pulito, bootstrap dei ruoli runtime, smoke test API, 107 casi di test verdi (101 nella suite generale e 6 integrazioni PostgreSQL/RLS), SBOM CycloneDX 1.5, audit di 139 dipendenze senza vulnerabilità note e policy licenze applicata a 140 pacchetti runtime. Gitleaks resta un gate obbligatorio sulla cronologia completa in GitHub Actions.
+**Stato analizzato:** branch `codex/reproducible-ci-release`, derivato da `develop` al merge commit `1255714`, fino al commit `68d0bb2`
+**Base di evidenza:** grafo Graphify rigenerato sul branch corrente, lettura del codice e dei workflow, lockfile `uv.lock`, build Docker reale, round trip Alembic su PostgreSQL 17 pulito, bootstrap dei ruoli runtime, smoke test API, 107 casi di test verdi (101 nella suite generale e 6 integrazioni PostgreSQL/RLS), SBOM CycloneDX 1.5, audit di 139 dipendenze senza vulnerabilità note e policy licenze applicata a 140 pacchetti runtime. Gitleaks sulla cronologia completa e tutti gli altri gate obbligatori sono risultati verdi nella PR GitHub.
 
 > Questo documento è un audit tecnico e di prodotto, non un parere legale. Prima della commercializzazione servono una verifica contrattuale su Google Maps Platform e un parere privacy/comunicazioni commerciali specifico per i mercati serviti.
 
@@ -83,10 +83,13 @@ Il branch `codex/reproducible-ci-release` aggiunge commit tematici separati per 
 | `5763936` | portabilità Windows | log Unicode degradabili senza interrompere la pipeline su console CP1252 |
 | `3dffd02` | supply chain | SBOM CycloneDX, audit vulnerabilità con hash, inventario licenze, eccezioni versionate e artefatti conservati |
 | `c2df7ad` | readiness CI | attesa esplicita della health PostgreSQL/Redis prima di verificare ruoli e migrazioni, eliminando una race osservata nel primo run della PR |
+| `68d0bb2` | segreti runtime non-root | chiavi effimere CI intestate all'UID/GID `10001:10001`, privata `0400` e pubblica `0444`, così il container non-root può leggerle senza inserirle nell'immagine |
 
 Il collaudo Docker ha rilevato e corretto un difetto reale: lo script di inizializzazione PostgreSQL arrivava con CRLF e falliva con `/bin/sh^M`, lasciando il database senza ruoli applicativi. `.gitattributes` impone ora LF agli script e il CI verifica esplicitamente l’esistenza dei ruoli prima delle migrazioni.
 
-La baseline di release è quindi riproducibile e verificabile. Restano gate commerciali successivi: firma dell’immagine, provenienza/attestazioni, manifest di aggiornamento firmato, rollback automatizzato e revisione legale delle dipendenze LGPL/MPL.
+Il primo run successivo ha inoltre esposto una differenza reale tra Windows e Linux: OpenSSL creava la chiave privata `0600` intestata all'utente del runner, mentre l'applicazione gira correttamente come UID non-root `10001`. Il bind mount Linux conservava quei permessi e l'API terminava con `PermissionError`. Il commit `68d0bb2` mantiene il principio least-privilege assegnando i file effimeri all'identità runtime; il modello è stato verificato su filesystem Linux Docker e poi dal container gate GitHub.
+
+La baseline di release è quindi riproducibile e verificata: nella PR #4 i run CI `30854285546` e Security `30854285146` hanno concluso verdi tutti gli otto gate. Restano gate commerciali successivi: firma dell’immagine, provenienza/attestazioni, manifest di aggiornamento firmato, rollback automatizzato e revisione legale delle dipendenze LGPL/MPL.
 
 ## 1. Verdetto esecutivo
 
