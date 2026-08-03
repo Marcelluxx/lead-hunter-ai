@@ -21,6 +21,10 @@ check succeeds on the exact commit being released.
 - a release is built from a clean, tagged commit;
 - secrets and customer data are never embedded in the image or artifacts;
 - the image digest and SBOM are retained with the release record;
+- unknown licenses fail the build unless a version-bounded, annually reviewed
+  upstream-license exception exists;
+- LGPL and MPL dependencies require a legal distribution review and complete
+  third-party notices before a commercial release;
 - migrations are tested against a clean database before publishing;
 - rollback is rehearsed against the previous supported release before the first
   commercial distribution.
