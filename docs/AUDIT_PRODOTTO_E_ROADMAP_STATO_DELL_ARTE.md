@@ -1,7 +1,7 @@
 # Lead Hunter V3 — Audit tecnico, vendibilità e roadmap “stato dell’arte”
 
 **Data dell’analisi:** 3 agosto 2026
-**Stato analizzato:** branch `codex/reproducible-ci-release`, derivato da `develop` al merge commit `1255714`, fino al commit `3dffd02`
+**Stato analizzato:** branch `codex/reproducible-ci-release`, derivato da `develop` al merge commit `1255714`, fino al commit `c2df7ad`
 **Base di evidenza:** grafo Graphify rigenerato sul branch corrente, lettura del codice e dei workflow, lockfile `uv.lock`, build Docker reale, round trip Alembic su PostgreSQL 17 pulito, bootstrap dei ruoli runtime, smoke test API, 107 casi di test verdi (101 nella suite generale e 6 integrazioni PostgreSQL/RLS), SBOM CycloneDX 1.5, audit di 139 dipendenze senza vulnerabilità note e policy licenze applicata a 140 pacchetti runtime. Gitleaks resta un gate obbligatorio sulla cronologia completa in GitHub Actions.
 
 > Questo documento è un audit tecnico e di prodotto, non un parere legale. Prima della commercializzazione servono una verifica contrattuale su Google Maps Platform e un parere privacy/comunicazioni commerciali specifico per i mercati serviti.
@@ -73,7 +73,7 @@ Esito della macrocategoria sul branch:
 
 ### Aggiornamento — riproducibilità, CI e release engineering
 
-Il branch `codex/reproducible-ci-release` aggiunge cinque commit tematici:
+Il branch `codex/reproducible-ci-release` aggiunge commit tematici separati per ambiente, gate e documentazione. I commit tecnici principali sono:
 
 | Commit | Ambito | Risultato |
 |---|---|---|
@@ -82,6 +82,7 @@ Il branch `codex/reproducible-ci-release` aggiunge cinque commit tematici:
 | `dada337` | gate container | build reale, bootstrap ruoli least-privilege, migrazioni `upgrade/downgrade/upgrade`, health API e teardown isolato |
 | `5763936` | portabilità Windows | log Unicode degradabili senza interrompere la pipeline su console CP1252 |
 | `3dffd02` | supply chain | SBOM CycloneDX, audit vulnerabilità con hash, inventario licenze, eccezioni versionate e artefatti conservati |
+| `c2df7ad` | readiness CI | attesa esplicita della health PostgreSQL/Redis prima di verificare ruoli e migrazioni, eliminando una race osservata nel primo run della PR |
 
 Il collaudo Docker ha rilevato e corretto un difetto reale: lo script di inizializzazione PostgreSQL arrivava con CRLF e falliva con `/bin/sh^M`, lasciando il database senza ruoli applicativi. `.gitattributes` impone ora LF agli script e il CI verifica esplicitamente l’esistenza dei ruoli prima delle migrazioni.
 
