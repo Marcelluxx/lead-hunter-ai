@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 from ..auditor import LeadAuditor
 from ..config import FIELD_MASK
+from ..prompting import AuditPromptProvider
 from ..scraper import LeadScraper
 from ..settings import ApplicationSettings
 
@@ -13,6 +15,7 @@ from ..settings import ApplicationSettings
 @dataclass(frozen=True)
 class ApplicationContainer:
     settings: ApplicationSettings
+    prompt_provider: Optional[AuditPromptProvider] = None
 
     @classmethod
     def from_environment(cls) -> "ApplicationContainer":
@@ -34,4 +37,5 @@ class ApplicationContainer:
             base_url=self.settings.openrouter_base_url,
             model=self.settings.llm_model,
             model_free=self.settings.llm_model_free,
+            prompt_provider=self.prompt_provider,
         )

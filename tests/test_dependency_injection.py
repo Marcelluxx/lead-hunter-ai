@@ -18,6 +18,21 @@ class _FakeLlmClient:
     pass
 
 
+class _FakePromptProvider:
+    system_no_website = "test no-website system instruction"
+    system_website_audit = "test website-audit system instruction"
+    system_page_clean = "test page-clean system instruction"
+
+    def build_no_website_prompt(self, *args):
+        return "test no-website user instruction"
+
+    def build_website_audit_prompt(self, *args):
+        return "test website-audit user instruction"
+
+    def build_page_clean_prompt(self, *args):
+        return "test page-clean user instruction"
+
+
 class DependencyInjectionTests(unittest.TestCase):
     def test_orchestrator_uses_explicit_dependencies(self):
         scraper = object()
@@ -70,15 +85,18 @@ class DependencyInjectionTests(unittest.TestCase):
 
     def test_auditor_uses_injected_client_and_models(self):
         client = _FakeLlmClient()
+        prompt_provider = _FakePromptProvider()
         auditor = LeadAuditor(
             api_key="",
             base_url="https://llm.test/v1",
             model="paid-model",
             model_free="free-model",
             client=client,
+            prompt_provider=prompt_provider,
         )
 
         self.assertIs(auditor.client, client)
+        self.assertIs(auditor.prompt_provider, prompt_provider)
         self.assertEqual(auditor.model, "paid-model")
         self.assertEqual(auditor.model_free, "free-model")
 
