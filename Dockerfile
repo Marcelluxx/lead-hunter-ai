@@ -8,16 +8,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_LINK_MODE=copy \
     PATH="/app/.venv/bin:$PATH"
 
-RUN useradd --create-home --uid 10001 leadhunter
+RUN useradd --create-home --uid 10001 leadhunter \
+    && install -d -o leadhunter -g leadhunter /app
 WORKDIR /app
 
 COPY --from=uv /uv /uvx /bin/
-COPY pyproject.toml uv.lock ./
+COPY --chown=leadhunter:leadhunter pyproject.toml uv.lock ./
+USER leadhunter
 RUN uv sync --frozen --no-default-groups --no-install-project
 
-COPY . .
-RUN chown -R leadhunter:leadhunter /app
-USER leadhunter
+COPY --chown=leadhunter:leadhunter . .
 
 EXPOSE 8000
 CMD ["uvicorn", "src.server:create_server_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
