@@ -258,6 +258,35 @@
         "confidence": "EXTRACTED",
         "confidence_score": 1.0,
         "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md"
+      },
+      {
+        "id": "least_privilege_ephemeral_secret_access",
+        "label": "Least-privilege Ephemeral Secret Access",
+        "nodes": [
+          "ci_ephemeral_ed25519_runtime_secrets",
+          "ci_runtime_secret_identity_10001",
+          "ci_private_key_mode_0400",
+          "ci_public_key_mode_0444",
+          "audit_68d0bb2_non_root_secret_fix"
+        ],
+        "relation": "implement",
+        "confidence": "EXTRACTED",
+        "confidence_score": 1.0,
+        "source_file": ".github/workflows/ci.yml"
+      },
+      {
+        "id": "pr4_verified_release_baseline",
+        "label": "PR #4 Verified Release Baseline",
+        "nodes": [
+          "audit_baseline_through_68d0bb2",
+          "audit_pr4_eight_green_gates",
+          "audit_ci_run_30854285546",
+          "audit_security_run_30854285146"
+        ],
+        "relation": "form",
+        "confidence": "EXTRACTED",
+        "confidence_score": 1.0,
+        "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md"
       }
     ]
   },
@@ -11654,9 +11683,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "id": "ci_compose_postgres_redis_readiness_barrier",
       "community": 9,
-      "norm_label": "docker compose postgresql and redis readiness barrier"
+      "norm_label": "docker compose postgresql and redis readiness barrier",
+      "id": "ci_compose_postgres_redis_readiness_barrier"
     },
     {
       "label": "Application Role and Migration Round-trip Checks",
@@ -11667,9 +11696,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "id": "ci_role_and_migration_checks",
       "community": 9,
-      "norm_label": "application role and migration round-trip checks"
+      "norm_label": "application role and migration round-trip checks",
+      "id": "ci_role_and_migration_checks"
     },
     {
       "label": "Audit Baseline Through Commit c2df7ad",
@@ -11680,9 +11709,9 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "id": "audit_baseline_through_c2df7ad",
       "community": 9,
-      "norm_label": "audit baseline through commit c2df7ad"
+      "norm_label": "audit baseline through commit c2df7ad",
+      "id": "audit_baseline_through_c2df7ad"
     },
     {
       "label": "First-PR Container Startup Race",
@@ -11694,9 +11723,9 @@
       "author": null,
       "contributor": null,
       "rationale": "The first pull-request run observed role and migration checks racing PostgreSQL and Redis startup before the services were healthy.",
-      "id": "audit_first_pr_container_startup_race",
       "community": 9,
-      "norm_label": "first-pr container startup race"
+      "norm_label": "first-pr container startup race",
+      "id": "audit_first_pr_container_startup_race"
     },
     {
       "label": "c2df7ad CI Readiness Resolution",
@@ -11708,9 +11737,142 @@
       "author": null,
       "contributor": null,
       "rationale": "Commit c2df7ad adds an explicit PostgreSQL and Redis health wait before role verification and migration execution, eliminating the observed startup race.",
-      "id": "audit_c2df7ad_readiness_resolution",
       "community": 9,
-      "norm_label": "c2df7ad ci readiness resolution"
+      "norm_label": "c2df7ad ci readiness resolution",
+      "id": "audit_c2df7ad_readiness_resolution"
+    },
+    {
+      "label": "Ephemeral Ed25519 Runtime Secrets",
+      "file_type": "code",
+      "source_file": ".github/workflows/ci.yml",
+      "source_location": "jobs.container-release-gate.steps.Create ephemeral runtime secrets, lines 140-149",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "ci_ephemeral_ed25519_runtime_secrets",
+      "community": 33,
+      "norm_label": "ephemeral ed25519 runtime secrets"
+    },
+    {
+      "label": "Runtime Secret Ownership UID/GID 10001:10001",
+      "file_type": "rationale",
+      "source_file": ".github/workflows/ci.yml",
+      "source_location": "jobs.container-release-gate.steps.Create ephemeral runtime secrets, lines 148-149",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "The ephemeral JWT files are owned by the same non-root runtime identity declared in the container image so bind-mounted keys remain readable without weakening the container identity.",
+      "id": "ci_runtime_secret_identity_10001",
+      "community": 33,
+      "norm_label": "runtime secret ownership uid/gid 10001:10001"
+    },
+    {
+      "label": "JWT Private Key Mode 0400",
+      "file_type": "code",
+      "source_file": ".github/workflows/ci.yml",
+      "source_location": "jobs.container-release-gate.steps.Create ephemeral runtime secrets, line 146",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "ci_private_key_mode_0400",
+      "community": 33,
+      "norm_label": "jwt private key mode 0400"
+    },
+    {
+      "label": "JWT Public Key Mode 0444",
+      "file_type": "code",
+      "source_file": ".github/workflows/ci.yml",
+      "source_location": "jobs.container-release-gate.steps.Create ephemeral runtime secrets, line 147",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "ci_public_key_mode_0444",
+      "community": 33,
+      "norm_label": "jwt public key mode 0444"
+    },
+    {
+      "label": "Audit Baseline Through Commit 68d0bb2",
+      "file_type": "document",
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "header, lines 3-5",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "audit_baseline_through_68d0bb2",
+      "community": 9,
+      "norm_label": "audit baseline through commit 68d0bb2"
+    },
+    {
+      "label": "Linux Bind-mount PermissionError",
+      "file_type": "rationale",
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "Aggiornamento \u2014 riproducibilit\u00e0, CI e release engineering, line 90",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "On Linux, OpenSSL created the private key as mode 0600 owned by the GitHub runner user; the bind mount preserved that ownership while the API ran as non-root UID 10001, so API startup failed with PermissionError.",
+      "id": "audit_linux_bind_mount_permission_error",
+      "community": 9,
+      "norm_label": "linux bind-mount permissionerror"
+    },
+    {
+      "label": "Commit 68d0bb2 Non-root Secret Fix",
+      "file_type": "rationale",
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "release-engineering table line 86 and explanation line 90",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Commit 68d0bb2 assigns ephemeral keys to UID/GID 10001:10001 with private mode 0400 and public mode 0444, preserving least privilege while making the Linux bind mount usable by the API container.",
+      "id": "audit_68d0bb2_non_root_secret_fix",
+      "community": 9,
+      "norm_label": "commit 68d0bb2 non-root secret fix"
+    },
+    {
+      "label": "PR #4 Eight Green CI and Security Gates",
+      "file_type": "document",
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "Aggiornamento \u2014 riproducibilit\u00e0, CI e release engineering, line 92",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "audit_pr4_eight_green_gates",
+      "community": 9,
+      "norm_label": "pr #4 eight green ci and security gates"
+    },
+    {
+      "label": "GitHub CI Run 30854285546",
+      "file_type": "document",
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "Aggiornamento \u2014 riproducibilit\u00e0, CI e release engineering, line 92",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "audit_ci_run_30854285546",
+      "community": 9,
+      "norm_label": "github ci run 30854285546"
+    },
+    {
+      "label": "GitHub Security Run 30854285146",
+      "file_type": "document",
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "Aggiornamento \u2014 riproducibilit\u00e0, CI e release engineering, line 92",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "audit_security_run_30854285146",
+      "community": 9,
+      "norm_label": "github security run 30854285146"
     }
   ],
   "links": [
@@ -32997,6 +33159,16 @@
       "target": "release_secret_data_exclusion"
     },
     {
+      "relation": "mounts",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "compose.yml",
+      "source_location": "services.api.volumes and container-release-gate secret preparation",
+      "weight": 1.0,
+      "source": "compose_ephemeral_secret_mount",
+      "target": "ci_ephemeral_ed25519_runtime_secrets"
+    },
+    {
       "relation": "conceptually_related_to",
       "confidence": "EXTRACTED",
       "confidence_score": 1,
@@ -33215,6 +33387,16 @@
       "weight": 1,
       "source": "security_commercial_license_policy",
       "target": "release_license_review"
+    },
+    {
+      "relation": "verifies",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "release-engineering verification, line 92",
+      "weight": 1.0,
+      "source": "audit_pr4_eight_green_gates",
+      "target": "release_required_pr_checks"
     },
     {
       "relation": "conceptually_related_to",
@@ -33457,6 +33639,16 @@
       "target": "audit_c2df7ad_readiness_resolution"
     },
     {
+      "relation": "supersedes",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "header line 4",
+      "weight": 1.0,
+      "source": "audit_baseline_through_68d0bb2",
+      "target": "audit_baseline_through_c2df7ad"
+    },
+    {
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
@@ -33465,6 +33657,126 @@
       "weight": 1.0,
       "source": "audit_first_pr_container_startup_race",
       "target": "audit_c2df7ad_readiness_resolution"
+    },
+    {
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".github/workflows/ci.yml",
+      "source_location": "jobs.container-release-gate.steps.Create ephemeral runtime secrets, lines 143-149",
+      "weight": 1.0,
+      "source": "ci_ephemeral_ed25519_runtime_secrets",
+      "target": "ci_runtime_secret_identity_10001"
+    },
+    {
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".github/workflows/ci.yml",
+      "source_location": "jobs.container-release-gate.steps.Create ephemeral runtime secrets, line 146",
+      "weight": 1.0,
+      "source": "ci_ephemeral_ed25519_runtime_secrets",
+      "target": "ci_private_key_mode_0400"
+    },
+    {
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".github/workflows/ci.yml",
+      "source_location": "jobs.container-release-gate.steps.Create ephemeral runtime secrets, line 147",
+      "weight": 1.0,
+      "source": "ci_ephemeral_ed25519_runtime_secrets",
+      "target": "ci_public_key_mode_0444"
+    },
+    {
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".github/workflows/ci.yml",
+      "source_location": "jobs.container-release-gate.steps.Create ephemeral runtime secrets, lines 148-149",
+      "weight": 1.0,
+      "source": "audit_68d0bb2_non_root_secret_fix",
+      "target": "ci_runtime_secret_identity_10001"
+    },
+    {
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "release-engineering table, line 86",
+      "weight": 1.0,
+      "source": "audit_68d0bb2_non_root_secret_fix",
+      "target": "ci_private_key_mode_0400"
+    },
+    {
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "release-engineering table, line 86",
+      "weight": 1.0,
+      "source": "audit_68d0bb2_non_root_secret_fix",
+      "target": "ci_public_key_mode_0444"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "header line 4 and release-engineering table line 86",
+      "weight": 1.0,
+      "source": "audit_baseline_through_68d0bb2",
+      "target": "audit_68d0bb2_non_root_secret_fix"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "header line 5 and release-engineering verification line 92",
+      "weight": 1.0,
+      "source": "audit_baseline_through_68d0bb2",
+      "target": "audit_pr4_eight_green_gates"
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "Aggiornamento \u2014 riproducibilit\u00e0, CI e release engineering, line 90",
+      "weight": 1.0,
+      "source": "audit_linux_bind_mount_permission_error",
+      "target": "audit_68d0bb2_non_root_secret_fix"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "Aggiornamento \u2014 riproducibilit\u00e0, CI e release engineering, lines 90-92",
+      "weight": 1.0,
+      "source": "audit_pr4_eight_green_gates",
+      "target": "audit_68d0bb2_non_root_secret_fix"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "Aggiornamento \u2014 riproducibilit\u00e0, CI e release engineering, line 92",
+      "weight": 1.0,
+      "source": "audit_pr4_eight_green_gates",
+      "target": "audit_ci_run_30854285546"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "Aggiornamento \u2014 riproducibilit\u00e0, CI e release engineering, line 92",
+      "weight": 1.0,
+      "source": "audit_pr4_eight_green_gates",
+      "target": "audit_security_run_30854285146"
     }
   ],
   "hyperedges": [
@@ -33723,7 +34035,36 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md"
+    },
+    {
+      "id": "least_privilege_ephemeral_secret_access",
+      "label": "Least-privilege Ephemeral Secret Access",
+      "nodes": [
+        "ci_ephemeral_ed25519_runtime_secrets",
+        "ci_runtime_secret_identity_10001",
+        "ci_private_key_mode_0400",
+        "ci_public_key_mode_0444",
+        "audit_68d0bb2_non_root_secret_fix"
+      ],
+      "relation": "implement",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".github/workflows/ci.yml"
+    },
+    {
+      "id": "pr4_verified_release_baseline",
+      "label": "PR #4 Verified Release Baseline",
+      "nodes": [
+        "audit_baseline_through_68d0bb2",
+        "audit_pr4_eight_green_gates",
+        "audit_ci_run_30854285546",
+        "audit_security_run_30854285146"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md"
     }
   ],
-  "built_at_commit": "5cb737083aeba50f562f1503a40f5372229284a1"
+  "built_at_commit": "4ba0690bcaba943bda25870363fd8117fbc47e6b"
 }

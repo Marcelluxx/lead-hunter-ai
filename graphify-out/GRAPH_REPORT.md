@@ -1,15 +1,15 @@
 # Graph Report - .  (2026-08-03)
 
 ## Corpus Check
-- Corpus is ~45,704 words - fits in a single context window. You may not need a graph.
+- Corpus is ~45,847 words - fits in a single context window. You may not need a graph.
 
 ## Summary
-- 1172 nodes · 2104 edges · 96 communities (62 shown, 34 thin omitted)
+- 1182 nodes · 2119 edges · 96 communities (62 shown, 34 thin omitted)
 - Extraction: 78% EXTRACTED · 22% INFERRED · 0% AMBIGUOUS · INFERRED: 468 edges (avg confidence: 0.66)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `5cb73708`
+- Built from commit: `4ba0690b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -149,6 +149,8 @@
 - **Mandatory Release Evidence** — ci_python_test_matrix, ci_postgres_integration_gate, ci_container_release_gate, security_full_history_secret_scan, security_supply_chain_gate [EXTRACTED 1.00]
 - **Commercial Supply-chain Controls** — security_cyclonedx_sbom, security_runtime_vulnerability_policy, security_commercial_license_policy, release_license_review [EXTRACTED 1.00]
 - **Container Readiness Before Database Verification** — audit_first_pr_container_startup_race, ci_compose_postgres_redis_readiness_barrier, ci_role_and_migration_checks, audit_c2df7ad_readiness_resolution [EXTRACTED 1.00]
+- **Least-privilege Ephemeral Secret Access** — ci_ephemeral_ed25519_runtime_secrets, ci_runtime_secret_identity_10001, ci_private_key_mode_0400, ci_public_key_mode_0444, audit_68d0bb2_non_root_secret_fix [EXTRACTED 1.00]
+- **PR #4 Verified Release Baseline** — audit_baseline_through_68d0bb2, audit_pr4_eight_green_gates, audit_ci_run_30854285546, audit_security_run_30854285146 [EXTRACTED 1.00]
 
 ## Communities (96 total, 34 thin omitted)
 
@@ -189,8 +191,8 @@ Cohesion: 0.07
 Nodes (36): Workspace Retention Actor, Admin MFA Secret Boundary, Auditable Erasure with Non-Reacquisition, Bounded and Restartable Retention, Bounded and Sanitized Provider Failure, Distributed Scheduler Singleton, Suppression Check at Export Boundary, Official Website as Verified Truth Boundary (+28 more)
 
 ### Community 9 - "Current Product Roadmap"
-Cohesion: 0.07
-Nodes (35): 3 August 2026 Evidence Baseline, Audit Baseline Through Commit c2df7ad, c2df7ad CI Readiness Resolution, Controlled Server and On-premise Vendability, First-PR Container Startup Race, Priority 10 — Controlled Server and Report Pilot, Priority 4 — Crawler Infrastructure Governance, Priority 12 — Deferred Public SaaS (+27 more)
+Cohesion: 0.06
+Nodes (41): 3 August 2026 Evidence Baseline, Commit 68d0bb2 Non-root Secret Fix, Audit Baseline Through Commit 68d0bb2, Audit Baseline Through Commit c2df7ad, c2df7ad CI Readiness Resolution, GitHub CI Run 30854285546, Controlled Server and On-premise Vendability, First-PR Container Startup Race (+33 more)
 
 ### Community 10 - "Persistence Data Models"
 Cohesion: 0.14
@@ -285,8 +287,8 @@ Cohesion: 0.17
 Nodes (3): platform_fixture(), JobServiceTests, RecordingPublisher
 
 ### Community 33 - "Container Release Gate"
-Cohesion: 0.26
-Nodes (12): API Liveness Smoke Check, PostgreSQL Migration Round Trip, Lead Hunter API Service, Runtime Secret Mount, Alembic Migration Service, PostgreSQL 17 Service, Redis 8 Service, Retention Scheduler Service (+4 more)
+Cohesion: 0.17
+Nodes (16): API Liveness Smoke Check, Ephemeral Ed25519 Runtime Secrets, PostgreSQL Migration Round Trip, JWT Private Key Mode 0400, JWT Public Key Mode 0444, Runtime Secret Ownership UID/GID 10001:10001, Lead Hunter API Service, Runtime Secret Mount (+8 more)
 
 ### Community 34 - "Repository Architecture Documentation"
 Cohesion: 0.18
@@ -385,7 +387,7 @@ Cohesion: 0.67
 Nodes (3): URL Policy Decision, Synchronous URL Validation, Asynchronous URL Validation
 
 ## Knowledge Gaps
-- **71 isolated node(s):** `ProviderRetentionRule`, `Lead Hunter v3 Package`, `Untrusted Content Sanitization`, `Untrusted Pages JSON Envelope`, `Untrusted Data System Rules` (+66 more)
+- **72 isolated node(s):** `ProviderRetentionRule`, `Lead Hunter v3 Package`, `Untrusted Content Sanitization`, `Untrusted Pages JSON Envelope`, `Untrusted Data System Rules` (+67 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **34 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -397,7 +399,7 @@ _Questions this graph is uniquely positioned to answer:_
 - **Why does `HybridCrawler` connect `Crawler Browser Guard` to `Presentation Output Security`, `Hybrid Crawler Extraction`, `URL Decision Enforcement`?**
   _High betweenness centrality (0.064) - this node is a cross-community bridge._
 - **Why does `GeolocationError` connect `Approximate Geolocation Privacy` to `SSRF URL Policy`, `Lead Processing Modes`, `URL Decision Enforcement`?**
-  _High betweenness centrality (0.061) - this node is a cross-community bridge._
+  _High betweenness centrality (0.060) - this node is a cross-community bridge._
 - **Are the 9 inferred relationships involving `Base` (e.g. with `ContactPersistenceTests` and `DataSubjectRequestTests`) actually correct?**
   _`Base` has 9 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 20 inferred relationships involving `Database` (e.g. with `JobModel` and `ContactPersistenceTests`) actually correct?**
