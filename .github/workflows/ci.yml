@@ -164,7 +164,7 @@ jobs:
       - name: Verify PostgreSQL migration round trip
         shell: bash
         run: |
-          docker compose up -d postgres redis
+          docker compose up -d --wait postgres redis
           roles="$(
             docker compose exec -T postgres psql \
               -U postgres \
