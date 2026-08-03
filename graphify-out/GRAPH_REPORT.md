@@ -1,12 +1,17 @@
 # Graph Report - .  (2026-08-03)
 
 ## Corpus Check
-- Corpus is ~45,666 words - fits in a single context window. You may not need a graph.
+- Corpus is ~45,704 words - fits in a single context window. You may not need a graph.
 
 ## Summary
-- 1167 nodes · 2097 edges · 96 communities (62 shown, 34 thin omitted)
+- 1172 nodes · 2104 edges · 96 communities (62 shown, 34 thin omitted)
 - Extraction: 78% EXTRACTED · 22% INFERRED · 0% AMBIGUOUS · INFERRED: 468 edges (avg confidence: 0.66)
 - Token cost: 0 input · 0 output
+
+## Graph Freshness
+- Built from commit: `5cb73708`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - [[_COMMUNITY_Web Authorization Schemas|Web Authorization Schemas]]
@@ -143,6 +148,7 @@
 - **Runtime Service Dependency Chain** — compose_postgres_service, compose_redis_service, compose_migrate_service, compose_api_service, compose_worker_service, compose_retention_scheduler [EXTRACTED 1.00]
 - **Mandatory Release Evidence** — ci_python_test_matrix, ci_postgres_integration_gate, ci_container_release_gate, security_full_history_secret_scan, security_supply_chain_gate [EXTRACTED 1.00]
 - **Commercial Supply-chain Controls** — security_cyclonedx_sbom, security_runtime_vulnerability_policy, security_commercial_license_policy, release_license_review [EXTRACTED 1.00]
+- **Container Readiness Before Database Verification** — audit_first_pr_container_startup_race, ci_compose_postgres_redis_readiness_barrier, ci_role_and_migration_checks, audit_c2df7ad_readiness_resolution [EXTRACTED 1.00]
 
 ## Communities (96 total, 34 thin omitted)
 
@@ -183,8 +189,8 @@ Cohesion: 0.07
 Nodes (36): Workspace Retention Actor, Admin MFA Secret Boundary, Auditable Erasure with Non-Reacquisition, Bounded and Restartable Retention, Bounded and Sanitized Provider Failure, Distributed Scheduler Singleton, Suppression Check at Export Boundary, Official Website as Verified Truth Boundary (+28 more)
 
 ### Community 9 - "Current Product Roadmap"
-Cohesion: 0.08
-Nodes (30): 3 August 2026 Evidence Baseline, Controlled Server and On-premise Vendability, Priority 10 — Controlled Server and Report Pilot, Priority 4 — Crawler Infrastructure Governance, Priority 12 — Deferred Public SaaS, Priority 6 — Deterministic Evidence Audit, Priority 7 — Gold-set Benchmark and Score Calibration, Priority 1 — Legal and Commercial Review (+22 more)
+Cohesion: 0.07
+Nodes (35): 3 August 2026 Evidence Baseline, Audit Baseline Through Commit c2df7ad, c2df7ad CI Readiness Resolution, Controlled Server and On-premise Vendability, First-PR Container Startup Race, Priority 10 — Controlled Server and Report Pilot, Priority 4 — Crawler Infrastructure Governance, Priority 12 — Deferred Public SaaS (+27 more)
 
 ### Community 10 - "Persistence Data Models"
 Cohesion: 0.14
@@ -379,7 +385,7 @@ Cohesion: 0.67
 Nodes (3): URL Policy Decision, Synchronous URL Validation, Asynchronous URL Validation
 
 ## Knowledge Gaps
-- **70 isolated node(s):** `ProviderRetentionRule`, `Lead Hunter v3 Package`, `Untrusted Content Sanitization`, `Untrusted Pages JSON Envelope`, `Untrusted Data System Rules` (+65 more)
+- **71 isolated node(s):** `ProviderRetentionRule`, `Lead Hunter v3 Package`, `Untrusted Content Sanitization`, `Untrusted Pages JSON Envelope`, `Untrusted Data System Rules` (+66 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **34 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -387,9 +393,9 @@ Nodes (3): URL Policy Decision, Synchronous URL Validation, Asynchronous URL Val
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `UrlPolicyError` connect `URL Decision Enforcement` to `SSRF URL Policy`, `Approximate Geolocation Privacy`, `Platform Bootstrap Validation`?**
-  _High betweenness centrality (0.068) - this node is a cross-community bridge._
+  _High betweenness centrality (0.067) - this node is a cross-community bridge._
 - **Why does `HybridCrawler` connect `Crawler Browser Guard` to `Presentation Output Security`, `Hybrid Crawler Extraction`, `URL Decision Enforcement`?**
-  _High betweenness centrality (0.065) - this node is a cross-community bridge._
+  _High betweenness centrality (0.064) - this node is a cross-community bridge._
 - **Why does `GeolocationError` connect `Approximate Geolocation Privacy` to `SSRF URL Policy`, `Lead Processing Modes`, `URL Decision Enforcement`?**
   _High betweenness centrality (0.061) - this node is a cross-community bridge._
 - **Are the 9 inferred relationships involving `Base` (e.g. with `ContactPersistenceTests` and `DataSubjectRequestTests`) actually correct?**

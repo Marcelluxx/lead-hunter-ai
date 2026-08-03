@@ -244,6 +244,20 @@
         "confidence": "EXTRACTED",
         "confidence_score": 1,
         "source_file": ".github/workflows/security.yml"
+      },
+      {
+        "id": "container_readiness_before_database_verification",
+        "label": "Container Readiness Before Database Verification",
+        "nodes": [
+          "audit_first_pr_container_startup_race",
+          "ci_compose_postgres_redis_readiness_barrier",
+          "ci_role_and_migration_checks",
+          "audit_c2df7ad_readiness_resolution"
+        ],
+        "relation": "form",
+        "confidence": "EXTRACTED",
+        "confidence_score": 1.0,
+        "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md"
       }
     ]
   },
@@ -11630,6 +11644,73 @@
       "community": 9,
       "norm_label": "revised structural-first priority order",
       "id": "audit_revised_priority_order"
+    },
+    {
+      "label": "Docker Compose PostgreSQL and Redis Readiness Barrier",
+      "file_type": "code",
+      "source_file": ".github/workflows/ci.yml",
+      "source_location": "jobs.container-release-gate.steps.Verify PostgreSQL migration round trip, line 167",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "ci_compose_postgres_redis_readiness_barrier",
+      "community": 9,
+      "norm_label": "docker compose postgresql and redis readiness barrier"
+    },
+    {
+      "label": "Application Role and Migration Round-trip Checks",
+      "file_type": "code",
+      "source_file": ".github/workflows/ci.yml",
+      "source_location": "jobs.container-release-gate.steps.Verify PostgreSQL migration round trip, lines 168-178",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "ci_role_and_migration_checks",
+      "community": 9,
+      "norm_label": "application role and migration round-trip checks"
+    },
+    {
+      "label": "Audit Baseline Through Commit c2df7ad",
+      "file_type": "document",
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "header, lines 3-5",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "audit_baseline_through_c2df7ad",
+      "community": 9,
+      "norm_label": "audit baseline through commit c2df7ad"
+    },
+    {
+      "label": "First-PR Container Startup Race",
+      "file_type": "rationale",
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "Aggiornamento \u2014 riproducibilit\u00e0, CI e release engineering, line 85",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "The first pull-request run observed role and migration checks racing PostgreSQL and Redis startup before the services were healthy.",
+      "id": "audit_first_pr_container_startup_race",
+      "community": 9,
+      "norm_label": "first-pr container startup race"
+    },
+    {
+      "label": "c2df7ad CI Readiness Resolution",
+      "file_type": "rationale",
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "Aggiornamento \u2014 riproducibilit\u00e0, CI e release engineering, line 85",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Commit c2df7ad adds an explicit PostgreSQL and Redis health wait before role verification and migration execution, eliminating the observed startup race.",
+      "id": "audit_c2df7ad_readiness_resolution",
+      "community": 9,
+      "norm_label": "c2df7ad ci readiness resolution"
     }
   ],
   "links": [
@@ -33036,6 +33117,26 @@
       "target": "audit_reproducible_ci_release_baseline"
     },
     {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".github/workflows/ci.yml",
+      "source_location": "jobs.container-release-gate, lines 159-178",
+      "weight": 1.0,
+      "source": "ci_container_release_gate",
+      "target": "ci_compose_postgres_redis_readiness_barrier"
+    },
+    {
+      "relation": "includes",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".github/workflows/ci.yml",
+      "source_location": "jobs.container-release-gate, lines 168-178",
+      "weight": 1.0,
+      "source": "ci_role_and_migration_checks",
+      "target": "ci_migration_round_trip"
+    },
+    {
       "relation": "implements",
       "confidence": "EXTRACTED",
       "confidence_score": 1,
@@ -33314,6 +33415,56 @@
       "weight": 1,
       "source": "audit_priority_deferred_public_saas",
       "target": "audit_revised_priority_order"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".github/workflows/ci.yml",
+      "source_location": "jobs.container-release-gate.steps.Verify PostgreSQL migration round trip, lines 167-178",
+      "weight": 1.0,
+      "source": "ci_compose_postgres_redis_readiness_barrier",
+      "target": "ci_role_and_migration_checks"
+    },
+    {
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".github/workflows/ci.yml",
+      "source_location": "jobs.container-release-gate.steps.Verify PostgreSQL migration round trip, line 167",
+      "weight": 1.0,
+      "source": "audit_c2df7ad_readiness_resolution",
+      "target": "ci_compose_postgres_redis_readiness_barrier"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "Aggiornamento \u2014 riproducibilit\u00e0, CI e release engineering, line 85",
+      "weight": 1.0,
+      "source": "audit_c2df7ad_readiness_resolution",
+      "target": "ci_role_and_migration_checks"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "header line 4 and release-engineering table line 85",
+      "weight": 1.0,
+      "source": "audit_baseline_through_c2df7ad",
+      "target": "audit_c2df7ad_readiness_resolution"
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md",
+      "source_location": "Aggiornamento \u2014 riproducibilit\u00e0, CI e release engineering, line 85",
+      "weight": 1.0,
+      "source": "audit_first_pr_container_startup_race",
+      "target": "audit_c2df7ad_readiness_resolution"
     }
   ],
   "hyperedges": [
@@ -33558,7 +33709,21 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1,
       "source_file": ".github/workflows/security.yml"
+    },
+    {
+      "id": "container_readiness_before_database_verification",
+      "label": "Container Readiness Before Database Verification",
+      "nodes": [
+        "audit_first_pr_container_startup_race",
+        "ci_compose_postgres_redis_readiness_barrier",
+        "ci_role_and_migration_checks",
+        "audit_c2df7ad_readiness_resolution"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/AUDIT_PRODOTTO_E_ROADMAP_STATO_DELL_ARTE.md"
     }
   ],
-  "built_at_commit": "71aef633ad5ae0d00ea47a7acd4e4759a53185bb"
+  "built_at_commit": "5cb737083aeba50f562f1503a40f5372229284a1"
 }
