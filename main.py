@@ -22,6 +22,7 @@ from src.domain.discovery import TransientCandidate
 from src.domain.provenance import VerifiedLead
 from src.exporter import DataExporter
 from src.crawler import HybridCrawler
+from src.security.presentation import normalize_console_text
 from src.security.privacy import redact_sensitive_text
 from src.filters import (
     filter_by_business_age,
@@ -126,7 +127,7 @@ class LeadHunterOrchestrator:
 
         def log(msg):
             safe_message = redact_sensitive_text(msg)
-            print(safe_message)
+            print(normalize_console_text(safe_message))
             if on_log:
                 on_log(safe_message)
 

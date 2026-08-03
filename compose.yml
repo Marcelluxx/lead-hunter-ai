@@ -10,7 +10,7 @@ x-server-env: &server-env
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
     environment:
       POSTGRES_DB: leadhunter
       POSTGRES_USER: postgres
@@ -27,7 +27,7 @@ services:
       retries: 20
 
   redis:
-    image: redis:8-alpine
+    image: redis:8-alpine@sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis-data:/data
@@ -38,6 +38,7 @@ services:
       retries: 20
 
   migrate:
+    image: leadhunter-app:${LEADHUNTER_IMAGE_TAG:-local}
     build: .
     user: root
     environment:
@@ -48,6 +49,7 @@ services:
         condition: service_healthy
 
   api:
+    image: leadhunter-app:${LEADHUNTER_IMAGE_TAG:-local}
     build: .
     environment: *server-env
     volumes:
@@ -59,8 +61,21 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json, urllib.request;
+          assert json.load(urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3))['status'] == 'ok'
+      interval: 5s
+      timeout: 4s
+      retries: 20
+      start_period: 10s
 
   worker:
+    image: leadhunter-app:${LEADHUNTER_IMAGE_TAG:-local}
     build: .
     environment:
       <<: *server-env
@@ -75,6 +90,7 @@ services:
         condition: service_healthy
 
   retention-scheduler:
+    image: leadhunter-app:${LEADHUNTER_IMAGE_TAG:-local}
     build: .
     environment:
       <<: *server-env

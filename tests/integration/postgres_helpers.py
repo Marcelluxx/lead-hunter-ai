@@ -13,6 +13,12 @@ OWNER_URL = os.getenv("TEST_DATABASE_OWNER_URL", "")
 APP_URL = os.getenv("TEST_DATABASE_APP_URL", "")
 WORKER_URL = os.getenv("TEST_DATABASE_WORKER_URL", "")
 POSTGRES_AVAILABLE = bool(OWNER_URL and APP_URL and WORKER_URL)
+POSTGRES_REQUIRED = os.getenv("REQUIRE_POSTGRES_TESTS", "") == "1"
+
+if POSTGRES_REQUIRED and not POSTGRES_AVAILABLE:
+    raise RuntimeError(
+        "PostgreSQL integration tests are required but database URLs are missing."
+    )
 
 
 def databases() -> tuple[Database, Database, Database]:
