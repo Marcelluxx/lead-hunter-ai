@@ -1,0 +1,10 @@
+title = "Lead Hunter secret scanning"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "openrouter-api-key"
+description = "OpenRouter API key"
+regex = '''\bsk-or-v1-[A-Za-z0-9_-]{20,}\b'''
+keywords = ["sk-or-v1-"]

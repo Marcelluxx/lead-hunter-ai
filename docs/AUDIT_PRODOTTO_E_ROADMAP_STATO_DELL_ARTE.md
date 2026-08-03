@@ -1,8 +1,8 @@
 # Lead Hunter V3 — Audit tecnico, vendibilità e roadmap “stato dell’arte”
 
-**Data dell’analisi:** 30 luglio 2026
-**Stato analizzato:** commit `62e5d9a` sincronizzato da `origin/main`, più le modifiche locali preservate nel working tree e gli artefatti `graphify-out/` rigenerati
-**Base di evidenza:** grafo Graphify post-sincronizzazione (304 nodi, 473 archi, 19 comunità), delta completo dei commit `78ffe58`, `e7afdbd` e `62e5d9a`, lettura del codice, compilazione statica, verifica dell’ambiente Python, artefatti diagnostici e fonti ufficiali aggiornate.
+**Data dell’analisi:** 3 agosto 2026
+**Stato analizzato:** branch `codex/reproducible-ci-release`, derivato da `develop` al merge commit `1255714`, fino al commit `68d0bb2`
+**Base di evidenza:** grafo Graphify rigenerato sul branch corrente, lettura del codice e dei workflow, lockfile `uv.lock`, build Docker reale, round trip Alembic su PostgreSQL 17 pulito, bootstrap dei ruoli runtime, smoke test API, 107 casi di test verdi (101 nella suite generale e 6 integrazioni PostgreSQL/RLS), SBOM CycloneDX 1.5, audit di 139 dipendenze senza vulnerabilità note e policy licenze applicata a 140 pacchetti runtime. Gitleaks sulla cronologia completa e tutti gli altri gate obbligatori sono risultati verdi nella PR GitHub.
 
 > Questo documento è un audit tecnico e di prodotto, non un parere legale. Prima della commercializzazione servono una verifica contrattuale su Google Maps Platform e un parere privacy/comunicazioni commerciali specifico per i mercati serviti.
 
@@ -27,6 +27,70 @@ Il delta remoto complessivo è di **9 file, 405 inserimenti e 564 rimozioni**. L
 - Il rilevamento framework/CMS non è implementato nel prompt e non è supportato da detector deterministici.
 - È stata rilevata una chiave OpenRouter in chiaro in un file locale ignorato. Il file non è tracciato e non compare nella cronologia Git esaminata, ma la chiave deve comunque essere ruotata.
 
+### Aggiornamento — prima macrocategoria P0
+
+Il branch `codex/p0-secure-crawl-evidence` introduce quattro commit tematici:
+
+| Commit | P0 | Risultato |
+|---|---|---|
+| `ac05ccf` | P0-01 | URL policy fail-closed, blocco IP non pubblici, route guard del browser, limite redirect e test di DNS rebinding simulato |
+| `71a4a96` | P0-02 | boundary `UNTRUSTED_WEB_DATA`, sanitizzazione prima/dopo l’LLM, DTO di output in allowlist e rimozione dei prompt dagli output |
+| `3044ce7` | P0-06 | modello tipizzato di evidenza, status/content-type/hash/timestamp e doppio rifiuto dell’audit senza evidenza |
+| `39541fc` | P0-10 | Gitleaks pre-commit e CI, regola OpenRouter, ignore difensivi e procedura di risposta |
+
+Esito della macrocategoria:
+
+- **P0-06 è risolto a livello applicativo.**
+- **P0-01 è fortemente mitigato nel processo applicativo**, ma in produzione deve essere completato da egress firewall/container isolation: una policy Python non elimina da sola ogni rischio TOCTOU del DNS.
+- **P0-02 è mitigato con difese stratificate**, non “matematicamente risolto”: detector euristici e istruzioni LLM richiedono red-team test continui.
+- **P0-10 resta parzialmente aperto per decisione del proprietario:** la cronologia Git è pulita e le nuove esposizioni sono bloccate, ma la chiave locale non è stata ruotata né rimossa.
+
+### Aggiornamento — seconda macrocategoria P0
+
+Il branch `codex/p0-data-output-hardening`, basato sul `develop` aggiornato, introduce tre commit tematici:
+
+| Commit | P0 | Risultato |
+|---|---|---|
+| `8db14c9` | P0-03 | valori dinamici escapati nelle card, log su widget testuale nativo ed eccezioni grezze rimosse dalla GUI |
+| `89fe7fa` | P0-08 | neutralizzazione centralizzata delle formule, celle testuali esplicite e verifica del file XLSX riaperto |
+| `71e5f47` | P0-09 | geolocalizzazione HTTPS opt-in, redazione log e artefatti diagnostici disabilitati per default con retention |
+
+Esito della macrocategoria:
+
+- **P0-03 è risolto a livello applicativo.** La CSP resta un controllo del deployment/reverse proxy, non del rendering dinamico Streamlit.
+- **P0-08 è risolto per l’export XLSX attuale.** Non viene offerto un export CSV; se verrà aggiunto dovrà riusare la stessa policy.
+- **P0-09 è risolto per i percorsi applicativi correnti e mitigato in prospettiva SaaS:** prompt e risposte grezze non attraversano il DTO pubblico, la geolocalizzazione non parte senza consenso e i dump diagnostici richiedono opt-in. Crittografia at-rest, RBAC, isolamento tenant e inventario sub-responsabili restano gate infrastrutturali prima dell’esposizione pubblica.
+
+### Aggiornamento — terza macrocategoria P0
+
+Il branch `codex/p0-governance-compliance` introduce un commit tematico per ciascun P0: P0-07 crea il core server multi-workspace, P0-04 separa i dati del provider dalla base persistente e P0-05 governa i contatti professionali. La suite corrente conta 100 test verdi su PostgreSQL 17 reale, inclusi concorrenza dei budget, ruoli runtime senza `BYPASSRLS`, isolamento dei nuovi record privacy e retention per workspace.
+
+Esito della macrocategoria sul branch:
+
+- **P0-07 è risolto per il core server**, con frontend dedicato, OIDC completo e billing rinviati alla fase commerciale.
+- **P0-04 è risolto a livello applicativo**, ma contratto e flusso Google richiedono revisione professionale prima della vendita.
+- **P0-05 è risolto per i controlli tecnici del core**: contatti tipizzati, policy Italia/UE, retention 90/365 giorni, suppression HMAC, diritti dell’interessato, audit, worker a batch e scheduler Docker orario con lock Redis. Informativa, DPA, sub-responsabili, data residency e base giuridica concreta restano responsabilità organizzative/legali.
+
+### Aggiornamento — riproducibilità, CI e release engineering
+
+Il branch `codex/reproducible-ci-release` aggiunge commit tematici separati per ambiente, gate e documentazione. I commit tecnici principali sono:
+
+| Commit | Ambito | Risultato |
+|---|---|---|
+| `46bc974` | ambiente riproducibile | `pyproject.toml`, `uv.lock`, Python supportato 3.10–3.13, immagini base pin-nate per digest e unica distribuzione `python-whois` |
+| `b8b7961` | gate Python/PostgreSQL | matrice Python dal lockfile e integrazioni PostgreSQL 17 obbligatorie, senza skip silenziosi |
+| `dada337` | gate container | build reale, bootstrap ruoli least-privilege, migrazioni `upgrade/downgrade/upgrade`, health API e teardown isolato |
+| `5763936` | portabilità Windows | log Unicode degradabili senza interrompere la pipeline su console CP1252 |
+| `3dffd02` | supply chain | SBOM CycloneDX, audit vulnerabilità con hash, inventario licenze, eccezioni versionate e artefatti conservati |
+| `c2df7ad` | readiness CI | attesa esplicita della health PostgreSQL/Redis prima di verificare ruoli e migrazioni, eliminando una race osservata nel primo run della PR |
+| `68d0bb2` | segreti runtime non-root | chiavi effimere CI intestate all'UID/GID `10001:10001`, privata `0400` e pubblica `0444`, così il container non-root può leggerle senza inserirle nell'immagine |
+
+Il collaudo Docker ha rilevato e corretto un difetto reale: lo script di inizializzazione PostgreSQL arrivava con CRLF e falliva con `/bin/sh^M`, lasciando il database senza ruoli applicativi. `.gitattributes` impone ora LF agli script e il CI verifica esplicitamente l’esistenza dei ruoli prima delle migrazioni.
+
+Il primo run successivo ha inoltre esposto una differenza reale tra Windows e Linux: OpenSSL creava la chiave privata `0600` intestata all'utente del runner, mentre l'applicazione gira correttamente come UID non-root `10001`. Il bind mount Linux conservava quei permessi e l'API terminava con `PermissionError`. Il commit `68d0bb2` mantiene il principio least-privilege assegnando i file effimeri all'identità runtime; il modello è stato verificato su filesystem Linux Docker e poi dal container gate GitHub.
+
+La baseline di release è quindi riproducibile e verificata: nella PR #4 i run CI `30854285546` e Security `30854285146` hanno concluso verdi tutti gli otto gate. Restano gate commerciali successivi: firma dell’immagine, provenienza/attestazioni, manifest di aggiornamento firmato, rollback automatizzato e revisione legale delle dipendenze LGPL/MPL.
+
 ## 1. Verdetto esecutivo
 
 ### L’applicazione può essere venduta?
@@ -43,20 +107,21 @@ La proposta più forte per Lead Hunter non è:
 
 ### È vendibile oggi?
 
-**Non ancora come SaaS pubblico o servizio automatizzato su larga scala.** La versione attuale è un buon prototipo tecnico, ma presenta blocker di sicurezza, accuratezza, compliance, riproducibilità e isolamento dei clienti.
+**Sì come vendita server/on-premise controllata e come servizio di report revisionati; non ancora come SaaS pubblico self-service su larga scala.** I P0 applicativi, il core multi-workspace e la baseline CI/release sono stati implementati. Prima dei primi contratti servono comunque revisione legale Google/privacy/licenze, documentazione operativa, backup/restore provato, osservabilità e un processo di aggiornamento firmato. Accuratezza dell’audit, benchmark e UX restano i principali limiti di prodotto, non più l’assenza delle fondamenta di sicurezza e riproducibilità.
 
 Valutazione sintetica:
 
 | Area | Valutazione attuale | Potenziale dopo roadmap |
 |---|---:|---:|
 | Idea e utilità commerciale | 8/10 | 9/10 |
-| Crawler come prototipo | 6.5/10 | 9/10 |
-| Accuratezza dell’audit | 4/10 | 9/10 |
-| Sicurezza applicativa | 2/10 | 9/10 |
-| Compliance e governance dati | 2/10 | 8.5/10 |
-| Scalabilità operativa | 3/10 | 9/10 |
-| Esperienza prodotto | 4/10 | 8.5/10 |
-| Prontezza alla vendita | 3/10 | 9/10 |
+| Crawler come prototipo | 7.5/10 | 9/10 |
+| Accuratezza dell’audit | 5/10 | 9/10 |
+| Sicurezza applicativa | 7.5/10 | 9/10 |
+| Compliance e governance dati | 7/10 | 8.5/10 |
+| Scalabilità operativa | 6.5/10 | 9/10 |
+| Esperienza prodotto | 5/10 | 8.5/10 |
+| Prontezza vendita server/report | 6.5/10 | 9/10 |
+| Prontezza SaaS pubblico | 4/10 | 9/10 |
 
 ### Il crawler è già “ottimo”?
 
@@ -81,7 +146,7 @@ Tuttavia, un crawler top di gamma non si misura dalla capacità di aggirare un 4
 - osservabilità, retry, caching e costi;
 - benchmark su un corpus reale.
 
-La versione attuale non soddisfa ancora questi criteri.
+La versione attuale soddisfa ora i principali criteri di sicurezza applicativa, evidenza e riproducibilità, ma non ancora benchmark su corpus reale, osservabilità/SLO, policy robots completa, controllo risorse del browser e accuratezza deterministica sufficienti per definirla “top di gamma”.
 
 ## 2. Punti di forza da preservare
 
@@ -96,6 +161,8 @@ La versione attuale non soddisfa ancora questi criteri.
 ## 3. Blocker P0 — da risolvere prima di esporre il prodotto a clienti
 
 ### P0-01 — SSRF e navigazione arbitraria
+
+**Stato sul branch `codex/p0-secure-crawl-evidence`: MITIGATO — requisito infrastrutturale ancora aperto.**
 
 **Evidenza**
 
@@ -138,6 +205,8 @@ Una suite automatica deve bloccare il 100% dei payload SSRF noti, compresi redir
 
 ### P0-02 — Prompt injection indiretta e fuga dei prompt proprietari
 
+**Stato sul branch `codex/p0-secure-crawl-evidence`: MITIGATO — mantenere red-team e regression corpus.**
+
 **Evidenza**
 
 - `src/prompts.py:118-135` inserisce contenuto web non fidato direttamente nel prompt di pulizia.
@@ -170,7 +239,9 @@ Riferimento: [OWASP LLM Prompt Injection Prevention](https://cheatsheetseries.ow
 
 ### P0-03 — XSS nella GUI Streamlit
 
-**Evidenza**
+**Stato sul branch `codex/p0-data-output-hardening`: RISOLTO a livello applicativo (`8db14c9`).**
+
+**Evidenza originaria**
 
 - `src/gui.py:105-111` inserisce `keyword` in HTML con `unsafe_allow_html=True`.
 - `src/gui.py:190-192` permette keyword personalizzate.
@@ -189,9 +260,22 @@ Un nome attività, una keyword o un messaggio di errore contenente HTML può ess
 - Non renderizzare eccezioni grezze all’utente.
 - Aggiungere test con payload `<img onerror=...>`, SVG e attributi malformati.
 
+**Implementazione verificata**
+
+- `src/security/presentation.py` centralizza escaping HTML, classi di stato consentite e normalizzazione dei log.
+- `src/gui.py` usa `st.code` per i log dinamici e non mostra più il testo grezzo delle eccezioni.
+- `tests/test_presentation_security.py` copre tag immagine, SVG, script, quote e caratteri di controllo.
+- L’HTML residuo con `unsafe_allow_html=True` è statico oppure riceve esclusivamente valori già escapati. La CSP resta un requisito del frontend/reverse proxy di produzione.
+
 ### P0-04 — Google Places: storage, attribuzione e uso con la mappa
 
-**Evidenza**
+**Stato sul branch `codex/p0-governance-compliance`: RISOLTO a livello applicativo; restano revisione legale e scelta contrattuale del provider prima della vendita.**
+
+L’implementazione separa il provider dal prodotto persistente: il payload Google resta nella memoria dell’adapter, il field mask è ridotto a identificatore/nome/sito/attribuzione e non richiede più recensioni, rating, indirizzi o telefoni. La modalità `no_website` è consultabile solo in forma transitoria con attribution e non produce Excel. La modalità `with_website` crea report esclusivamente con attributi ri-estratti dal sito ufficiale e relativa evidenza; nessun nome, rating o review Google raggiunge l’LLM.
+
+Il database conserva solo riferimenti provider consentiti e attributi con provenienza, evidenza, classificazione, confidence e scadenza. La migrazione `0002_discovery_provenance` applica RLS per workspace; il servizio retention elimina gli attributi scaduti e registra soltanto il conteggio. API e worker rifiutano payload con forma Places nei parametri persistenti. La mappa Folium è dichiarata e usata soltanto come selettore OpenStreetMap indipendente.
+
+**Evidenza originaria**
 
 - `src/config.py:34-43` richiede dati Places, incluse recensioni.
 - `src/gui.py:257-274` mostra una mappa Folium/non-Google.
@@ -223,6 +307,16 @@ Questo punto può cambiare radicalmente il modello dati e va risolto prima di ve
 
 ### P0-05 — Lead generation, email pubbliche e marketing in Italia
 
+**Stato sul branch `codex/p0-governance-compliance`: RISOLTO per i controlli tecnici del core; revisione legale e configurazione operativa restano obbligatorie prima dell’uso commerciale.**
+
+Il crawler non restituisce più semplici stringhe: ogni contatto porta valore normalizzato e di presentazione, URL sorgente, timestamp, metodo di estrazione, confidence, hash dell’evidenza, versione delle regole, classificazione e scadenza. Solo gli alias esplicitamente aziendali sono `generic_business`; i casi ambigui sono trattati prudentemente come `named_professional`. I default tecnici sono 12 mesi per i generici e massimo 90 giorni per i nominativi.
+
+I contatti nominativi non possono essere persistiti o esportati senza una policy workspace completa con finalità, base giuridica dichiarata dal titolare, referente privacy, mercato `IT_EU`, versione e retention non superiore a 90 giorni. La suppression usa un HMAC-SHA-256 con chiave separata, non conserva l’identificatore in chiaro ed è verificata prima di persistenza ed export. Esistono scope workspace e globale; PostgreSQL consente ai tenant di leggere i fingerprint globali per applicare il blocco, ma non di modificarli o cancellarli.
+
+Le API amministrative richiedono ruolo admin e MFA e supportano accesso controllato, rettifica, cancellazione e opposizione. Le richieste sono idempotenti, l’audit conserva UUID/fingerprint e conteggi ma non ricrea il dato eliminato. L’export server verifica membership e permesso, elimina gli scaduti, applica suppression e policy, poi registra attore, workspace, job opzionale, conteggio e versione della policy. Il worker di retention elabora batch limitati e riavviabili e accoda il batch successivo senza inserire PII nei log. Un servizio Compose pianifica automaticamente i workspace attivi ogni ora, usa un lock Redis per evitare duplicazioni tra repliche e mette in coda soltanto UUID. Non è presente alcun invio automatico o motore di campagne.
+
+La migrazione `0003_contact_privacy_governance` aggiunge policy, contatti, suppression e richieste dell’interessato con RLS fail-closed. I test verificano anche che un ruolo tenant non possa cancellare una suppression globale e che la retention di un workspace non tocchi quello adiacente.
+
 **Evidenza**
 
 - `src/crawler.py:215-248` estrae email dall’HTML e dal Markdown dei siti.
@@ -253,6 +347,8 @@ Fonti:
 
 ### P0-06 — Crawl fallito o vuoto può produrre un audit come se fosse valido
 
+**Stato sul branch `codex/p0-secure-crawl-evidence`: RISOLTO a livello applicativo.**
+
 **Evidenza**
 
 - `src/crawler.py:107-110` restituisce correttamente un errore quando Crawl4AI dichiara il crawl fallito.
@@ -279,7 +375,11 @@ Nessun audit qualitativo viene prodotto quando l’unica evidenza è una pagina 
 
 ### P0-07 — Nessuna autenticazione, isolamento tenant o controllo costi
 
-**Evidenza**
+**Stato sul branch `codex/p0-governance-compliance`: RISOLTO per il core server; OIDC completo, billing commerciale e frontend dedicato restano evoluzioni enterprise.**
+
+Il nuovo boundary server introduce API FastAPI autenticata, password hashing, sessioni revocabili, MFA, ruoli per workspace, credenziali provider cifrate, job persistenti/idempotenti e coda Redis con soli UUID. PostgreSQL applica RLS fail-closed per workspace anche al ruolo worker. Budget, prenotazioni atomiche, hard limit e ledger impediscono l’avvio oltre soglia e rilasciano/contabilizzano i costi. Gli eventi sensibili sono registrati nell’audit log senza segreti. La console Streamlit resta intenzionalmente uno strumento interno e non è il frontend pubblico del prodotto.
+
+**Evidenza originaria**
 
 La GUI esegue direttamente l’intera pipeline usando chiavi condivise, filesystem condiviso e nomi file prevedibili. Non esistono:
 
@@ -313,7 +413,9 @@ Streamlit va mantenuto come console interna. Per il prodotto:
 
 ### P0-08 — Formula injection negli Excel
 
-**Evidenza**
+**Stato sul branch `codex/p0-data-output-hardening`: RISOLTO per l’export XLSX (`89fe7fa`).**
+
+**Evidenza originaria**
 
 `src/exporter.py:83-88` scrive direttamente in celle valori provenienti da Google, siti e LLM. Valori che iniziano con `=`, `+`, `-` o `@` possono essere interpretati come formule.
 
@@ -328,15 +430,23 @@ Un dato malevolo può diventare una formula quando il cliente apre il file, con 
 - Aggiungere test con payload formula/DDE.
 - Offrire CSV solo con la stessa protezione.
 
+**Implementazione verificata**
+
+- `src/security/spreadsheet.py` preserva i valori numerici intenzionali e neutralizza i testi che, anche dopo whitespace, iniziano con `=`, `+`, `-` o `@`.
+- `src/exporter.py` forza esplicitamente il tipo stringa per i valori non numerici.
+- `tests/test_spreadsheet_security.py` riapre il file prodotto con `openpyxl` e verifica che nessuna cella controllata sia di tipo formula.
+- È stato corretto anche il crash post-salvataggio causato dalle emoji su console Windows CP1252.
+
 ### P0-09 — Dati sensibili e prompt completi esposti o conservati
 
-**Evidenza**
+**Stato sul branch `codex/p0-data-output-hardening`: RISOLTO nei percorsi applicativi correnti; restano gate infrastrutturali SaaS (`71e5f47`).**
 
-- `src/auditor.py:229-231` restituisce prompt completo, pagine pulite e risposta grezza.
-- `src/gui.py:453-455` mostra l’intero oggetto.
-- `src/tester.py:113-151` salva HTML e CSS.
-- `src/tester.py:195-230` salva prompt e risposta.
-- `src/gui.py:146-159` invia l’IP dell’utente a `ip-api.com` via HTTP, senza consenso esplicito.
+**Evidenza originaria e delta**
+
+- La restituzione di prompt completo, pagine pulite e risposta grezza era già stata eliminata nel commit `71a4a96`: `WebsiteAuditResult.to_public_dict()` applica un’allowlist e la GUI mostra solo il DTO pubblico.
+- Il tester salvava HTML e testi elaborati automaticamente in `test_output/`.
+- La GUI contattava automaticamente `ip-api.com` via HTTP durante l’inizializzazione, senza un’azione esplicita dell’utente.
+- I log della pipeline potevano contenere email, IP o credenziali incluse in errori e URL.
 
 **Impatto**
 
@@ -352,7 +462,20 @@ Leak di prompt proprietari, PII, email, contenuto dei siti e dati di localizzazi
 - Geolocalizzazione opt-in via browser o inserimento manuale; non usare endpoint HTTP di terzi.
 - Inventario dei sub-responsabili e data flow map.
 
+**Implementazione verificata**
+
+- La GUI parte da coordinate locali modificabili e contatta il provider soltanto dopo il pulsante esplicito “Usa la mia posizione approssimativa”.
+- `src/security/geolocation.py` impone HTTPS, URL policy pubblica, redirect disabilitati, timeout, limite di risposta e range delle coordinate; restituisce solo latitudine e longitudine.
+- Il provider predefinito è `https://ipwho.is/`, configurabile con `IP_GEOLOCATION_URL`; la documentazione corrente dichiara HTTPS e uso commerciale anche sul piano gratuito. Prima della vendita va comunque inserito nell’inventario dei sub-responsabili o sostituito con un provider contrattualizzato.
+- `src/security/privacy.py` redige email, IP e credenziali dai log applicativi.
+- `--test-url` non crea più dump per default. `--save-diagnostic-artifacts` abilita esplicitamente HTML/testi e `--diagnostic-retention-hours` applica la cancellazione dei file scaduti.
+- `tests/test_privacy_controls.py` verifica redazione, HTTPS-only, assenza dell’IP dal DTO e retention contenuta nella directory diagnostica.
+
+Riferimenti provider: [documentazione IPWhois](https://ipwhois.io/documentation), [piani e uso commerciale](https://ipwhois.io/pricing).
+
 ### P0-10 — Chiave OpenRouter in chiaro in configurazione locale
+
+**Stato sul branch `codex/p0-secure-crawl-evidence`: PARZIALE — prevenzione implementata, rotazione rinviata su indicazione del proprietario.**
 
 **Evidenza**
 
@@ -568,11 +691,15 @@ Latitudine o longitudine `0.0` sono valide.
 
 ### P1-20 — Collisione tra `python-whois` e `whois`
 
+**Stato sul branch `codex/reproducible-ci-release`: RISOLTO.**
+
 **Evidenza:** `requirements.txt` installa entrambi i pacchetti non versionati; entrambi espongono storicamente un modulo importabile come `whois`, mentre `src/filters.py:15` importa genericamente `whois`.
 
 **Effetto:** il provider effettivo può dipendere dall’ordine di installazione e cambiare API o comportamento fra ambienti.
 
 **Fix:** scegliere un solo pacchetto, fissarne versione e hash, racchiuderlo in un adapter interno e testare date singole/multiple, privacy-redacted, timeout e TLD non supportati.
+
+`pyproject.toml` e `uv.lock` includono ora soltanto `python-whois==0.9.6`; la distribuzione concorrente `whois` non è più presente. Restano utili test aggiuntivi per timeout, TLD e formati data anomali, ma la collisione di import e installazione è eliminata.
 
 ### P1-21 — Normalizzazione categorie e località contiene rami incoerenti
 
@@ -587,6 +714,8 @@ Latitudine o longitudine `0.0` sono valide.
 ## 5. Debito P2 — ciò che impedisce di essere “enterprise”
 
 ### P2-01 — Ambiente non riproducibile
+
+**Stato sul branch `codex/reproducible-ci-release`: BASELINE RISOLTA.**
 
 Verifica effettuata:
 
@@ -606,9 +735,13 @@ Verifica effettuata:
 - container riproducibile;
 - SBOM e scansione vulnerabilità.
 
+Implementato con `pyproject.toml`, `uv.lock`, uv 0.11.15 vincolato, matrice Python 3.10–3.13, immagini Docker per digest, SBOM CycloneDX, audit vulnerabilità e policy licenze. Restano da aggiungere firma dell’immagine, attestazione di provenienza e manifest di aggiornamento firmato prima della distribuzione commerciale automatizzata.
+
 ### P2-02 — Nessuna test suite o CI
 
-Mancano `tests/`, pytest config, workflow CI, coverage e test di sicurezza.
+**Stato sul branch `codex/reproducible-ci-release`: BASELINE RISOLTA.**
+
+Nella baseline iniziale mancavano `tests/`, workflow CI, coverage e test di sicurezza; l’elenco seguente resta il riferimento per valutare la copertura, non lo stato corrente dell’infrastruttura.
 
 Test minimi:
 
@@ -626,7 +759,11 @@ Test minimi:
 
 Target iniziale: coverage significativo sulle decisioni critiche, non una percentuale cosmetica.
 
+Sono presenti 107 casi di test, workflow CI su quattro versioni Python, integrazioni PostgreSQL/RLS obbligatorie, build container, migrazioni reversibili, smoke API, Gitleaks e gate supply-chain. Restano aperti coverage misurata, gold set da siti reali, test browser end-to-end controllati e benchmark di regressione dell’accuratezza.
+
 ### P2-03 — Streamlit non è il prodotto finale
+
+**Stato: PARZIALMENTE SUPERATO.** Streamlit resta una console/demo, ma il core dispone ora di API FastAPI, autenticazione, RBAC, workspace, job persistenti, worker e audit log. Mancano ancora frontend prodotto, billing, SSO enterprise e SLA operativi.
 
 Streamlit è utile per demo e console interna, ma non offre da solo l’architettura necessaria per:
 
@@ -641,6 +778,8 @@ Streamlit è utile per demo e console interna, ma non offre da solo l’architet
 - SLA.
 
 ### P2-04 — Nessun database o modello di dominio persistente
+
+**Stato: RISOLTO PER IL CORE SERVER.** PostgreSQL, migrazioni Alembic, RLS fail-closed e modelli persistenti coprono identità, workspace, job, costi, audit, provenienza, privacy, contatti, suppression e richieste degli interessati. Evidence/findings e versionamento del report devono ancora evolvere per supportare benchmark e rescansioni commerciali.
 
 Excel è un output, non un sistema di record. Servono entità versionate:
 
@@ -662,6 +801,8 @@ Excel è un output, non un sistema di record. Servono entità versionate:
 - model/prompt version.
 
 ### P2-05 — Nessuna coda job, idempotenza o resume
+
+**Stato: PARZIALMENTE RISOLTO.** API, stato job persistente, idempotency key, Redis/Dramatiq e worker dedicati sono presenti. Restano dead-letter queue esplicita, cancellazione cooperativa, checkpoint per fase e resume completo del crawl/audit.
 
 Una campagna non deve vivere nel processo web. Servono:
 
@@ -994,6 +1135,8 @@ Solo dopo aver consolidato:
 
 ### Sprint 0 — 1–2 settimane: rendere il prototipo onesto e sicuro per uso interno
 
+Stato al 3 agosto 2026: P0-01/P0-02/P0-03/P0-04/P0-05/P0-06/P0-07/P0-08 sono chiusi o mitigati come indicato nelle rispettive sezioni; P0-09 è chiuso nei percorsi applicativi ma richiede i gate infrastrutturali; P0-10 mantiene intenzionalmente aperta soltanto la rotazione della chiave locale. Lockfile, CI, PostgreSQL obbligatorio, gate Docker, SBOM, vulnerability audit e policy licenze sono completati sul branch `codex/reproducible-ci-release`.
+
 1. Ruotare la chiave OpenRouter esposta nella configurazione locale e introdurre secret scanning.
 2. Correggere filtro età.
 3. Collegare o rimuovere audit “no website”.
@@ -1001,16 +1144,18 @@ Solo dopo aver consolidato:
 5. Correggere filtro social.
 6. Bloccare SSRF.
 7. Validare errori/status/redirect del crawl e impedire audit senza evidenza.
-8. Rimuovere prompt completi dalla GUI.
-9. Escapare HTML.
-10. Neutralizzare formule Excel.
-11. Aggiungere timeout Google.
-12. Scegliere un solo provider WHOIS e bloccare le dipendenze.
+8. Rimuovere prompt completi dalla GUI. **Completato (`71a4a96`).**
+9. Escapare HTML e rendere testuali i log dinamici. **Completato (`8db14c9`).**
+10. Neutralizzare formule Excel. **Completato (`89fe7fa`).**
+11. Aggiungere timeout Google. **Completato nel P0-04.**
+12. Scegliere un solo provider WHOIS e bloccare le dipendenze. **Completato (`46bc974`).**
 13. Correggere `token_mode`, `is_dynamic`, categorie/località e framework detection.
-14. Creare `pyproject.toml`, lockfile e bootstrap.
-15. Aggiungere test P0.
+14. Creare `pyproject.toml`, lockfile e bootstrap. **Completato (`46bc974`).**
+15. Aggiungere test P0. **Completato come baseline: 107 casi, inclusi 6 PostgreSQL obbligatori (`b8b7961`).**
+16. Verificare container, migrazioni, ruoli e API in CI. **Completato (`dada337`).**
+17. Generare SBOM e bloccare vulnerabilità/licenze non conformi. **Completato (`3dffd02`).**
 
-**Gate:** uso interno controllato, non pubblico.
+**Gate:** superato per uso interno controllato e pilot server/report; non abilita da solo un SaaS pubblico.
 
 ### Fase 1 — 3–6 settimane: motore affidabile
 
@@ -1105,19 +1250,18 @@ Solo dopo aver consolidato:
 
 ## 12. Ordine di intervento raccomandato
 
-1. **Ruotare la chiave OpenRouter locale e bloccare future esposizioni di segreti.**
-2. **Stop a qualsiasi esposizione pubblica dell’attuale Streamlit.**
-3. **SSRF guard e validazione URL/status/redirect.**
-4. **Revisione Google Places e privacy/marketing.**
-5. **Rimozione prompt/dati sensibili dalla UI.**
-6. **XSS ed Excel injection.**
-7. **Correzione dei bug funzionali: età, no-website AI, e-commerce, social, crawl vuoto, token mode, categorie/località e framework.**
-8. **Test suite, dipendenza WHOIS univoca, lockfile e CI.**
-9. **Evidence schema e output LLM strutturato.**
-10. **Job architecture e storage multi-tenant.**
-11. **Audit deterministico Lighthouse/WCAG/security/SEO/technology detection.**
-12. **Pilot manuale con agenzie.**
-13. **Solo dopo: auth, billing e SaaS pubblico.**
+1. **Revisione professionale Google Places, privacy/marketing Italia-UE e licenze LGPL/MPL; predisporre DPA, informative e third-party notices.**
+2. **Firma immagine, provenance/SBOM associata alla release, manifest aggiornamenti firmato e rollback provato.**
+3. **Backup/restore PostgreSQL verificato, osservabilità, alert, runbook incidenti e SLO.**
+4. **Completare egress isolation, robots/takedown policy e limiti CPU/RAM/byte/browser-minute.**
+5. **Correggere i bug funzionali P1 ancora aperti: età, no-website AI, e-commerce, social, `token_mode`, categorie/località e framework detection.**
+6. **Audit deterministico Lighthouse/WCAG/security/SEO/technology detection con evidence per finding.**
+7. **Gold set e benchmark su almeno 200–500 siti, con human review e calibrazione degli score.**
+8. **Hardening operativo della coda: DLQ, cancellazione, checkpoint e resume per fase.**
+9. **Frontend prodotto e generazione report white-label; Streamlit rimane console interna.**
+10. **Pilot server/report con pochi design partner e contratti limitati, misurando costi e contestazioni.**
+11. **Ruotare la chiave locale quando il proprietario autorizzerà l’intervento; il secret scanning impedisce nuove esposizioni.**
+12. **Solo dopo i pilot: updater automatico firmato, billing/SSO e valutazione del SaaS pubblico.**
 
 ## 13. Decisione finale
 

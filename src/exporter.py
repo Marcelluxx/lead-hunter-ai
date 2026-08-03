@@ -6,15 +6,21 @@ Export duale:
 """
 
 import os
-from typing import Union, List, Dict
+from typing import Callable, Union, List, Dict, Any
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 try:
-    from .filters import clean_and_translate_categories, extract_address_details
+    from .application.export_policy import ExportPolicy
+    from .domain.provenance import VerifiedLead
+    from .domain.privacy import WorkspacePrivacyPolicy
+    from .security.spreadsheet import is_text_cell, sanitize_spreadsheet_value
 except (ImportError, ValueError):
-    from filters import clean_and_translate_categories, extract_address_details
+    from src.application.export_policy import ExportPolicy
+    from src.domain.provenance import VerifiedLead
+    from src.domain.privacy import WorkspacePrivacyPolicy
+    from src.security.spreadsheet import is_text_cell, sanitize_spreadsheet_value
 
 
 
@@ -44,7 +50,9 @@ class DataExporter:
     def export_to_excel(
         leads: Union[List[Dict], Dict[str, Dict]],
         mode: str = "no_website",
-        filename: str = "leads_v3_premium.xlsx"
+        filename: str = "leads_v3_premium.xlsx",
+        privacy_policy: WorkspacePrivacyPolicy | None = None,
+        suppression_checker: Callable[[Any], bool] | None = None,
     ) -> None:
         """
         Esporta lead in Excel con formattazione professionale.
@@ -54,20 +62,23 @@ class DataExporter:
             print("[Exporter] Nessun lead da esportare.")
             return
 
+        leads_list = list(leads.values()) if isinstance(leads, dict) else list(leads)
+        ExportPolicy.require_exportable(
+            leads_list, mode, privacy_policy, suppression_checker
+        )
+
         # Assicurati che la cartella di destinazione esista
         dir_name = os.path.dirname(filename)
         if dir_name:
             os.makedirs(dir_name, exist_ok=True)
-
-        leads_list = list(leads.values()) if isinstance(leads, dict) else leads
 
         # Definisci colonne in base alla modalità
         if mode == "with_website":
             columns = DataExporter._get_website_columns()
             rows = DataExporter._format_website_rows(leads_list)
         else:
-            columns = DataExporter._get_no_website_columns()
-            rows = DataExporter._format_no_website_rows(leads_list)
+            # ExportPolicy rejects this branch. Kept explicit for defensive typing.
+            raise RuntimeError("Esportazione no_website non consentita.")
 
         try:
             wb = Workbook()
@@ -88,7 +99,10 @@ class DataExporter:
             # --- DATA ROWS ---
             for row_idx, row_data in enumerate(rows, 2):
                 for col_idx, value in enumerate(row_data, 1):
-                    cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                    safe_value = sanitize_spreadsheet_value(value)
+                    cell = ws.cell(row=row_idx, column=col_idx, value=safe_value)
+                    if is_text_cell(safe_value):
+                        cell.data_type = "s"
                     cell.font = DataExporter.DATA_FONT
                     cell.alignment = DataExporter.DATA_ALIGNMENT
 
@@ -125,69 +139,48 @@ class DataExporter:
             ws.auto_filter.ref = ws.dimensions
 
             wb.save(filename)
-            print(f"\n✅ [OK] Esportazione premium completata: {len(leads_list)} lead in '{filename}'")
+            print(f"\n[OK] Esportazione premium completata: {len(leads_list)} lead in '{filename}'")
 
         except PermissionError:
-            print(f"❌ [Errore] Il file '{filename}' è aperto in un altro programma. Chiudilo e riprova.")
+            print(f"[Errore] Il file '{filename}' è aperto in un altro programma. Chiudilo e riprova.")
         except Exception as e:
-            print(f"❌ [Errore] Eccezione durante l'esportazione: {e}")
+            print(f"[Errore] Eccezione durante l'esportazione: {e}")
 
     @staticmethod
     def _get_no_website_columns() -> list:
-        return [
-            "Business Name", "Category", "Address", "Paese", "Phone",
-            "Rating", "Reviews", "Top Competitor"
-        ]
+        return ["Business Name", "Website status", "Provider"]
 
     @staticmethod
     def _get_website_columns() -> list:
         return [
-            "Business Name", "Category", "Address", "Paese", "Phone",
-            "Rating", "Reviews", "Website",
+            "Business Name", "Category", "Website",
             "Extracted Email", "Website Score", "Framework",
             "Diagnosis", "Site Brief", "Cold Message"
         ]
 
     @staticmethod
     def _format_no_website_rows(leads: List[Dict]) -> List[list]:
-        rows = []
-        for lead in leads:
-            category = clean_and_translate_categories(lead.get("types", []), lead.get("search_keyword", ""))
-            via_e_civico, paese = extract_address_details(lead)
-
-            rows.append([
-                lead.get("displayName", {}).get("text", "N/A"),
-                category,
-                via_e_civico,
-                paese,
-                lead.get("nationalPhoneNumber", "N/A"),
-                lead.get("rating", "N/A"),
-                lead.get("userRatingCount", "N/A"),
-                lead.get("competitor", "N/A"),
-            ])
-        return rows
+        # Presentation-only helper: never used by the Excel export path.
+        return [
+            [lead.display_name or "N/A", "Senza sito", lead.attribution.label]
+            for lead in leads
+        ]
 
     @staticmethod
     def _format_website_rows(leads: List[Dict]) -> List[list]:
         rows = []
         for lead in leads:
-            category = clean_and_translate_categories(lead.get("types", []), lead.get("search_keyword", ""))
-            via_e_civico, paese = extract_address_details(lead)
+            if isinstance(lead, VerifiedLead):
+                lead = lead.to_export_record()
 
-            # Email: preferisci quella estratta dal crawler, fallback su Google Places
             extracted_email = lead.get("extracted_email", "")
             if isinstance(extracted_email, list):
                 extracted_email = ", ".join(extracted_email) if extracted_email else ""
 
             rows.append([
-                lead.get("displayName", {}).get("text", "N/A"),
-                category,
-                via_e_civico,
-                paese,
-                lead.get("nationalPhoneNumber", "N/A"),
-                lead.get("rating", "N/A"),
-                lead.get("userRatingCount", "N/A"),
-                lead.get("websiteUri", "N/A"),
+                lead.get("business_name", "N/A"),
+                lead.get("category", "N/A"),
+                lead.get("website", "N/A"),
                 extracted_email or "N/A",
                 lead.get("website_score", "N/A"),
                 lead.get("framework", "N/A"),

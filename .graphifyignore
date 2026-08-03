@@ -1,3 +1,8 @@
 # Local tooling and secrets must never enter Graphify artifacts.
 .claude/
 .env
+.env.*
+src/prompts.py
+docs/SINCRONIZZAZIONE_GITHUB_E_IMPATTO_GRAPHIFY.md
+docs/superpowers/
+test_output/

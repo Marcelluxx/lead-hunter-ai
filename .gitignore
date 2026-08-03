@@ -1,4 +1,13 @@
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+.secrets/
 __pycache__/
 *.xlsx
 outputs/

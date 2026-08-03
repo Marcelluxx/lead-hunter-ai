@@ -1,0 +1,48 @@
+{
+  "allowed_license_atoms": [
+    "0BSD",
+    "3-Clause BSD License",
+    "Apache License 2.0",
+    "Apache Software License",
+    "Apache-2.0",
+    "Apache2.0",
+    "BSD License",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "CC0-1.0",
+    "CNRI-Python",
+    "GNU Lesser General Public License v3 or later (LGPLv3+)",
+    "LGPL-3.0-only",
+    "MIT",
+    "MIT License",
+    "MIT-0",
+    "MIT-CMU",
+    "Mozilla Public License 2.0 (MPL 2.0)",
+    "MPL-2.0",
+    "PSF-2.0",
+    "Python Software Foundation License",
+    "Zlib"
+  ],
+  "review_required_atoms": [
+    "GNU Lesser General Public License v3 or later (LGPLv3+)",
+    "LGPL-3.0-only",
+    "Mozilla Public License 2.0 (MPL 2.0)",
+    "MPL-2.0"
+  ],
+  "package_overrides": {
+    "streamlit-folium": {
+      "license": "MIT",
+      "versions": [
+        "0.26.2",
+        "0.27.4"
+      ],
+      "sources": {
+        "0.26.2": "https://github.com/randyzwitch/streamlit-folium/blob/89f90b9706910f84adf60459ac9212f9ef56f511/LICENSE",
+        "0.27.4": "https://github.com/randyzwitch/streamlit-folium/blob/2b3e1051111b3be0b79d385542bd429ecf183d06/LICENSE"
+      },
+      "reviewed": "2026-08-03",
+      "expires": "2027-08-03",
+      "reason": "The wheel omits license metadata; the upstream repository declares MIT."
+    }
+  }
+}

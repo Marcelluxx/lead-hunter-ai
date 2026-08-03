@@ -1,0 +1,110 @@
+name: leadhunter
+
+x-server-env: &server-env
+  LEADHUNTER_DATABASE_URL: postgresql+psycopg://leadhunter_app:${LEADHUNTER_APP_DB_PASSWORD:?app database password required}@postgres:5432/leadhunter
+  LEADHUNTER_REDIS_URL: redis://redis:6379/0
+  LEADHUNTER_MASTER_KEY_BASE64: ${LEADHUNTER_MASTER_KEY_BASE64:?master key required}
+  LEADHUNTER_SUPPRESSION_HMAC_KEY_BASE64: ${LEADHUNTER_SUPPRESSION_HMAC_KEY_BASE64:?suppression HMAC key required}
+  LEADHUNTER_JWT_PRIVATE_KEY_FILE: /run/secrets/jwt_private.pem
+  LEADHUNTER_JWT_PUBLIC_KEY_FILE: /run/secrets/jwt_public.pem
+
+services:
+  postgres:
+    image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+    environment:
+      POSTGRES_DB: leadhunter
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?postgres admin password required}
+      LEADHUNTER_APP_DB_PASSWORD: ${LEADHUNTER_APP_DB_PASSWORD:?app database password required}
+      LEADHUNTER_WORKER_DB_PASSWORD: ${LEADHUNTER_WORKER_DB_PASSWORD:?worker database password required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d leadhunter"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:8-alpine@sha256:978f0e01593e65eed801f2402944efcd936d43b5027e4908a7897baf88ed6241
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    image: leadhunter-app:${LEADHUNTER_IMAGE_TAG:-local}
+    build: .
+    user: root
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_ADMIN_PASSWORD:?postgres admin password required}@postgres:5432/leadhunter
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    image: leadhunter-app:${LEADHUNTER_IMAGE_TAG:-local}
+    build: .
+    environment: *server-env
+    volumes:
+      - ./secrets:/run/secrets:ro
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json, urllib.request;
+          assert json.load(urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3))['status'] == 'ok'
+      interval: 5s
+      timeout: 4s
+      retries: 20
+      start_period: 10s
+
+  worker:
+    image: leadhunter-app:${LEADHUNTER_IMAGE_TAG:-local}
+    build: .
+    environment:
+      <<: *server-env
+      LEADHUNTER_DATABASE_URL: postgresql+psycopg://leadhunter_worker:${LEADHUNTER_WORKER_DB_PASSWORD:?worker database password required}@postgres:5432/leadhunter
+    volumes:
+      - ./secrets:/run/secrets:ro
+    command: ["dramatiq", "src.workers.runtime", "--processes", "1", "--threads", "4"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  retention-scheduler:
+    image: leadhunter-app:${LEADHUNTER_IMAGE_TAG:-local}
+    build: .
+    environment:
+      <<: *server-env
+      LEADHUNTER_DATABASE_URL: postgresql+psycopg://leadhunter_worker:${LEADHUNTER_WORKER_DB_PASSWORD:?worker database password required}@postgres:5432/leadhunter
+      LEADHUNTER_RETENTION_SCHEDULE_SECONDS: ${LEADHUNTER_RETENTION_SCHEDULE_SECONDS:-3600}
+    volumes:
+      - ./secrets:/run/secrets:ro
+    command: ["python", "-m", "src.workers.retention_scheduler"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redis-data:

@@ -1,0 +1,47 @@
+[project]
+name = "lead-hunter-ai"
+version = "0.1.0"
+description = "Evidence-first lead discovery and website audit platform"
+requires-python = ">=3.10,<3.14"
+license = "LicenseRef-Proprietary"
+dependencies = [
+    "alembic>=1.16,<2",
+    "beautifulsoup4>=4.12,<5",
+    "crawl4ai>=0.7,<1",
+    "cryptography>=50,<51",
+    "dramatiq[redis]>=2.2,<3",
+    "fastapi>=0.116,<1",
+    "folium>=0.18,<1",
+    "openai>=2,<3",
+    "openpyxl>=3.1,<4",
+    "pandas>=2.2,<4",
+    "playwright>=1.50,<2",
+    "psycopg[binary]>=3.2,<4",
+    "pwdlib[argon2]>=0.3,<1",
+    "pydantic-settings>=2.10,<3",
+    "pyjwt[crypto]>=2.10,<3",
+    "pyotp>=2.9,<3",
+    "python-dotenv>=1,<2",
+    "python-multipart>=0.0.20,<1",
+    "python-whois>=0.9,<1",
+    "redis>=6,<8",
+    "requests>=2.31,<3",
+    "sqlalchemy>=2.0,<2.1",
+    "streamlit>=1.40,<2",
+    "streamlit-folium>=0.24,<1",
+    "uvicorn[standard]>=0.35,<1",
+]
+
+[dependency-groups]
+test = [
+    "httpx>=0.28,<1",
+]
+audit = [
+    "pip-audit>=2.9,<3",
+    "pip-licenses>=5,<6",
+]
+
+[tool.uv]
+package = false
+default-groups = ["test"]
+required-version = ">=0.11.15,<0.12"

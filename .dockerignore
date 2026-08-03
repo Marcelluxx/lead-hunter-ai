@@ -1,0 +1,16 @@
+.git
+.github
+.env
+.env.*
+.venv
+venv
+__pycache__
+*.pyc
+docs
+graphify-out
+legacy
+outputs
+secrets
+tests
+test_output
+output

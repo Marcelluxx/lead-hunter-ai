@@ -15,19 +15,30 @@ import pandas as pd
 import os
 import sys
 import time
-import requests
+import logging
 from datetime import datetime
 
 # Path setup per import dal progetto root
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from config import (
+from src.config import (
     GRID_SIZE, GRID_STEP_KM, RADIUS_M, LAT_DEGREE_KM,
     MIN_RATING, MAX_REVIEWS, MIN_BUSINESS_AGE_YEARS, MAX_CRAWL_PAGES,
     OUTPUT_DIR,
 )
-from main import LeadHunterOrchestrator
-from exporter import DataExporter
+from main import create_orchestrator
+from src.settings import ApplicationSettings, SettingsError
+from src.exporter import DataExporter
+from src.security.presentation import (
+    build_keyword_card_html,
+    build_phase_card_html,
+    normalize_log_message,
+)
+from src.security.geolocation import GeolocationError, lookup_approximate_location
+from src.security.privacy import redact_sensitive_text
+
+
+logger = logging.getLogger(__name__)
 
 # --- PAGE CONFIG ---
 st.set_page_config(
@@ -35,6 +46,12 @@ st.set_page_config(
     layout="wide",
     page_icon="🎯"
 )
+
+try:
+    runtime_settings = ApplicationSettings.from_environment()
+except SettingsError as exc:
+    st.error(f"Configurazione non valida: {exc}")
+    st.stop()
 
 # --- CUSTOM CSS PREMIUM ---
 st.markdown("""
@@ -96,30 +113,17 @@ st.markdown("""
 
 # --- HELPERS ---
 def render_kw_card(placeholder, keyword, count, status, footer):
-    status_map = {"idle": "status-idle", "running": "status-running", "done": "status-success", "fail": "status-fail"}
-    if status == "done" and count == 0:
-        status = "fail"
-    color_class = status_map.get(status, "status-idle")
-    icons = {"done": "✅", "fail": "❌", "running": "🛰️"}
-    icon = icons.get(status, "⏳")
-    placeholder.markdown(f"""
-        <div class="keyword-card {color_class}">
-            <div class="card-title">{keyword}</div>
-            <div class="card-value">{count}</div>
-            <div class="card-footer">{icon} {footer}</div>
-        </div>
-    """, unsafe_allow_html=True)
+    placeholder.markdown(
+        build_keyword_card_html(keyword, count, status, footer),
+        unsafe_allow_html=True,
+    )
 
 
 def render_phase_card(placeholder, icon, text, elapsed_str=""):
-    time_html = f'<span class="phase-time">⏱️ {elapsed_str}</span>' if elapsed_str else ""
-    placeholder.markdown(f"""
-        <div class="phase-card">
-            <span class="phase-icon">{icon}</span>
-            <span class="phase-text">{text}</span>
-            {time_html}
-        </div>
-    """, unsafe_allow_html=True)
+    placeholder.markdown(
+        build_phase_card_html(icon, text, elapsed_str),
+        unsafe_allow_html=True,
+    )
 
 
 def format_elapsed(seconds: float) -> str:
@@ -143,23 +147,9 @@ def calculate_grid_circles(center_lat, center_lng):
 
 
 # --- SESSION STATE ---
-def get_approximate_location():
-    """Tenta di ottenere la posizione approssimativa dell'utente tramite IP."""
-    try:
-        # Timeout breve (3s) per non bloccare la GUI se non c'è rete o l'API è lenta
-        response = requests.get("http://ip-api.com/json/", timeout=3)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get("status") == "success":
-                return {"lat": data["lat"], "lng": data["lon"]}
-    except Exception:
-        pass
-    
-    # Fallback su Roma se fallisce
-    return {"lat": 41.9028, "lng": 12.4964}
-
 if "target_coords" not in st.session_state:
-    st.session_state.target_coords = get_approximate_location()
+    # Nessuna chiamata esterna automatica: Roma è un default modificabile.
+    st.session_state.target_coords = {"lat": 41.9028, "lng": 12.4964}
 
 # --- HEADER ---
 st.markdown("<h1 style='text-align: center; color: #1e293b; margin-bottom: 0;'>🎯 Lead Hunter V3</h1>", unsafe_allow_html=True)
@@ -195,14 +185,12 @@ with col1:
     if mode_key == "with_website":
         st.markdown("<hr style='margin: 12px 0; border: none; border-top: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
         st.markdown("#### 🎯 Filtri Lead")
-
-        wm_col1, wm_col2 = st.columns(2)
-        with wm_col1:
-            min_rating = st.number_input("⭐ Rating minimo", min_value=1.0, max_value=5.0, value=MIN_RATING, step=0.1)
-            st.markdown('<p class="param-hint">Solo attività con rating superiore a questa soglia</p>', unsafe_allow_html=True)
-        with wm_col2:
-            max_reviews = st.number_input("📝 Max recensioni", min_value=1, max_value=500, value=MAX_REVIEWS, step=10)
-            st.markdown('<p class="param-hint">Esclude catene con centinaia di recensioni</p>', unsafe_allow_html=True)
+        min_rating = MIN_RATING
+        max_reviews = MAX_REVIEWS
+        st.caption(
+            "Rating e recensioni Google non vengono richiesti né usati. "
+            "La qualificazione si basa sul sito ufficiale verificato."
+        )
 
         min_age = st.number_input("📅 Età minima attività (anni)", min_value=1, max_value=30, value=MIN_BUSINESS_AGE_YEARS, step=1)
         st.markdown('<p class="param-hint">Verifica WHOIS e copywriting del sito (se nessun dato: passa)</p>', unsafe_allow_html=True)
@@ -248,12 +236,28 @@ with col1:
     coord_c1, coord_c2 = st.columns(2)
     coord_c1.metric("Latitudine", f"{st.session_state.target_coords['lat']:.5f}")
     coord_c2.metric("Longitudine", f"{st.session_state.target_coords['lng']:.5f}")
-    st.caption("💡 Clicca sulla mappa per aggiornare le coordinate.")
+    if st.button("📡 USA LA MIA POSIZIONE APPROSSIMATIVA", use_container_width=True):
+        with st.spinner("Rilevamento della posizione approssimativa..."):
+            try:
+                location = lookup_approximate_location()
+                st.session_state.target_coords = location.to_public_dict()
+                st.success("Posizione approssimativa aggiornata.")
+            except GeolocationError as exc:
+                st.warning(str(exc))
+    st.caption(
+        "Il rilevamento è facoltativo. Solo dopo il clic, il provider HTTPS "
+        "configurato riceve l'IP pubblico della connessione; IP e risposta grezza "
+        "non vengono salvati dall'app. Puoi sempre scegliere il punto sulla mappa."
+    )
     st.markdown("<br>", unsafe_allow_html=True)
 
     start_btn = st.button("🚀 AVVIA LEAD HUNTER ENGINE", type="primary", use_container_width=True)
 
 with col2:
+    st.caption(
+        "Mappa indipendente OpenStreetMap/Folium usata solo per scegliere il centro; "
+        "non visualizza contenuti Google Places."
+    )
     m = folium.Map(
         location=[st.session_state.target_coords["lat"], st.session_state.target_coords["lng"]],
         zoom_start=13, control_scale=True
@@ -313,27 +317,23 @@ if start_btn:
             if "logs" not in st.session_state:
                 st.session_state.logs = []
             elapsed = format_elapsed(time.time() - pipeline_start)
-            st.session_state.logs.append(f"<span style='color:#64748b'>[{elapsed}]</span> {msg}")
-            log_html = "<br>".join(st.session_state.logs[::-1])
-            log_container.markdown(f'<div class="log-container">{log_html}</div>', unsafe_allow_html=True)
+            safe_message = normalize_log_message(redact_sensitive_text(msg))
+            st.session_state.logs.append(f"[{elapsed}] {safe_message}")
+            log_container.code("\n".join(st.session_state.logs[::-1]), language=None)
 
         def update_elapsed():
             elapsed = format_elapsed(time.time() - pipeline_start)
-            elapsed_placeholder.markdown(
-                f"<p style='text-align:right; color:#64748b; font-size:0.85rem;'>⏱️ Tempo trascorso: <b>{elapsed}</b></p>",
-                unsafe_allow_html=True
-            )
+            elapsed_placeholder.caption(f"⏱️ Tempo trascorso: {elapsed}")
 
         st.session_state.logs = []
         update_log("🚀 Inizializzazione Engine V3...")
 
-        orchestrator = LeadHunterOrchestrator(mode=mode_key)
-
         try:
+            orchestrator = create_orchestrator(mode_key, runtime_settings)
             if mode_key == "no_website":
                 # === PIPELINE NO WEBSITE ===
                 def on_kw_start(kw):
-                    update_log(f"🔍 Scansione grid per: <b>{kw}</b>")
+                    update_log(f"🔍 Scansione grid per: {kw}")
                     render_kw_card(kw_placeholders[kw], kw, 0, "running", "Ricerca in corso...")
                     update_elapsed()
 
@@ -344,7 +344,7 @@ if start_btn:
                     update_elapsed()
 
                 def on_kw_end(kw, count):
-                    update_log(f"✅ {kw} → <b>{count}</b> lead trovati")
+                    update_log(f"✅ {kw} → {count} lead trovati")
                     render_kw_card(kw_placeholders[kw], kw, count, "done", "Completato" if count > 0 else "Nessun lead")
                     update_elapsed()
 
@@ -441,36 +441,51 @@ if start_btn:
                 st.balloons()
                 st.success(f"🎊 Pipeline completata! **{len(results)}** lead qualificati in **{total_elapsed}**.")
 
-                city = orchestrator.scraper.get_city_name(
-                    st.session_state.target_coords["lat"],
-                    st.session_state.target_coords["lng"]
-                )
-                date_str = datetime.now().strftime("%d_%m_%Y")
-                filename = f"Lead_Hunter_{city}_{date_str}.xlsx"
-                filepath = os.path.join(OUTPUT_DIR, filename)
-                DataExporter.export_to_excel(results, mode=mode_key, filename=filepath)
-
                 st.markdown("### 💎 Database Lead Premium")
                 if mode_key == "with_website":
                     cols = DataExporter._get_website_columns()
                     rows = DataExporter._format_website_rows(results)
+                    date_str = datetime.now().strftime("%d_%m_%Y")
+                    filename = f"Lead_Hunter_Report_{date_str}.xlsx"
+                    filepath = os.path.join(OUTPUT_DIR, filename)
+                    DataExporter.export_to_excel(results, mode=mode_key, filename=filepath)
                 else:
                     cols = DataExporter._get_no_website_columns()
                     rows = DataExporter._format_no_website_rows(results)
                 df = pd.DataFrame(rows, columns=cols)
                 st.dataframe(df, use_container_width=True)
 
-                with open(filepath, "rb") as f:
-                    st.download_button(
-                        label=f"📥 SCARICA REPORT: {filename}",
-                        data=f,
-                        file_name=filename,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
+                if mode_key == "with_website":
+                    with open(filepath, "rb") as f:
+                        st.download_button(
+                            label=f"📥 SCARICA REPORT: {filename}",
+                            data=f,
+                            file_name=filename,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True,
+                        )
+                else:
+                    attribution = orchestrator.scraper.attribution
+                    st.info(
+                        "Questi risultati sono transitori: non vengono salvati né "
+                        "esportati. Per ottenere un report persistente serve verificare "
+                        "i dati su una fonte indipendente."
+                    )
+                    st.markdown(
+                        f"Dati: **{attribution.label}** — "
+                        f"[Termini]({attribution.terms_url}) · "
+                        f"[Privacy]({attribution.privacy_url})"
                     )
             else:
                 st.warning("⚠️ La ricerca è terminata ma non sono stati trovati lead idonei in quest'area.")
 
-        except Exception as e:
-            st.error(f"❌ Errore durante l'esecuzione: {e}")
-            update_log(f"<span style='color:#ef4444'>CRITICAL ERROR: {str(e)}</span>")
+        except SettingsError as exc:
+            st.error(f"Configurazione non valida: {exc}")
+            update_log("CONFIGURAZIONE NON VALIDA: verifica le credenziali richieste")
+        except Exception as exc:
+            logger.error(
+                "Errore non gestito durante l'esecuzione della pipeline (%s)",
+                type(exc).__name__,
+            )
+            st.error("❌ Errore interno durante l'esecuzione. Consulta i log applicativi.")
+            update_log("ERRORE CRITICO: dettagli registrati lato server")
