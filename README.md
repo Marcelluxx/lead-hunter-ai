@@ -75,7 +75,8 @@ Whether targeting local businesses that lack a digital presence or performing de
 ```
 agente-lead/
 ├── main.py                  # CLI Entry point & Core Orchestrator
-├── requirements.txt         # Package dependencies
+├── pyproject.toml           # Direct dependencies and project metadata
+├── uv.lock                  # Reproducible lock for Python 3.10-3.13
 ├── .env                     # Local API keys (Git ignored)
 ├── .env.example             # Configuration template for .env
 ├── outputs/                 # Dedicated output directory for Excel reports (Git ignored)
@@ -99,32 +100,27 @@ agente-lead/
 
 ## 🛠️ Installation & Configuration
 
-### 1. Repository Setup & Virtual Environment
+### 1. Repository Setup
 
 ```bash
 # Clone the repository
 git clone https://github.com/Marcellux02/agente-lead.git
 cd agente-lead
 
-# Initialize virtual environment
-python -m venv venv
-
-# Activate environment
-# On Windows:
-venv\Scripts\activate
-# On macOS / Linux:
-source venv/bin/activate
 ```
 
 ### 2. Dependency Installation
 
 ```bash
-# Install core Python packages
-pip install -r requirements.txt
+# Install the exact dependency set recorded in uv.lock
+uv sync --frozen
 
-# Install stealth browser binaries for Playwright
-playwright install chromium
+# Install the browser binary used by Crawl4AI/Playwright
+uv run playwright install chromium
 ```
+
+The supported Python range is 3.10-3.13. Update dependencies with `uv lock`
+and always commit `pyproject.toml` and `uv.lock` together.
 
 ### 3. API Key & Local Environment Configuration
 
