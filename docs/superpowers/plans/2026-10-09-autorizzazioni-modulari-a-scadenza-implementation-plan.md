@@ -10,8 +10,13 @@
 
 **Spec:** [Specifica approvata il 9 ottobre 2026](../specs/2026-10-08-autorizzazioni-modulari-a-scadenza-design.md).
 
-Stato del piano: approvato il 9 ottobre 2026; esecuzione native in corso sul branch
+Stato del piano: approvato il 9 ottobre 2026; nove task implementati con esecuzione native sul branch
 `codex/expiring-feature-licenses`, con commit/push dei blocchi principali e review indipendente finale.
+
+Risultati nel [resoconto di implementazione](../../FEATURE_LICENSES_IMPLEMENTATION_REVIEW.md):
+158 test passati senza skip, revisione indipendente corretta con regressioni,
+gate funzionali CI passati. Release commerciale bloccata dal gate Security per
+NLTK senza patch pubblicata; la checklist completata non implica readiness commerciale.
 
 ## Global Constraints
 
@@ -89,7 +94,7 @@ contratto aggiuntivo testabile, non un handler fittizio che finge di eseguire un
 - `FeatureContext(scope: LicenseScope, permissions: frozenset[Permission], mfa_verified: bool, principal_active: bool)`; `FeatureStatus(feature_id: str, label: str, granted: bool, module_status: str, license_status: str, expires_at: int | None)`.
 - Fixture `license_claims(*, scope: LicenseScope | None = None, issued_at: int = 0, not_before: int = 0, expires_at: int = 100, features: tuple[str, ...] = ("diagnostics.full",)) -> LicenseClaims`; `local_scope()` e `managed_scope()` restituiscono UUID distinti e stabili soltanto nei test.
 
-- [ ] **Step 1: scrivere `test_catalog_declares_three_planned_features` e `test_scope_and_claim_types_are_strict`** con subTest e valori espliciti:
+- [x] **Step 1: scrivere `test_catalog_declares_three_planned_features` e `test_scope_and_claim_types_are_strict`** con subTest e valori espliciti:
 
 ```python
 catalog = FeatureCatalog()
@@ -107,10 +112,10 @@ duplicati/wildcard e `True` invece di intero. Per export usare `EXPORT_RESULTS`
 per entrambe le azioni; per filtri `START_JOB` per execute, `VIEW_RESULTS` per view;
 MFA specifica soltanto per diagnostica.
 
-- [ ] **Step 2:** `uv run --frozen --group test python -m unittest tests.test_feature_license_contract -v`; atteso fallimento per interfacce ancora assenti, non per dipendenze.
-- [ ] **Step 3:** implementare contratti, invarianti, catalogo e fixture. `LicenseClaims` contiene claim strutturali; il controllo temporale appartiene al verificatore, non al costruttore.
-- [ ] **Step 4:** ripetere il comando; atteso PASS per tutti i subTest, nessuna rete.
-- [ ] **Step 5:** commit selettivo dei file del task: `feat(licensing): define feature license contracts and catalog`.
+- [x] **Step 2:** `uv run --frozen --group test python -m unittest tests.test_feature_license_contract -v`; atteso fallimento per interfacce ancora assenti, non per dipendenze.
+- [x] **Step 3:** implementare contratti, invarianti, catalogo e fixture. `LicenseClaims` contiene claim strutturali; il controllo temporale appartiene al verificatore, non al costruttore.
+- [x] **Step 4:** ripetere il comando; atteso PASS per tutti i subTest, nessuna rete.
+- [x] **Step 5:** commit selettivo dei file del task: `feat(licensing): define feature license contracts and catalog`.
 
 ## Task 2: firme e chiavi pubbliche fidate
 
@@ -124,7 +129,7 @@ MFA specifica soltanto per diagnostica.
 - `.decode_verified(token: str, *, scope: LicenseScope) -> LicenseClaims` esegue tutti i controlli di firma/schema/destinatario, senza decidere validità rispetto a now. Serve allo stato pubblico per mostrare date autentiche di licenze scadute; non concede privilegi e non sostituisce `.verify` nelle operazioni.
 - Fixture `test_key_pair() -> tuple[bytes, bytes]` genera PEM privata/pubblica effimere; `signed_test_license(claims: LicenseClaims, private_pem: bytes, *, kid: str = "test-key") -> str` usa PyJWT solo nei test.
 
-- [ ] **Step 1: scrivere `test_validity_has_inclusive_start_exclusive_end`, `test_signature_and_trust_are_strict`, `test_duplicate_and_unexpected_json_fields_are_rejected` e `test_scope_and_features_must_match`** con subTest:
+- [x] **Step 1: scrivere `test_validity_has_inclusive_start_exclusive_end`, `test_signature_and_trust_are_strict`, `test_duplicate_and_unexpected_json_fields_are_rejected` e `test_scope_and_features_must_match`** con subTest:
 
 ```python
 token = signed_test_license(license_claims(not_before=10, expires_at=100), private_pem)
@@ -148,10 +153,10 @@ numeri oltre questi limiti non arrivano al database o alla conversione UI.
 tramite decode_verified per una licenza firmata scaduta e rifiutare la medesima
 licenza alterata; verify continua a rifiutare entrambe per l'esecuzione.
 
-- [ ] **Step 2:** `uv run --frozen --group test python -m unittest tests.test_feature_license_verification -v`; atteso FAIL sull'interfaccia mancante.
-- [ ] **Step 3:** implementare parsing JSON con rifiuto duplicati e limiti prima della verifica; selezionare una chiave locale, usare `jwt.decode(..., algorithms=["EdDSA"])` per la firma. Disabilitare soltanto i controlli temporali automatici per applicare l'orologio iniettato, senza disabilitare firma/audience/issuer. Ricontrollare schema, tipo della chiave, invarianti e scope; zero leeway sulla scadenza.
-- [ ] **Step 4:** ripetere il comando e Task 1; atteso PASS, access token del login rifiutato come licenza.
-- [ ] **Step 5:** commit dei quattro file: `feat(licensing): verify strict signed expiring grants`.
+- [x] **Step 2:** `uv run --frozen --group test python -m unittest tests.test_feature_license_verification -v`; atteso FAIL sull'interfaccia mancante.
+- [x] **Step 3:** implementare parsing JSON con rifiuto duplicati e limiti prima della verifica; selezionare una chiave locale, usare `jwt.decode(..., algorithms=["EdDSA"])` per la firma. Disabilitare soltanto i controlli temporali automatici per applicare l'orologio iniettato, senza disabilitare firma/audience/issuer. Ricontrollare schema, tipo della chiave, invarianti e scope; zero leeway sulla scadenza.
+- [x] **Step 4:** ripetere il comando e Task 1; atteso PASS, access token del login rifiutato come licenza.
+- [x] **Step 5:** commit dei quattro file: `feat(licensing): verify strict signed expiring grants`.
 
 ## Task 3: repository locale, tempo e gestione comune delle licenze
 
@@ -166,7 +171,7 @@ licenza alterata; verify continua a rifiutare entrambe per l'esecuzione.
 - `LicenseService(repository: LicenseRepository, verifier: LicenseVerifier, clock: Clock)`; `.import_license(scope, token: str, *, actor_id: UUID | None = None) -> LicenseSummary`, `.revoke_license(scope, license_id: UUID, *, actor_id: UUID | None = None) -> LicenseSummary`, `.summary(scope) -> LicenseSummary`, `.require_valid(scope) -> LicenseClaims`.
 - Audit locale amministrativo in `audit.jsonl`; token nello stato, mai nell'audit. File di stato `state.json`, lock separato `state.lock`, formato stato v1; maximum_time e installation_id rimangono quando la licenza scade/revoca.
 
-- [ ] **Step 1: scrivere `test_backup_preserves_identity_new_installation_does_not`, `test_invalid_renewal_preserves_active_grant`, `test_renewal_replaces_features_and_revoked_jti_cannot_reactivate`, `test_multiprocess_import_keeps_coherent_state` e `test_clock_rollback_uses_high_watermark`**, con `FakeClock(epoch: int).now_epoch() -> int` e `.set(epoch: int) -> None` in `tests/license_helpers.py`:
+- [x] **Step 1: scrivere `test_backup_preserves_identity_new_installation_does_not`, `test_invalid_renewal_preserves_active_grant`, `test_renewal_replaces_features_and_revoked_jti_cannot_reactivate`, `test_multiprocess_import_keeps_coherent_state` e `test_clock_rollback_uses_high_watermark`**, con `FakeClock(epoch: int).now_epoch() -> int` e `.set(epoch: int) -> None` in `tests/license_helpers.py`:
 
 ```python
 original_id = store.installation_id()
@@ -189,10 +194,10 @@ importare/rinnovare da due processi senza corruzione; usare processi spawn compa
 Windows, worker di test definiti a livello modulo, join con timeout e cleanup dei soli
 processi creati dal test. Verificare che `--status` possa descrivere missing/scaduta.
 
-- [ ] **Step 2:** `uv run --frozen --group test python -m unittest tests.test_local_feature_licenses tests.test_license_clock -v`; atteso FAIL per componenti mancanti.
-- [ ] **Step 3:** implementare lock cross-platform (`msvcrt` Windows, `fcntl` Unix con import condizionale), timeout massimo 5 secondi e `license_storage_unavailable` su lock fallito. Scrivere temp nello stesso filesystem e usare `os.replace`; proteggere con lock anche letture coerenti e prima identità. Il massimo del tempo viene persistito prima di un permesso. `summary` usa decode_verified per conservare date/feature autentiche, calcola lo stato temporale e converte errori in stato leggibile; su firma/scope invalido non espone claim. `require_valid` usa verify e rilancia i dinieghi. Validare nuova licenza prima della sostituzione e, sotto lock, verificare ancora tombstone revocate.
-- [ ] **Step 4:** ripetere test e Task 1–2; atteso PASS; su Windows non importare `fcntl` e su Unix non importare `msvcrt`.
-- [ ] **Step 5:** commit dei sei file e fixture modificata: `feat(licensing): persist local grants and guarded time`.
+- [x] **Step 2:** `uv run --frozen --group test python -m unittest tests.test_local_feature_licenses tests.test_license_clock -v`; atteso FAIL per componenti mancanti.
+- [x] **Step 3:** implementare lock cross-platform (`msvcrt` Windows, `fcntl` Unix con import condizionale), timeout massimo 5 secondi e `license_storage_unavailable` su lock fallito. Scrivere temp nello stesso filesystem e usare `os.replace`; proteggere con lock anche letture coerenti e prima identità. Il massimo del tempo viene persistito prima di un permesso. `summary` usa decode_verified per conservare date/feature autentiche, calcola lo stato temporale e converte errori in stato leggibile; su firma/scope invalido non espone claim. `require_valid` usa verify e rilancia i dinieghi. Validare nuova licenza prima della sostituzione e, sotto lock, verificare ancora tombstone revocate.
+- [x] **Step 4:** ripetere test e Task 1–2; atteso PASS; su Windows non importare `fcntl` e su Unix non importare `msvcrt`.
+- [x] **Step 5:** commit dei sei file e fixture modificata: `feat(licensing): persist local grants and guarded time`.
 
 ## Task 4: persistenza PostgreSQL con RLS e clock condiviso
 
@@ -207,7 +212,7 @@ processi creati dal test. Verificare che `--status` possa descrivere missing/sca
 - Revision `0004_feature_licenses`, down_revision `0003_contact_privacy_governance`. Registrare i nuovi modelli dopo la definizione di Base evitando import circolari; metadata di test e Alembic devono includerli.
 - Function PostgreSQL `public.app_advance_license_clock(p_installation_id uuid, p_observed_epoch bigint) RETURNS bigint`: UPSERT con GREATEST; SECURITY DEFINER e search_path fisso pg_catalog,public; REVOKE da PUBLIC. App/worker EXECUTE, nessun INSERT/UPDATE/DELETE diretto sulla tabella del tempo. Impostare contesto transaction-local `app.installation_id`; rifiutare parameter diverso da quello corrente; si tratta di isolamento applicativo deployment, non di difesa da un amministratore DB.
 
-- [ ] **Step 1: scrivere `test_grant_lifecycle_is_atomic`, `test_grants_are_workspace_scoped_and_worker_read_only`, `test_concurrent_renewals_have_one_active_grant`, `test_revoke_and_renew_preserve_tombstones` e `test_license_time_only_advances`**; SQLite per lifecycle, PostgreSQL per permessi/concorrenza:
+- [x] **Step 1: scrivere `test_grant_lifecycle_is_atomic`, `test_grants_are_workspace_scoped_and_worker_read_only`, `test_concurrent_renewals_have_one_active_grant`, `test_revoke_and_renew_preserve_tombstones` e `test_license_time_only_advances`**; SQLite per lifecycle, PostgreSQL per permessi/concorrenza:
 
 ```python
 with app.session(workspace_id=workspace_a) as session:
@@ -223,10 +228,10 @@ renew/renew e revoke/renew concorrenti (membership row FOR UPDATE come lock
 stabile, anche quando non esiste ancora un grant), replay di revoked jti, token
 immutato con colonne normalized manomesse, downgrade/upgrade preservando la base.
 
-- [ ] **Step 2:** unità `uv run --frozen --group test python -m unittest tests.test_feature_license_repository tests.test_migrations -v`; atteso FAIL su schema/interfacce nuove. PostgreSQL solo con URL owner/app/worker del fixture e `REQUIRE_POSTGRES_TESTS=1` su database effimero.
-- [ ] **Step 3:** implementare schema/migrazione/repository. Grants: ENABLE e FORCE RLS sul predicato workspace esistente; app SELECT/INSERT/UPDATE, worker SELECT, nessun DELETE runtime. Sotto lock aggiornare active/revoked e conservare tombstone; read preferisce active, altrimenti l'ultimo revocato per stato pubblico. Il token viene sempre riverificato dal servizio, non sostituito dalle colonne estratte.
-- [ ] **Step 4:** ripetere unità e `uv run --frozen --group test python -m unittest tests.integration.test_feature_license_rls tests.integration.test_feature_license_concurrency -v` con `REQUIRE_POSTGRES_TESTS=1`; atteso PASS senza skip. Verificare upgrade/downgrade/upgrade su PostgreSQL effimero con ruoli runtime reali.
-- [ ] **Step 5:** commit selettivo dei nove file: `feat(licensing): isolate server grants and persist license time`.
+- [x] **Step 2:** unità `uv run --frozen --group test python -m unittest tests.test_feature_license_repository tests.test_migrations -v`; atteso FAIL su schema/interfacce nuove. PostgreSQL solo con URL owner/app/worker del fixture e `REQUIRE_POSTGRES_TESTS=1` su database effimero.
+- [x] **Step 3:** implementare schema/migrazione/repository. Grants: ENABLE e FORCE RLS sul predicato workspace esistente; app SELECT/INSERT/UPDATE, worker SELECT, nessun DELETE runtime. Sotto lock aggiornare active/revoked e conservare tombstone; read preferisce active, altrimenti l'ultimo revocato per stato pubblico. Il token viene sempre riverificato dal servizio, non sostituito dalle colonne estratte.
+- [x] **Step 4:** ripetere unità e `uv run --frozen --group test python -m unittest tests.integration.test_feature_license_rls tests.integration.test_feature_license_concurrency -v` con `REQUIRE_POSTGRES_TESTS=1`; atteso PASS senza skip. Verificare upgrade/downgrade/upgrade su PostgreSQL effimero con ruoli runtime reali.
+- [x] **Step 5:** commit selettivo dei nove file: `feat(licensing): isolate server grants and persist license time`.
 
 ## Task 5: autorizzazione comune e gestione server
 
@@ -240,7 +245,7 @@ immutato con colonne normalized manomesse, downgrade/upgrade preservando la base
 - `job_feature_context(session: Session, *, job_id: UUID, installation_id: UUID) -> FeatureContext`: scope da jobs.workspace_id/created_by, membership corrente; mfa_verified False perché il modello job attuale non conserva una prova MFA verificabile. Nessun aggiramento per diagnostica: un futuro handler deve fornire un contesto MFA attendibile nella propria milestone.
 - Audit detail allowlist aggiunge `license_id`, `features`, `expires_at`; features serializzate come stringa bounded con identificatori noti. Audit event `license.imported`, `license.renewed`, `license.revoked`, target_id jti, workspace/attore esistenti, zero token.
 
-- [ ] **Step 1: scrivere `test_expiry_blocks_next_step_and_sensitive_delivery`, `test_roles_and_mfa_never_replace_license`, `test_inactive_or_removed_member_is_denied`, `test_planned_feature_is_not_executable`, `test_job_context_ignores_client_supplied_authorization` e `test_license_audit_is_redacted`** con catalogo di test che marca una funzione available soltanto nel fixture:
+- [x] **Step 1: scrivere `test_expiry_blocks_next_step_and_sensitive_delivery`, `test_roles_and_mfa_never_replace_license`, `test_inactive_or_removed_member_is_denied`, `test_planned_feature_is_not_executable`, `test_job_context_ignores_client_supplied_authorization` e `test_license_audit_is_redacted`** con catalogo di test che marca una funzione available soltanto nel fixture:
 
 ```python
 self.assertEqual(access.require(context, "diagnostics.full").license_id, expected_id)
@@ -260,10 +265,10 @@ di consegna; confermare nessun materiale riservato restituito. Verificare modifi
 token nei parametri job e ruolo dichiarato nel body ignorati; `job_feature_context`
 usa creatore persistito e non assume MFA; missing job/workspace genera diniego.
 
-- [ ] **Step 2:** `uv run --frozen --group test python -m unittest tests.test_feature_access tests.test_managed_feature_licenses tests.test_worker_feature_context -v`; atteso FAIL sulle interfacce mancanti.
-- [ ] **Step 3:** implementare accesso con verifica licenza per ogni operazione/consegna, controllo del principal, feature/action, ruolo/MFA e disponibilità. ManagedLicenseService richiede MANAGE_WORKSPACE/MFA per import/revoke/status altrui; self status richiede membership ma non licenza attiva. Concedere solo token firmato esatto per target. Il repository e l'audit condividono la transazione request, il clock resta indipendente.
-- [ ] **Step 4:** ripetere i tre moduli e `tests.test_authorization tests.test_audit_log tests.test_job_state_machine`; atteso PASS; dispatcher commerciale invariato e nessun permesso derivato dai parametri.
-- [ ] **Step 5:** commit dei sette file: `feat(licensing): enforce scoped feature access and managed grants`.
+- [x] **Step 2:** `uv run --frozen --group test python -m unittest tests.test_feature_access tests.test_managed_feature_licenses tests.test_worker_feature_context -v`; atteso FAIL sulle interfacce mancanti.
+- [x] **Step 3:** implementare accesso con verifica licenza per ogni operazione/consegna, controllo del principal, feature/action, ruolo/MFA e disponibilità. ManagedLicenseService richiede MANAGE_WORKSPACE/MFA per import/revoke/status altrui; self status richiede membership ma non licenza attiva. Concedere solo token firmato esatto per target. Il repository e l'audit condividono la transazione request, il clock resta indipendente.
+- [x] **Step 4:** ripetere i tre moduli e `tests.test_authorization tests.test_audit_log tests.test_job_state_machine`; atteso PASS; dispatcher commerciale invariato e nessun permesso derivato dai parametri.
+- [x] **Step 5:** commit dei sette file: `feat(licensing): enforce scoped feature access and managed grants`.
 
 ## Task 6: strumento privato del proprietario
 
@@ -276,7 +281,7 @@ usa creatore persistito e non assume MFA; missing job/workspace genera diniego.
 - `parse_license_date(value: str) -> int`: ISO-8601 con Z o offset obbligatorio; niente date/ore naive; precisione in secondi interi.
 - `main(argv: Sequence[str] | None = None) -> int` con subcommand `keygen`, `issue`, `inspect`; passphrase tramite getpass.getpass, niente flag passphrase/variabile obbligatoria/log. `inspect` usa LicenseVerifier e destinatario/tempo espliciti per il riepilogo verificato.
 
-- [ ] **Step 1: scrivere `test_encrypted_key_and_issued_license_round_trip`, `test_keygen_never_overwrites_existing_keys`, `test_bad_passphrase_and_naive_dates_are_rejected` e `test_inspect_never_prints_token`** con temp directory e passphrase effimera:
+- [x] **Step 1: scrivere `test_encrypted_key_and_issued_license_round_trip`, `test_keygen_never_overwrites_existing_keys`, `test_bad_passphrase_and_naive_dates_are_rejected` e `test_inspect_never_prints_token`** con temp directory e passphrase effimera:
 
 ```python
 generate_issuer_keys(private_path=private_path, public_path=public_path, passphrase=b"test-only")
@@ -292,13 +297,13 @@ Testare passphrase errata/vuota, keygen senza sovrascrittura, file pubblici al p
 dei privati, date naive/invalidi, impossibilità di exp assente/permanente, output
 failure senza privata nei messaggi, `inspect` che non mostra token.
 
-- [ ] **Step 2:** `uv run --frozen --group test python -m unittest tests.test_license_issuer -v`; atteso FAIL sui file mancanti.
-- [ ] **Step 3:** implementare comandi; flags issue: `--private-key`, `--kid`, `--issuer`, `--installation-id`, `--subject-kind`, `--subject-id`, `--workspace-id` se server, `--feature` ripetibile, `--not-before`, `--expires-at`, `--out`. Generare jti e iat; verificare intervalli e non inserire dati personali. Paths reali rimangono esterni/ignorati; nessuna chiave di produzione generata durante sviluppo.
+- [x] **Step 2:** `uv run --frozen --group test python -m unittest tests.test_license_issuer -v`; atteso FAIL sui file mancanti.
+- [x] **Step 3:** implementare comandi; flags issue: `--private-key`, `--kid`, `--issuer`, `--installation-id`, `--subject-kind`, `--subject-id`, `--workspace-id` se server, `--feature` ripetibile, `--not-before`, `--expires-at`, `--out`. Generare jti e iat; verificare intervalli e non inserire dati personali. Paths reali rimangono esterni/ignorati; nessuna chiave di produzione generata durante sviluppo.
   `keygen` usa `--private-out` e `--public-out`; `inspect` usa `--license-file`,
   `--public-key`, `--kid`, `--issuer` e gli stessi flags di destinatario, con
   `SystemClock` in produzione e clock iniettato soltanto nei test.
-- [ ] **Step 4:** ripetere test e prova round-trip issuer/verifier nel test, atteso PASS.
-- [ ] **Step 5:** commit dei cinque file: `feat(licensing): add private expiring license issuer`.
+- [x] **Step 4:** ripetere test e prova round-trip issuer/verifier nel test, atteso PASS.
+- [x] **Step 5:** commit dei cinque file: `feat(licensing): add private expiring license issuer`.
 
 ## Task 7: configurazione e API server
 
@@ -313,7 +318,7 @@ failure senza privata nei messaggi, `inspect` che non mostra token.
 - Routes: `GET /workspaces/{workspace_id}/features` (proprio stato); `PUT /workspaces/{workspace_id}/feature-licenses/{user_id}` body `{token}` (import/rinnovo); `GET` stesso path (self oppure gestione admin); `DELETE .../{user_id}/{license_id}` (revoca idempotente). Non accettare expires/features/ruoli dal body.
 - Response schemas `LicenseSummaryResponse`, `FeatureStatusResponse`; epoch -> ISO-8601 UTC e campi tipo/UUID pubblici, nessun token. Request `LicenseImportRequest` extra forbidden e token max 16 KiB.
 
-- [ ] **Step 1: scrivere `test_license_import_requires_authenticated_admin_mfa`, `test_signed_target_cannot_be_reassigned`, `test_self_status_survives_expiry`, `test_unconfigured_license_runtime_keeps_base_available` e `test_api_never_echoes_signed_token`** tramite TestClient e fixture piattaforma esistente:
+- [x] **Step 1: scrivere `test_license_import_requires_authenticated_admin_mfa`, `test_signed_target_cannot_be_reassigned`, `test_self_status_survives_expiry`, `test_unconfigured_license_runtime_keeps_base_available` e `test_api_never_echoes_signed_token`** tramite TestClient e fixture piattaforma esistente:
 
 ```python
 self.assertEqual(client.get(features_url).status_code, 401)
@@ -329,10 +334,10 @@ viewer non può gestire altri, cross-workspace 403/404 senza informazioni altrui
 inactive user negato, local grant su server negato, admin non può inventare grant,
 trust key login rifiutata per typ/audience, health/auth senza licensing configurato.
 
-- [ ] **Step 2:** `uv run --frozen --group test python -m unittest tests.test_feature_license_settings tests.test_feature_license_api -v`; atteso FAIL su routes/config assenti.
-- [ ] **Step 3:** implementare wiring e schema. API usa auth esistente e ManagedLicenseService; 401 login, 403 accesso, 422 import invalido, 503 storage. Compose condivide installation ID e path pubblico fidato fra API/worker tramite server-env senza chiavi private licensing. Preservare bootstrap standard senza variabili licenza obbligatorie finché non configurate.
-- [ ] **Step 4:** ripetere i due moduli e `tests.test_api_security tests.test_authentication tests.test_secret_encryption tests.test_settings`; atteso PASS.
-- [ ] **Step 5:** commit selettivo dei file del task: `feat(licensing): expose scoped license management APIs`.
+- [x] **Step 2:** `uv run --frozen --group test python -m unittest tests.test_feature_license_settings tests.test_feature_license_api -v`; atteso FAIL su routes/config assenti.
+- [x] **Step 3:** implementare wiring e schema. API usa auth esistente e ManagedLicenseService; 401 login, 403 accesso, 422 import invalido, 503 storage. Compose condivide installation ID e path pubblico fidato fra API/worker tramite server-env senza chiavi private licensing. Preservare bootstrap standard senza variabili licenza obbligatorie finché non configurate.
+- [x] **Step 4:** ripetere i due moduli e `tests.test_api_security tests.test_authentication tests.test_secret_encryption tests.test_settings`; atteso PASS.
+- [x] **Step 5:** commit selettivo dei file del task: `feat(licensing): expose scoped license management APIs`.
 
 ## Task 8: CLI e pannello locale
 
@@ -345,7 +350,7 @@ trust key login rifiutata per typ/audience, health/auth senza licensing configur
 - `render_feature_license_panel(*, scope: LicenseScope, licenses: LicenseService, access: FeatureAccessService) -> None`: consultazione stato, scadenza nel fuso locale, upload licenza e messaggio import; label per `planned`: "Autorizzato, modulo non ancora disponibile" quando granted, altrimenti "Modulo non ancora disponibile". Nessun pulsante di esecuzione per moduli pianificati.
 - `main.py --gui` aggiunge `--server.address 127.0.0.1` al lancio Streamlit; introdurre `.streamlit/config.toml` con lo stesso binding per lancio diretto. La UI mantiene esplicite le restrizioni attuali di export/filtri finché i moduli sono pianificati.
 
-- [ ] **Step 1: scrivere `test_local_license_commands_need_no_provider_keys`, `test_planned_feature_shows_granted_but_unavailable`, `test_gui_import_and_expiry_use_common_service` e `test_gui_launch_and_direct_config_bind_loopback`**; CLI e Streamlit AppTest sul pannello in fixture isolata:
+- [x] **Step 1: scrivere `test_local_license_commands_need_no_provider_keys`, `test_planned_feature_shows_granted_but_unavailable`, `test_gui_import_and_expiry_use_common_service` e `test_gui_launch_and_direct_config_bind_loopback`**; CLI e Streamlit AppTest sul pannello in fixture isolata:
 
 ```python
 with patch.dict(os.environ, {"GOOGLE_API_KEY": "", "OPENROUTER_API_KEY": ""}):
@@ -362,10 +367,10 @@ import oversize negato prima di read illimitato, locale data/ora con fuso
 Europe/Rome tramite timezone di test, CLI senza fetch API/licenze online, launch
 diretto `.streamlit/config.toml` coerente. Nessun test dipende da rete o rendering mappa.
 
-- [ ] **Step 2:** `uv run --frozen --group test python -m unittest tests.test_feature_license_cli tests.test_feature_license_ui -v`; atteso FAIL sulle interfacce mancanti.
-- [ ] **Step 3:** implementare pannello come unità isolata e poi inserirlo nella sidebar GUI; CLI dedicata evita refactor non necessario del parser pipeline e suoi P1. Stato licensing errore redatto non impedisce le funzioni base. Label/tempo derivano dal servizio, niente controllo privilegi alternativo in session_state. I file di stato non sono scritti in outputs/test_output.
-- [ ] **Step 4:** ripetere i due moduli più `tests.test_dependency_injection tests.test_presentation_security`; atteso PASS. Un test di servizio Task 5 continua a negare l'accesso diretto anche senza UI.
-- [ ] **Step 5:** commit dei file del task, inclusa `.streamlit/config.toml`: `feat(licensing): add local activation and feature status UI`.
+- [x] **Step 2:** `uv run --frozen --group test python -m unittest tests.test_feature_license_cli tests.test_feature_license_ui -v`; atteso FAIL sulle interfacce mancanti.
+- [x] **Step 3:** implementare pannello come unità isolata e poi inserirlo nella sidebar GUI; CLI dedicata evita refactor non necessario del parser pipeline e suoi P1. Stato licensing errore redatto non impedisce le funzioni base. Label/tempo derivano dal servizio, niente controllo privilegi alternativo in session_state. I file di stato non sono scritti in outputs/test_output.
+- [x] **Step 4:** ripetere i due moduli più `tests.test_dependency_injection tests.test_presentation_security`; atteso PASS. Un test di servizio Task 5 continua a negare l'accesso diretto anche senza UI.
+- [x] **Step 5:** commit dei file del task, inclusa `.streamlit/config.toml`: `feat(licensing): add local activation and feature status UI`.
 
 ## Task 9: distribuzione e verifica complessiva del blocco
 
@@ -373,11 +378,11 @@ diretto `.streamlit/config.toml` coerente. Nessun test dipende da rete o renderi
 
 **Interfaces:** Consumes i servizi e comandi dei Task 1–8; nessuna nuova interfaccia di prodotto.
 
-- [ ] **Step 1: scrivere `test_local_offline_expiry_renewal_and_revocation`, `test_managed_grant_lifecycle_is_scoped_and_redacted` e `test_customer_build_excludes_issuer_and_private_state`**. Lifecycle offline/API: issue/import/status, operazione fixture protetta, expiry con clock controllato, rinnovo e revoca; affermare base disponibile e token assente nei report. In `test_license_distribution` verificare esclusioni di `tools/license_issuer`, `.secrets`, `.leadhunter-state`, `*.pem`, `*.key`, `*.p12`, `*.pfx` e che README non contenga chiavi reali. I test source delle esclusioni sono preliminari; il gate immagine reale sotto è la prova finale.
-- [ ] **Step 2:** `uv run --frozen --group test python -m unittest tests.test_license_distribution tests.test_feature_license_lifecycle -v`; atteso FAIL sulle esclusioni/manuale mancanti o lifecycle non integrato.
-- [ ] **Step 3:** escludere materiale emittente e stato privato da build/Git, mantenendo fixture test generate a runtime. Nel CI container aggiungere una verifica reale che `tools/license_issuer` e file di chiavi licensing non esistano nell'immagine (file JWT runtime mount esclusi da questa verifica). All'interno del gate Python esistente rendere esplicito il lifecycle; PostgreSQL obbligatorio continua a includere le nuove integrazioni tramite discover.
-- [ ] **Step 4:** aggiornare manuale con comandi per emittente e cliente, trust bootstrap, backup identità, rinnovo, revoca, correzione orologio, confronto locale/server, scadenza aggiuntiva rispetto alla base perpetua. Documentare limiti offline e moduli pianificati. Esempi usano UUID fittizi, date con offset e path `.secrets`; non emettere una vera licenza del proprietario.
-- [ ] **Step 5:** verifiche finali sull'esecuzione:
+- [x] **Step 1: scrivere `test_local_offline_expiry_renewal_and_revocation`, `test_managed_grant_lifecycle_is_scoped_and_redacted` e `test_customer_build_excludes_issuer_and_private_state`**. Lifecycle offline/API: issue/import/status, operazione fixture protetta, expiry con clock controllato, rinnovo e revoca; affermare base disponibile e token assente nei report. In `test_license_distribution` verificare esclusioni di `tools/license_issuer`, `.secrets`, `.leadhunter-state`, `*.pem`, `*.key`, `*.p12`, `*.pfx` e che README non contenga chiavi reali. I test source delle esclusioni sono preliminari; il gate immagine reale sotto è la prova finale.
+- [x] **Step 2:** `uv run --frozen --group test python -m unittest tests.test_license_distribution tests.test_feature_license_lifecycle -v`; atteso FAIL sulle esclusioni/manuale mancanti o lifecycle non integrato.
+- [x] **Step 3:** escludere materiale emittente e stato privato da build/Git, mantenendo fixture test generate a runtime. Nel CI container aggiungere una verifica reale che `tools/license_issuer` e file di chiavi licensing non esistano nell'immagine (file JWT runtime mount esclusi da questa verifica). All'interno del gate Python esistente rendere esplicito il lifecycle; PostgreSQL obbligatorio continua a includere le nuove integrazioni tramite discover.
+- [x] **Step 4:** aggiornare manuale con comandi per emittente e cliente, trust bootstrap, backup identità, rinnovo, revoca, correzione orologio, confronto locale/server, scadenza aggiuntiva rispetto alla base perpetua. Documentare limiti offline e moduli pianificati. Esempi usano UUID fittizi, date con offset e path `.secrets`; non emettere una vera licenza del proprietario.
+- [x] **Step 5:** verifiche finali sull'esecuzione:
 
 ```powershell
 uv lock --check
@@ -394,8 +399,8 @@ e verifica immagine; niente down --volumes contro uno stack reale del proprietar
 I gate CI Python 3.10–3.13/PostgreSQL/container/Security sono prova ulteriore al PR,
 non risultati da dichiarare prima che siano eseguiti.
 
-- [ ] **Step 6:** verificare che il token completo non compaia nei log catturati e che il corpus Git/build non contenga chiavi private licensing; eseguire pre-commit/Gitleaks nel flusso release esistente. Nessun allargamento dei test oltre i gate richiesti salvo nuovi errori/modifiche.
-- [ ] **Step 7:** commit dei sette file modificati e due test: `test(licensing): verify expiry lifecycle and customer distribution`.
+- [x] **Step 6:** verificare che il token completo non compaia nei log catturati e che il corpus Git/build non contenga chiavi private licensing; eseguire pre-commit/Gitleaks nel flusso release esistente. Nessun allargamento dei test oltre i gate richiesti salvo nuovi errori/modifiche.
+- [x] **Step 7:** commit dei sette file modificati e due test: `test(licensing): verify expiry lifecycle and customer distribution`.
 
 ## Copertura della specifica e handoff
 
@@ -412,10 +417,10 @@ non risultati da dichiarare prima che siano eseguiti.
 | Preservazione boundary e verifiche PostgreSQL reali | 4, 9 |
 
 Revisione del piano effettuata su copertura, firme/tipi, nomi dei file, cinque
-Review Focus e proporzione rispetto alla specifica. I comandi indicati sono prove
-da eseguire durante l'implementazione; questa fase produce documentazione soltanto.
+Review Focus e proporzione rispetto alla specifica. Prove eseguite e risultati
+registrati nel resoconto di implementazione.
 
-Proposta di esecuzione: **native**, implementazione da parte dell'agente principale
+Esecuzione adottata: **native**, implementazione da parte dell'agente principale
 in questa chat, con verifiche per task e revisione indipendente del branch al termine.
 Le attività dipendono strettamente dallo stesso contratto di licenza e contesto;
 questa modalità riduce i passaggi di contesto. L'alternativa è subagent-driven,

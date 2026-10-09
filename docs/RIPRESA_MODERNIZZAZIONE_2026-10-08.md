@@ -26,7 +26,14 @@ conversazionale del primo sottoprogetto è stato approvato dal proprietario.
 La [specifica scritta](superpowers/specs/2026-10-08-autorizzazioni-modulari-a-scadenza-design.md)
 è stata approvata il 9 ottobre 2026. Il
 [piano operativo](superpowers/plans/2026-10-09-autorizzazioni-modulari-a-scadenza-implementation-plan.md)
-è pronto per revisione; implementazione e metodo di esecuzione non sono ancora approvati.
+è stato approvato e implementato il 9 ottobre 2026 con esecuzione native.
+Il core delle licenze è nel branch `codex/expiring-feature-licenses`,
+[PR draft #7](https://github.com/Marcelluxx/lead-hunter-ai/pull/7).
+Il [resoconto di implementazione e verifica](FEATURE_LICENSES_IMPLEMENTATION_REVIEW.md)
+registra risultati, decisioni e blocchi di release.
+I tre moduli richiesti restano il prossimo sottoprogetto: risultano pianificati,
+senza esecuzione concessa dal solo possesso di una licenza. La release commerciale
+resta bloccata dalla vulnerabilità NLTK senza versione corretta pubblicata.
 
 ## Baseline recuperata
 
@@ -147,15 +154,15 @@ cliente, con credenziali oscurate e limiti di conservazione.
 - La continuità della versione base perpetua e la manutenzione separata restano
   coerenti con il design precedente; si discute qui solo degli accessi aggiuntivi.
 
-Verifiche previste nel futuro piano: license/manifests alterati, funzione non
+Verifiche eseguite nel piano licensing: token alterati, funzione non
 concessa, installazione diversa, identità/workspace non autorizzati, parità CLI/API/
 worker, revoca o scadenza secondo la policy scelta, assenza di diagnostica nei
 report pubblici e regressioni sui boundary di rete/export già esistenti.
 
-### Primo sottoprogetto proposto: autorizzazioni modulari a scadenza
+### Primo sottoprogetto implementato: autorizzazioni modulari a scadenza
 
-È il primo componente da progettare e implementare, seguito dai tre recuperi
-funzionali distinti e poi dal collegamento al worker commerciale della roadmap.
+Il nucleo è implementato e verificato nel branch della PR #7. Seguono i tre
+recuperi funzionali distinti e poi il collegamento al worker commerciale della roadmap.
 
 - Licenza firmata con identificativo, versione del formato, emittente/chiave,
   destinatario, installazione, elenco di funzioni, inizio validità e scadenza.
@@ -201,4 +208,6 @@ rimangono nel percorso concordato, ma non risultano implementati da questa nota.
 - [x] Completare la revisione del proprietario sulla specifica scritta (9 ottobre 2026).
 - [x] Scrivere il piano operativo e completare la revisione interna.
 - [x] Completare la revisione del proprietario sul piano e scegliere il metodo di esecuzione (9 ottobre 2026, native).
-- [ ] Implementare e verificare il primo sottoprogetto.
+- [x] Implementare e verificare il primo sottoprogetto, correggere la review indipendente e pubblicare il branch (PR draft #7).
+- [ ] Risolvere il blocco NLTK del gate Security prima della release commerciale.
+- [ ] Recuperare i tre moduli e collegarli ai controlli di accesso comuni.
