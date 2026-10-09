@@ -57,3 +57,11 @@ class ApplicationContainer:
         licenses = LicenseService(store, LicenseVerifier(config.load_trusted_keys(), catalog),
                                   GuardedClock(SystemClock(), store))
         return scope, licenses, FeatureAccessService(licenses, catalog)
+
+    def build_local_reference_export_service(self) -> "ReferenceExportService":
+        from .reference_exports import ReferenceExportService
+        from ..domain.feature_licenses import FeatureContext
+        from ..domain.identity import Permission
+        scope, _, access = self.build_local_license_service()
+        return ReferenceExportService(access, lambda: FeatureContext(
+            scope, frozenset(Permission), False, True))
