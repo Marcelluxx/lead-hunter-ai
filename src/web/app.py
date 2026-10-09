@@ -1,4 +1,5 @@
 from __future__ import annotations
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -11,7 +12,14 @@ from .routes import auth, jobs, privacy, usage, workspaces, feature_licenses
 
 
 def create_app(runtime: WebRuntime) -> FastAPI:
-    app = FastAPI(title="Lead Hunter API", version="0.1.0")
+    @asynccontextmanager
+    async def lifespan(_):
+        try:
+            yield
+        finally:
+            runtime.database.close_license_clock_pool()
+
+    app = FastAPI(title="Lead Hunter API", version="0.1.0", lifespan=lifespan)
     app.state.runtime = runtime
     if runtime.license_settings is not None:
         runtime.license_settings.validate_server()

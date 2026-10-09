@@ -64,6 +64,14 @@ Restore it to preserve the identity. A fresh directory creates a new installatio
 requiring a new grant. Do not put state in output/test-output folders. Protect the
 directory using the operating-system account permissions.
 
+`state.json` is the authoritative atomic journal for grants, revocations and
+redacted audit events. `audit.jsonl` is a recoverable projection: if it cannot be
+written, activation/revocation still succeeds with its event in the journal;
+the next state access retries the projection. Older v1 state is upgraded under
+the same lock, retaining its existing redacted audit history. File fsync and
+atomic replacement do not guarantee directory-entry durability during power
+loss on every filesystem; retain a trusted full backup.
+
 The console's **Licenze e funzioni riservate** panel displays identity, grant
 status, expiry (Europe/Rome) and module availability, and imports license files.
 Both `python main.py --gui` and direct Streamlit launches bind to loopback.
@@ -118,6 +126,11 @@ single-grant management endpoints return 503; health/login/base work normally.
 
 Validity is `not_before <= now < expires_at`, with no grace after expiry.
 Each protected step and sensitive delivery requires a fresh verification.
+Future module handlers must also rebuild their server `FeatureContext` from
+current user/workspace/membership records before each protected step or delivery.
+Do not retain an earlier context throughout a long-running job. `granted` in
+feature status means a valid signed entitlement; role/MFA and module availability
+are checked separately before execution.
 An already-started provider call may finish; delivering reserved material still
 requires current authorization. Stored data and files already downloaded are
 not deleted or recalled.
@@ -132,6 +145,10 @@ maximum denies protected access (`license_clock_regression`). Smaller rollbacks
 use that maximum. Correct the UTC system time to at least the stored maximum;
 do not reset state to extend a grant. API/worker share the PostgreSQL high-watermark,
 committed independently of the request transaction.
+The clock uses a dedicated bounded pool (two connections, no overflow) so that
+full request-pool occupancy cannot prevent its independent commit. API shutdown
+disposes that pool; other runtime owners must call `Database.close_license_clock_pool()`
+after their clock users stop.
 
 Offline installations can verify valid signed grants without a central service,
 but cannot receive immediate remote revocation. Local/admin intervention applies

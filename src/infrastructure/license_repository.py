@@ -93,7 +93,7 @@ class PostgresClockStore:
         if not valid_epoch(observed_epoch):
             raise LicenseError("license_clock_regression")
         try:
-            with self.database.session() as session:
+            with self.database.license_clock_session() as session:
                 if self.database.engine.dialect.name == "postgresql":
                     session.execute(text("SELECT set_config('app.installation_id', :id, true)"),
                                     {"id": str(self.installation_id)})

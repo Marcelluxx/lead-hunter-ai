@@ -127,3 +127,28 @@ class LocalFeatureLicenseTests(unittest.TestCase):
         self.assertIn('license.imported', audit)
         self.assertIn('license.revoked', audit)
         self.assertNotIn(self.token, repr(self.store.read(self.scope)))
+
+    def test_audit_projection_failure_keeps_grant_and_authoritative_event_together(self):
+        self.service.import_license(self.scope, self.token)
+        old_audit = (self.root / 'audit.jsonl').read_text()
+        renewal = replace(self.claims, license_id=UUID(int=77))
+        original_open = Path.open
+        def fail_projection(path, *args, **kwargs):
+            if path.name == 'audit.jsonl':
+                raise OSError('audit unavailable')
+            return original_open(path, *args, **kwargs)
+        with patch.object(Path, 'open', fail_projection):
+            result = self.service.import_license(self.scope, signed_test_license(renewal, self.private))
+            self.assertEqual(result.license_id, renewal.license_id)
+            state = json.loads((self.root / 'state.json').read_text())
+            self.assertEqual(state['audit_events'][-1]['license_id'], str(renewal.license_id))
+            self.service.revoke_license(self.scope, renewal.license_id)
+            state = json.loads((self.root / 'state.json').read_text())
+            self.assertEqual(state['audit_events'][-1]['event'], 'license.revoked')
+        self.assertEqual((self.root / 'audit.jsonl').read_text(), old_audit)
+        self.assertEqual(self.service.summary(self.scope).license_status, 'revoked')
+        self.assertIn('license.renewed', (self.root / 'audit.jsonl').read_text())
+        self.assertIn('license.revoked', (self.root / 'audit.jsonl').read_text())
+        (self.root / 'audit.jsonl').write_bytes(b'\xff')
+        self.assertEqual(self.service.summary(self.scope).license_status, 'revoked')
+        self.assertIn('license.revoked', (self.root / 'audit.jsonl').read_text())

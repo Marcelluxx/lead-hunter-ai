@@ -1,6 +1,7 @@
 """Locally configured public keys; tokens cannot nominate remote key sources."""
 from types import MappingProxyType
 from typing import Mapping
+import re
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -16,6 +17,10 @@ class TrustedLicenseKeys:
         try:
             for kid, pem in public_keys.items():
                 if type(kid) is not str or not kid or len(kid) > 128:
+                    raise ValueError()
+                # The parser otherwise accepts extra PEM blocks, including private keys.
+                if (type(pem) is not bytes or not re.fullmatch(
+                        rb"\s*-----BEGIN PUBLIC KEY-----\r?\n[A-Za-z0-9+/=\r\n]+-----END PUBLIC KEY-----\s*", pem)):
                     raise ValueError()
                 key = serialization.load_pem_public_key(pem)
                 if not isinstance(key, Ed25519PublicKey):

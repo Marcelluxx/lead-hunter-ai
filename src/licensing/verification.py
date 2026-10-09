@@ -29,7 +29,10 @@ def strict_json(value: str | bytes):
         return result
     def constant(_):
         raise ValueError("constant")
-    return json.loads(value, object_pairs_hook=pairs, parse_constant=constant)
+    try:
+        return json.loads(value, object_pairs_hook=pairs, parse_constant=constant)
+    except RecursionError:
+        raise ValueError("nesting") from None
 
 
 def claims_payload(claims: LicenseClaims) -> dict:

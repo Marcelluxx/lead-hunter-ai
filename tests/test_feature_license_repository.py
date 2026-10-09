@@ -17,6 +17,36 @@ from tests.platform_helpers import platform_fixture
 
 
 class FeatureLicenseRepositoryTests(unittest.TestCase):
+    def test_clock_commits_with_request_pool_saturated(self):
+        import tempfile
+        from pathlib import Path
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        from sqlalchemy import create_engine, text
+        from src.infrastructure.database import Database
+        from src.infrastructure.models import Base
+        with tempfile.TemporaryDirectory() as root:
+            database = Database('sqlite+pysqlite:///' + (Path(root) / 'pool.sqlite').as_posix())
+            database.engine.dispose()
+            database.engine = create_engine(database.engine.url, pool_size=2, max_overflow=0, pool_timeout=0.2)
+            database.session_factory.configure(bind=database.engine)
+            Base.metadata.create_all(database.engine)
+            barrier = Barrier(2)
+            identity = uuid4()
+            def request():
+                with database.session() as outer:
+                    outer.execute(text('SELECT 1'))
+                    barrier.wait(timeout=5)
+                    return PostgresClockStore(database, identity).advance(1000)
+            try:
+                with ThreadPoolExecutor(2) as pool:
+                    self.assertEqual(list(pool.map(lambda _: request(), range(2))), [1000, 1000])
+                self.assertEqual(PostgresClockStore(database, identity).advance(800), 1000)
+            finally:
+                if hasattr(database, 'close_license_clock_pool'):
+                    database.close_license_clock_pool()
+                database.engine.dispose()
+
     def setUp(self):
         self.database, *_ = platform_fixture()
         self.addCleanup(self.database.engine.dispose)

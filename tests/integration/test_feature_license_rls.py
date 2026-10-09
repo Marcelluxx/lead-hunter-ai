@@ -26,6 +26,7 @@ class FeatureLicenseRlsTests(unittest.TestCase):
                 session.execute(delete(UserModel).where(UserModel.id == scope.subject_id))
                 session.execute(delete(LicenseClockStateModel).where(LicenseClockStateModel.installation_id == scope.installation_id))
         for database in (self.owner, self.app, self.worker):
+            database.close_license_clock_pool()
             database.engine.dispose()
 
     def activate(self, database, scope, claims=None):

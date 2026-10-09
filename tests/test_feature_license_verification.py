@@ -59,6 +59,14 @@ class FeatureLicenseVerificationTests(unittest.TestCase):
                 self.reject(item)
         with self.assertRaises(LicenseError):
             TrustedLicenseKeys('test-owner', {'test-key': self.private})
+        with self.assertRaises(LicenseError):
+            TrustedLicenseKeys('test-owner', {'test-key': test_key_pair()[1] + self.private})
+
+    def test_deeply_nested_payload_is_a_redacted_invalid_license(self):
+        header = '{"alg":"EdDSA","typ":"LH-FEATURE-LICENSE","kid":"test-key"}'
+        token = self.raw_token(header, '[' * 5000 + '0' + ']' * 5000)
+        self.assertLess(len(token), 16384)
+        self.reject(token)
 
     def raw_token(self, header, payload):
         def enc(value):
