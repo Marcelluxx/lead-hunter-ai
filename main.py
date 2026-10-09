@@ -449,7 +449,8 @@ if __name__ == "__main__":
     if args.gui:
         print("🎨 Avvio interfaccia grafica Streamlit...")
         try:
-            subprocess.run([sys.executable, "-m", "streamlit", "run", "src/gui.py"], check=True)
+            subprocess.run([sys.executable, "-m", "streamlit", "run", "src/gui.py",
+                            "--server.address", "127.0.0.1"], check=True)
         except (FileNotFoundError, subprocess.CalledProcessError):
             print("❌ Errore: Impossibile avviare Streamlit. Installa con: pip install streamlit")
         except KeyboardInterrupt:

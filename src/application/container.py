@@ -39,3 +39,21 @@ class ApplicationContainer:
             model_free=self.settings.llm_model_free,
             prompt_provider=self.prompt_provider,
         )
+
+    def build_local_license_service(self):
+        from .feature_licenses import LicenseService
+        from .feature_access import FeatureAccessService
+        from .license_clock import GuardedClock, SystemClock
+        from ..domain.feature_licenses import LicenseScope, SubjectKind
+        from ..infrastructure.license_local_store import LocalLicenseStore
+        from ..licensing.catalog import FeatureCatalog
+        from ..licensing.settings import LicenseSettings
+        from ..licensing.verification import LicenseVerifier
+        config = LicenseSettings.from_environment()
+        store = LocalLicenseStore(config.local_state_dir)
+        identity = store.installation_id()
+        scope = LicenseScope(identity, SubjectKind.INSTALLATION, identity)
+        catalog = FeatureCatalog()
+        licenses = LicenseService(store, LicenseVerifier(config.load_trusted_keys(), catalog),
+                                  GuardedClock(SystemClock(), store))
+        return scope, licenses, FeatureAccessService(licenses, catalog)

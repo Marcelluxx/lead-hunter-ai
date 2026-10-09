@@ -28,6 +28,9 @@ from src.config import (
 )
 from main import create_orchestrator
 from src.settings import ApplicationSettings, SettingsError
+from src.application.container import ApplicationContainer
+from src.domain.feature_licenses import LicenseError
+from src.ui.feature_license_panel import render_feature_license_panel
 from src.exporter import DataExporter
 from src.security.presentation import (
     build_keyword_card_html,
@@ -52,6 +55,14 @@ try:
 except SettingsError as exc:
     st.error(f"Configurazione non valida: {exc}")
     st.stop()
+
+with st.sidebar.expander("Licenze e funzioni riservate"):
+    try:
+        license_scope, license_service, feature_access = ApplicationContainer(
+            runtime_settings).build_local_license_service()
+        render_feature_license_panel(scope=license_scope, licenses=license_service, access=feature_access)
+    except (LicenseError, SettingsError):
+        st.warning("Stato delle licenze non disponibile. Le funzioni base rimangono utilizzabili.")
 
 # --- CUSTOM CSS PREMIUM ---
 st.markdown("""
