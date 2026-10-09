@@ -30,7 +30,9 @@ from main import create_orchestrator
 from src.settings import ApplicationSettings, SettingsError
 from src.application.container import ApplicationContainer
 from src.domain.feature_licenses import LicenseError
+from src.domain.place_references import project_google_place_references
 from src.ui.feature_license_panel import render_feature_license_panel
+from src.ui.reference_export_panel import render_reference_export_panel
 from src.exporter import DataExporter
 from src.security.presentation import (
     build_keyword_card_html,
@@ -158,6 +160,8 @@ def calculate_grid_circles(center_lat, center_lng):
 
 
 # --- SESSION STATE ---
+if "no_website_place_ids" not in st.session_state:
+    st.session_state.no_website_place_ids = ()
 if "target_coords" not in st.session_state:
     # Nessuna chiamata esterna automatica: Roma è un default modificabile.
     st.session_state.target_coords = {"lat": 41.9028, "lng": 12.4964}
@@ -293,6 +297,7 @@ with col2:
 # ESECUZIONE PIPELINE
 # ==========================================
 if start_btn:
+    st.session_state.no_website_place_ids = ()
     if not keywords:
         st.error("⚠️ Seleziona almeno una keyword per procedere.")
     else:
@@ -438,6 +443,9 @@ if start_btn:
                     )
 
             # --- RISULTATI ---
+            if mode_key == "no_website":
+                references = project_google_place_references(results)
+                st.session_state.no_website_place_ids = tuple(reference.place_id for reference in references)
             total_elapsed = format_elapsed(time.time() - pipeline_start)
             
             if mode_key == "with_website":
@@ -478,9 +486,9 @@ if start_btn:
                 else:
                     attribution = orchestrator.scraper.attribution
                     st.info(
-                        "Questi risultati sono transitori: non vengono salvati né "
-                        "esportati. Per ottenere un report persistente serve verificare "
-                        "i dati su una fonte indipendente."
+                        "I contenuti Google sono transitori. L'export riservato permette "
+                        "di conservare soltanto Place ID e link Google Maps. Per un report "
+                        "con altri dati serve verificarli su una fonte indipendente."
                     )
                     st.markdown(
                         f"Dati: **{attribution.label}** — "
@@ -500,3 +508,9 @@ if start_btn:
             )
             st.error("❌ Errore interno durante l'esecuzione. Consulta i log applicativi.")
             update_log("ERRORE CRITICO: dettagli registrati lato server")
+
+if mode_key == "no_website":
+    render_reference_export_panel(
+        place_ids=st.session_state.no_website_place_ids,
+        service_factory=ApplicationContainer(runtime_settings).build_local_reference_export_service,
+    )
