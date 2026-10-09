@@ -49,5 +49,6 @@ def create_server_app():
             privacy_policies=WorkspacePrivacyPolicyService(),
             suppression=suppression,
             data_subject_requests=DataSubjectRequestService(suppression),
+            license_settings=settings.license_configuration(),
         )
     )
