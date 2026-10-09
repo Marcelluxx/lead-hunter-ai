@@ -24,6 +24,9 @@ _ALLOWED_DETAIL_KEYS = frozenset(
         "policy_version",
         "request_type",
         "classification",
+        "license_id",
+        "features",
+        "expires_at",
     }
 )
 
