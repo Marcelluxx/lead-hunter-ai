@@ -26,6 +26,8 @@ class MigrationTests(unittest.TestCase):
                 try:
                     tables = set(inspect(engine).get_table_names())
                     self.assertIn("users", tables)
+                    self.assertIn("feature_license_grants", tables)
+                    self.assertIn("license_clock_state", tables)
                     self.assertIn("workspaces", tables)
                     self.assertIn("usage_ledger", tables)
                     self.assertIn("lead_attributes", tables)

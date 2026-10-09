@@ -53,3 +53,16 @@ class FakeClock:
 
     def set(self, epoch):
         self.epoch = epoch
+
+
+def seed_license_subject(database):
+    from uuid import uuid4
+    from src.infrastructure.models import UserModel, WorkspaceModel, WorkspaceMembershipModel
+    identity, user, workspace = uuid4(), uuid4(), uuid4()
+    with database.session() as session:
+        session.add_all([UserModel(id=user, email=f'{user}@example.test',
+                                  password_hash='test-only', display_name='License test'),
+                         WorkspaceModel(id=workspace, slug=f'license-{workspace}', name='License test')])
+        session.flush()
+        session.add(WorkspaceMembershipModel(workspace_id=workspace, user_id=user, role='admin'))
+    return LicenseScope(identity, SubjectKind.WORKSPACE_USER, user, workspace)
