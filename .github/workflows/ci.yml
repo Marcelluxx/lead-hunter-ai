@@ -62,6 +62,16 @@ jobs:
       - name: Run explicit feature-license lifecycle
         run: uv run --frozen --group test python -m unittest tests.test_feature_license_lifecycle -v
 
+      - name: Install Chromium for crawler compatibility check
+        if: matrix.python-version == '3.11'
+        run: uv run --frozen --group test playwright install --with-deps chromium
+
+      - name: Verify real crawler without unused NLP dependency
+        if: matrix.python-version == '3.11'
+        env:
+          LEADHUNTER_BROWSER_TESTS: "1"
+        run: uv run --frozen --group test python -m unittest tests.test_crawler_runtime -v
+
   postgres-integration:
     name: PostgreSQL 17 integration
     runs-on: ubuntu-latest

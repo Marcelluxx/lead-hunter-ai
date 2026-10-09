@@ -290,6 +290,14 @@ uv sync --frozen --group test --no-install-project
 uv run playwright install chromium
 ```
 
+The locked runtime excludes NLTK, an unused dependency declared by Crawl4AI,
+because its published release has an unpatched model-file vulnerability.
+Lead Hunter uses pruning and Markdown generation rather than NLTK chunking or
+model utilities. Crawl4AI is pinned to the tested version; revalidate the exclusion
+before upgrading it or adding NLP strategies. Install through `uv sync --frozen`;
+an independent pip installation of Crawl4AI would pull NLTK back in.
+See [the remediation evidence](docs/NLTK_SECURITY_REMEDIATION.md).
+
 Create `.env` as described above. The direct pipeline reads:
 
 - `GOOGLE_API_KEY` for both operating modes;

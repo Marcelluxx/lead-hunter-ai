@@ -1,5 +1,12 @@
 # Ripresa della modernizzazione — 8 ottobre 2026
 
+Aggiornamento del 9 ottobre, dopo il recupero dell'export: il blocco NLTK è stato
+rimediato nel branch `codex/remove-unused-nltk`, tramite rimozione della dipendenza
+inutilizzata e test del crawler reale. [Causa, limiti e verifiche](NLTK_SECURITY_REMEDIATION.md).
+I riferimenti al gate rosso nei resoconti precedenti descrivono le revisioni delle
+PR #7/#8 prima di questa correzione; rimangono storici fino all'integrazione del
+branch. La versione commerciale conserva le altre milestone aperte.
+
 ## Intento del proprietario
 
 Riprendere la trasformazione di Lead Hunter in un prodotto vendibile senza perdere
@@ -209,7 +216,7 @@ rimangono nel percorso concordato, ma non risultano implementati da questa nota.
 - [x] Scrivere il piano operativo e completare la revisione interna.
 - [x] Completare la revisione del proprietario sul piano e scegliere il metodo di esecuzione (9 ottobre 2026, native).
 - [x] Implementare e verificare il primo sottoprogetto, correggere la review indipendente e pubblicare il branch (PR draft #7).
-- [ ] Risolvere il blocco NLTK del gate Security prima della release commerciale.
+- [x] Implementare la rimozione di NLTK inutilizzato e verificare il crawler nel branch dedicato; integrare solo dopo i gate GitHub della PR.
 - [ ] Recuperare i tre moduli e collegarli ai controlli di accesso comuni.
 
 ## Recupero export senza sito — scelta del 9 ottobre 2026
