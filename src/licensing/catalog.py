@@ -6,7 +6,7 @@ from src.domain.identity import Permission
 class FeatureCatalog:
     def all(self) -> tuple[FeatureDefinition, ...]:
         return (
-            FeatureDefinition("export.no_website", "Export senza sito", "planned",
+            FeatureDefinition("export.no_website", "Export riferimenti senza sito", "available",
                               (Permission.EXPORT_RESULTS,), (Permission.EXPORT_RESULTS,)),
             FeatureDefinition("discovery.rating_filters", "Filtri rating e recensioni", "planned",
                               (Permission.START_JOB,), (Permission.VIEW_RESULTS,)),

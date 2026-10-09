@@ -3,8 +3,8 @@
 Data: 9 ottobre 2026, Europe/Rome.
 
 Stato: specifica scritta approvata dal proprietario il 9 ottobre 2026.
-Il piano operativo viene preparato per revisione; l'implementazione di questo
-sottoprogetto segue la conferma del piano. Metodo di esecuzione già scelto: native.
+Piano operativo approvato il 9 ottobre 2026; implementazione avviata.
+Metodo di esecuzione scelto: native.
 
 Base: `876c839`, core delle licenze nella PR draft #7.
 Branch dedicato: `codex/no-website-reference-export`, derivato da

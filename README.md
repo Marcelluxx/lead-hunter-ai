@@ -55,7 +55,7 @@ The product supports two direct operating modes:
 
 | Mode | Purpose | Current output |
 |---|---|---|
-| `no_website` | Discover businesses without an official website | Transient, attributed Google Places results displayed only for the active session; export is intentionally disabled |
+| `no_website` | Discover businesses without an official website | Transient, attributed Google Places results; optional licensed XLSX containing only Place ID and Google Maps link |
 | `with_website` | Verify official sites, crawl selected pages, run an AI audit, and qualify opportunities | Verified leads exported to a protected XLSX report |
 
 Core capabilities include:
@@ -368,7 +368,23 @@ uv run python main.py \
 ```
 
 This mode intentionally prints transient, attributed results and does not export Google
-Places data.
+Places content. With an active `export.no_website` license, export only reusable references:
+
+```bash
+uv run python main.py --mode no_website --lat 45.4642 --lng 9.1900 --keywords ristorante --export-references --out riferimenti.xlsx
+```
+
+The workbook has exactly two columns, **Place ID** and **Link Google Maps**, deduplicated
+in first-occurrence order. It contains no business names, addresses, phones, ratings,
+reviews or search keywords. References describe the search snapshot; they do not certify
+that a business is still without a website or that its ID remains resolvable. Without
+the flag the base search remains available without a feature license.
+
+In the GUI, run a search without websites, then use **Prepara Excel dei riferimenti**
+and **Scarica Excel dei riferimenti**. Only IDs are retained for this panel across reruns;
+starting a new search clears them. Preparation and delivery each require current access.
+The GUI delivers the authorized workbook inline, without a reusable static server URL.
+CLI saves atomically and preserves an existing file if delivery is denied or saving fails.
 
 ### Crawl and audit businesses with websites
 
@@ -431,9 +447,10 @@ keys separate from authentication; additional feature access always expires.
 Base operations do not require a feature license.
 
 The initial catalog contains `export.no_website`, `discovery.rating_filters`
-and `diagnostics.full`. All three modules are **planned**: a valid grant displays
-“authorized, module not yet available” and cannot execute them. Their restoration
-and commercial worker pipeline remain subsequent milestones.
+and `diagnostics.full`. **Export riferimenti senza sito** is available in local CLI/GUI;
+its shared service is reusable with a current server context. Rating/review filters and
+full diagnostics remain **planned**: a valid grant cannot execute unavailable modules.
+Connecting the commercial worker and job export endpoints remains a subsequent milestone.
 
 See the [feature-license operations manual](docs/FEATURE_LICENSES.md) for encrypted
 key generation, issuance, public trust configuration, activation, server API,

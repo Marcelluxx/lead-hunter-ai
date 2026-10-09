@@ -28,7 +28,7 @@ class ReferenceExportUiTests(unittest.TestCase):
     def setUp(self):
         original_main = sys.modules['__main__']
         self.addCleanup(lambda: sys.modules.__setitem__('__main__', original_main))
-        self.fx = ReferenceExportFixture(self)
+        self.fx = ReferenceExportFixture(self, available=False)
 
     def prepare(self, app):
         app.button(key='reference_export_prepare').click().run()
@@ -52,7 +52,7 @@ class ReferenceExportUiTests(unittest.TestCase):
     def test_expired_revoked_or_missing_license_never_emits_iframe(self):
         for scenario in ['missing', 'expired', 'revoked']:
             with self.subTest(scenario=scenario):
-                fx = ReferenceExportFixture(self)
+                fx = ReferenceExportFixture(self, available=False)
                 if scenario != 'missing':
                     fx.activate()
                 if scenario == 'expired':

@@ -14,7 +14,7 @@ from tests.reference_export_helpers import ReferenceExportFixture
 
 class ReferenceExportCliTests(unittest.TestCase):
     def setUp(self):
-        self.fx = ReferenceExportFixture(self)
+        self.fx = ReferenceExportFixture(self, available=False)
         self.output = io.StringIO()
         redirect = contextlib.redirect_stdout(self.output); redirect.__enter__()
         self.addCleanup(redirect.__exit__, None, None, None)

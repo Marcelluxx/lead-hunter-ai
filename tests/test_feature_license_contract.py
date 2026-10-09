@@ -9,11 +9,14 @@ from tests.license_helpers import license_claims, local_scope, managed_scope
 
 
 class FeatureLicenseContractTests(unittest.TestCase):
-    def test_catalog_declares_three_planned_features(self):
+    def test_catalog_exposes_only_completed_export(self):
         catalog = FeatureCatalog()
         self.assertEqual({x.feature_id for x in catalog.all()},
                          {'export.no_website', 'discovery.rating_filters', 'diagnostics.full'})
-        self.assertTrue(all(x.module_status == 'planned' for x in catalog.all()))
+        self.assertEqual(catalog.get('export.no_website').module_status, 'available')
+        self.assertEqual(catalog.get('export.no_website').label, 'Export riferimenti senza sito')
+        for feature_id in ['discovery.rating_filters', 'diagnostics.full']:
+            self.assertEqual(catalog.get(feature_id).module_status, 'planned')
         diag = catalog.get('diagnostics.full')
         self.assertEqual(diag.execute_permissions, (Permission.START_JOB,))
         self.assertEqual(diag.view_permissions, (Permission.VIEW_AUDIT_LOG,))

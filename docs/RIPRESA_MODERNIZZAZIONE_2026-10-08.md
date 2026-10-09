@@ -230,5 +230,10 @@ La [specifica scritta](superpowers/specs/2026-10-09-export-riferimenti-senza-sit
 - [x] Scrivere e revisionare internamente la specifica.
 - [x] Approvare la specifica scritta (9 ottobre 2026).
 - [x] Preparare e revisionare internamente il [piano operativo](superpowers/plans/2026-10-09-export-riferimenti-senza-sito-implementation-plan.md).
-- [ ] Approvare il piano operativo; mantenere il metodo native già scelto.
+- [x] Approvare il piano operativo (9 ottobre 2026); mantenere il metodo native già scelto.
 - [ ] Implementare, verificare e pubblicare il modulo.
+
+Il modulo è implementato nel branch dedicato: contratto ID, servizio comune con
+verifica a generazione/consegna, salvataggio atomico CLI e consegna inline GUI.
+Sono in corso i gate finali e la review indipendente prima della chiusura della
+milestone. Nessun endpoint job o collegamento worker introdotto.

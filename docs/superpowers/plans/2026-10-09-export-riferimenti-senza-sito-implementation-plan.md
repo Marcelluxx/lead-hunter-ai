@@ -36,7 +36,7 @@
 
 ## Esecuzione e mappa dei file
 
-Metodo **native**, già scelto: implementazione in questa sessione, poi una review indipendente dell'intero branch con un reviewer nuovo sul modello più capace disponibile. Riutilizzare il worktree `expiring-feature-licenses` e il branch `codex/no-website-reference-export`; base del diff export `876c839`. La PR #7 resta il prerequisito di integrazione. Nessuna implementazione prima della revisione del piano.
+Metodo **native**, già scelto: implementazione in questa sessione, poi una review indipendente dell'intero branch con un reviewer nuovo sul modello più capace disponibile. Riutilizzare il worktree `expiring-feature-licenses` e il branch `codex/no-website-reference-export`; base del diff export `876c839`. La PR #7 resta il prerequisito di integrazione. Piano approvato dal proprietario il 9 ottobre 2026; implementazione autorizzata.
 
 Nuovi file: `src/domain/place_references.py` per contratto/proiezione/validazione; `src/application/reference_exports.py` per licenza, serializer privato e salvataggio; `src/ui/reference_export_panel.py` per consegna inline; quattro moduli di test omonimi alle aree sotto e `tests/reference_export_helpers.py` per fixture condivise. File esistenti: container per il wiring, `main.py` e `src/gui.py` per gli ingressi, catalogo per la disponibilità, README/licensing/milestone per le istruzioni.
 
@@ -52,7 +52,7 @@ Comandi di test sotto: PowerShell, uv **0.11.15**. In questo host definire `$exp
 - Produces: `normalize_references(references: Iterable[GooglePlaceReference]) -> tuple[GooglePlaceReference, ...]`; `project_google_place_references(candidates: Iterable[TransientCandidate]) -> tuple[GooglePlaceReference, ...]`.
 - Codici pubblici: `reference_export_invalid`, `reference_export_empty`, `reference_export_limit`, `reference_export_write_failed`; nessun input interpolato nel messaggio.
 
-- [ ] **Step 1: Scrivere i test**, con fixture di candidati reali; proiezione vuota restituisce `()`, normalizzazione vuota solleva `reference_export_empty`. Le asserzioni dei test includono:
+- [x] **Step 1: Scrivere i test**, con fixture di candidati reali; proiezione vuota restituisce `()`, normalizzazione vuota solleva `reference_export_empty`. Le asserzioni dei test includono:
 
 ```python
 def test_projection_retains_only_google_without_site(self):
@@ -83,10 +83,10 @@ def test_mixed_tail_and_empty_are_rejected(self):
 
 Fixture `self.candidates`: Google senza sito `ChIJ_1`, Google con sito, altro provider senza sito e Google con `website_url=""` (quest'ultimo escluso). Aggiungere immutabilità e tentativo di assegnare campi extra al record; non riutilizzare CandidateReference a tre campi.
 
-- [ ] **Step 2: RED**: `& $exportUv run --frozen --group test python -m unittest tests.test_place_references -v`; atteso errore per modulo/interfacce mancanti.
-- [ ] **Step 3: Implementare le interfacce** nel modulo indicato. Validazione in costruzione e nuovamente all'ingresso della normalizzazione; controllare tipo esatto del record e stringa. Consumare al massimo 10.001 riferimenti prima di decidere il limite. La proiezione filtra esplicitamente i candidati, restituisce ID deduplicati e gestisce la selezione vuota senza errore.
-- [ ] **Step 4: GREEN**: ripetere il comando; tutti i test passano, senza rete né filesystem di prodotto.
-- [ ] **Step 5: Commit/push**: aggiungere solo i due file; `git commit -m "feat(export): add minimal Google place reference contract"`, poi `git push`.
+- [x] **Step 2: RED**: `& $exportUv run --frozen --group test python -m unittest tests.test_place_references -v`; atteso errore per modulo/interfacce mancanti.
+- [x] **Step 3: Implementare le interfacce** nel modulo indicato. Validazione in costruzione e nuovamente all'ingresso della normalizzazione; controllare tipo esatto del record e stringa. Consumare al massimo 10.001 riferimenti prima di decidere il limite. La proiezione filtra esplicitamente i candidati, restituisce ID deduplicati e gestisce la selezione vuota senza errore.
+- [x] **Step 4: GREEN**: ripetere il comando; tutti i test passano, senza rete né filesystem di prodotto.
+- [x] **Step 5: Commit/push**: aggiungere solo i due file; `git commit -m "feat(export): add minimal Google place reference contract"`, poi `git push`.
 
 ### Task 2: Servizio autorizzato, workbook reale e scrittura atomica
 
@@ -98,7 +98,7 @@ Fixture `self.candidates`: Google senza sito `ChIJ_1`, Google con sito, altro pr
 - Produces: private `_serialize_reference_workbook(references: tuple[GooglePlaceReference, ...]) -> bytes` nello stesso modulo; `ApplicationContainer.build_local_reference_export_service() -> ReferenceExportService`.
 - Fixture test: `AvailableExportCatalog(FeatureCatalog)` rende disponibile solo export; gli altri moduli restano planned. Riutilizzare `license_claims`, `signed_test_license`, `FakeClock`, `test_key_pair` da `tests/license_helpers.py`; nessuna chiave permanente.
 
-- [ ] **Step 1: Scrivere i test** con LocalLicenseStore reale temporaneo, licenze firmate e contatore delle chiamate alla context factory. Patch del serializer privato solo per introdurre scadenza/revoca durante la generazione; workbook e scrittura sono reali negli altri test.
+- [x] **Step 1: Scrivere i test** con LocalLicenseStore reale temporaneo, licenze firmate e contatore delle chiamate alla context factory. Patch del serializer privato solo per introdurre scadenza/revoca durante la generazione; workbook e scrittura sono reali negli altri test.
 
 ```python
 def test_real_workbook_has_only_reference_content(self):
@@ -136,10 +136,10 @@ def test_server_membership_is_fresh_at_delivery(self):
 
 Ispezionare tutti i membri ZIP del workbook per marker provider/keyword/token e proprietà/commenti/fogli extra; vietare formule e target diversi da HTTPS www.google.com. Fixture ZIP: marker ASCII distinti nei campi scartati della proiezione; token esatto mai presente. Casi aggiuntivi con nomi espliciti: `test_direct_call_denies_missing_tampered_expired_revoked_other_subject_and_missing_feature`, `test_not_before_and_clock_regression_remain_enforced`, `test_empty_invalid_or_over_limit_never_creates_file`, `test_successful_save_reopens_workbook_and_returns_unique_count` (4), `test_write_failure_is_redacted_and_cleans_temp`. Test server con fixture SQLAlchemy esistente, licenza dello scope server, workspace distinto negato; disattivazione utente/workspace e rimozione membership durante serializer negate. Entrambi i controlli devono usare contesti distinti (assert `.context_calls == 2` per export_bytes riuscito).
 
-- [ ] **Step 2: RED**: `& $exportUv run --frozen --group test python -m unittest tests.test_reference_exports -v`; fallimento sulle nuove interfacce.
-- [ ] **Step 3: Implementare le interfacce**. Normalizzare tutto prima del serializer; openpyxl in BytesIO, celle testo, URL tramite `urllib.parse.urlencode(..., quote_via=quote)`, metadati fissi neutrali. Nessun metodo pubblico di export privo di controllo; GUI/CLI chiamano il servizio. `save` controlla EXECUTE, genera, scrive/flush/fsync un temporaneo nella directory destinazione, controlla VIEW immediatamente prima di `os.replace`, restituisce il conteggio; nessun errore viene trasformato in successo. Cleanup su eccezioni/interrupt, errori OSError redatti con `reference_export_write_failed`. Il wiring locale ricrea FeatureContext a ogni controllo, non conserva un booleano di accesso. I chiamanti server forniscono una factory che rilegge scope/principal tramite gli helper esistenti; nessuna API nuova.
-- [ ] **Step 4: GREEN**: comando del task 2 insieme a `tests.test_place_references tests.test_feature_access tests.test_dependency_injection`; tutti passano. I test usano catalogo disponibile di fixture, il catalogo di prodotto resta planned fino al task 5.
-- [ ] **Step 5: Commit/push**: aggiungere i quattro file; `git commit -m "feat(export): protect reference workbooks and atomic delivery"`, poi `git push`.
+- [x] **Step 2: RED**: `& $exportUv run --frozen --group test python -m unittest tests.test_reference_exports -v`; fallimento sulle nuove interfacce.
+- [x] **Step 3: Implementare le interfacce**. Normalizzare tutto prima del serializer; openpyxl in BytesIO, celle testo, URL tramite `urllib.parse.urlencode(..., quote_via=quote)`, metadati fissi neutrali. Nessun metodo pubblico di export privo di controllo; GUI/CLI chiamano il servizio. `save` controlla EXECUTE, genera, scrive/flush/fsync un temporaneo nella directory destinazione, controlla VIEW immediatamente prima di `os.replace`, restituisce il conteggio; nessun errore viene trasformato in successo. Cleanup su eccezioni/interrupt, errori OSError redatti con `reference_export_write_failed`. Il wiring locale ricrea FeatureContext a ogni controllo, non conserva un booleano di accesso. I chiamanti server forniscono una factory che rilegge scope/principal tramite gli helper esistenti; nessuna API nuova.
+- [x] **Step 4: GREEN**: comando del task 2 insieme a `tests.test_place_references tests.test_feature_access tests.test_dependency_injection`; tutti passano. I test usano catalogo disponibile di fixture, il catalogo di prodotto resta planned fino al task 5.
+- [x] **Step 5: Commit/push**: aggiungere i quattro file; `git commit -m "feat(export): protect reference workbooks and atomic delivery"`, poi `git push`.
 
 ### Task 3: Export CLI esplicito con verifica preventiva
 
@@ -149,7 +149,7 @@ Ispezionare tutti i membri ZIP del workbook per marker provider/keyword/token e 
 - Consumes: `ApplicationContainer.build_local_reference_export_service()`, `ReferenceExportService.require_access()`/`.save(...)`, `project_google_place_references(...)`.
 - Produces: `main(argv: Sequence[str] | None = None) -> int`; entry point `raise SystemExit(main())`. Flag argparse `--export-references`, default False; combinazione with_website rifiutata con `parser.error` (exit 2).
 
-- [ ] **Step 1: Scrivere i test** con orchestrator/provider finti e servizio reale firmato; patch soltanto catalogo di fixture fino al task 5. Testare direttamente main e mantenere prova runpy dell'entry point GUI esistente.
+- [x] **Step 1: Scrivere i test** con orchestrator/provider finti e servizio reale firmato; patch soltanto catalogo di fixture fino al task 5. Testare direttamente main e mantenere prova runpy dell'entry point GUI esistente.
 
 ```python
 def test_parser_rejects_reference_flag_with_website(self):
@@ -173,10 +173,10 @@ def test_failed_write_has_no_success_message(self):
 
 Altri test: no flag senza licenza = ricerca base e nessun XLSX; batch vuoto = nessun file/successo export; bare filename sotto OUTPUT_DIR e path esplicito rispettato; default filename mantiene la gestione corrente. Contenuto provider non passato a save. Report with_website, modalità GUI/test-url/examples e Ctrl-C conservano i percorsi esistenti.
 
-- [ ] **Step 2: RED**: `& $exportUv run --frozen --group test python -m unittest tests.test_reference_export_cli -v`; nuovo flag/main mancanti.
-- [ ] **Step 3: Estrarre main e integrare il flag** senza rifattorizzare le pipeline. Costruire/verificare il servizio se richiesto prima di create_orchestrator e prima di get_city_name. Ricerca completata -> proiezione -> save; se proiezione vuota, messaggio nessun riferimento senza file. Dinieghi/configurazione/errori del modulo restituiscono 2 con messaggio redatto; successo 0. Senza flag, indicare la disponibilità dell'export dei soli riferimenti evitando la vecchia affermazione di export totalmente disabilitato.
-- [ ] **Step 4: GREEN**: `& $exportUv run --frozen --group test python -m unittest tests.test_reference_export_cli tests.test_feature_license_ui tests.test_dependency_injection -v`; tutti passano.
-- [ ] **Step 5: Commit/push**: solo main e test; `git commit -m "feat(cli): add licensed no-website reference export"`, poi `git push`.
+- [x] **Step 2: RED**: `& $exportUv run --frozen --group test python -m unittest tests.test_reference_export_cli -v`; nuovo flag/main mancanti.
+- [x] **Step 3: Estrarre main e integrare il flag** senza rifattorizzare le pipeline. Costruire/verificare il servizio se richiesto prima di create_orchestrator e prima di get_city_name. Ricerca completata -> proiezione -> save; se proiezione vuota, messaggio nessun riferimento senza file. Dinieghi/configurazione/errori del modulo restituiscono 2 con messaggio redatto; successo 0. Senza flag, indicare la disponibilità dell'export dei soli riferimenti evitando la vecchia affermazione di export totalmente disabilitato.
+- [x] **Step 4: GREEN**: `& $exportUv run --frozen --group test python -m unittest tests.test_reference_export_cli tests.test_feature_license_ui tests.test_dependency_injection -v`; tutti passano.
+- [x] **Step 5: Commit/push**: solo main e test; `git commit -m "feat(cli): add licensed no-website reference export"`, poi `git push`.
 
 ### Task 4: Stato GUI minimale e consegna inline autorizzata
 
@@ -187,7 +187,7 @@ Altri test: no flag senza licenza = ricerca base e nessun XLSX; batch vuoto = ne
 - Produces: `render_reference_export_panel(*, place_ids: tuple[str, ...], service_factory: Callable[[], ReferenceExportService]) -> None`; helper privato `_reference_download_html(data: bytes) -> str`, con MIME XLSX e filename costante `riferimenti_google_maps.xlsx`.
 - Integrazione: session_state `no_website_place_ids` contiene soltanto tuple[str, ...], default `()`; pannello fuori dal blocco start_btn, mostrato in modalità no_website.
 
-- [ ] **Step 1: Scrivere AppTest** sul pannello reale e sul wiring di `src/gui.py`, con orchestrator finto, firma/store reali e clock controllato. Preservare/restaurare `sys.modules['__main__']` come nei test UI esistenti.
+- [x] **Step 1: Scrivere AppTest** sul pannello reale e sul wiring di `src/gui.py`, con orchestrator finto, firma/store reali e clock controllato. Preservare/restaurare `sys.modules['__main__']` come nei test UI esistenti.
 
 ```python
 def test_inline_payload_is_real_workbook_without_static_url(self):
@@ -211,10 +211,10 @@ def test_expired_revoked_or_missing_license_never_emits_iframe(self):
 
 Testare rerun di successo con sole stringhe ID in stato, contenuti provider/token assenti dall'HTML e nuovo search clearing anche cambiando modalità; base search senza trust continua a funzionare. Aggiungere `test_delivery_rechecks_after_html_construction`: revocare dopo export_bytes mentre l'HTML viene costruito, assert nessun iframe. Su rerun successivo al diniego il vecchio iframe non viene ricreato. Un iframe già ricevuto è materiale già consegnato, non una promessa di cancellazione alla scadenza.
 
-- [ ] **Step 2: RED**: `& $exportUv run --frozen --group test python -m unittest tests.test_reference_export_ui -v`; pannello/stato mancanti.
-- [ ] **Step 3: Implementare pannello e wiring**. Bottone `reference_export_prepare`, testo che specifica solo ID e link; factory invocata durante l'operazione, export_bytes, costruzione HTML da costanti e base64, ulteriore require_access(action=VIEW) immediatamente prima di `streamlit.components.v1.html`. Nessun st.download_button per questo export e nessun file pubblico. Azzerare ID a inizio nuova ricerca, popolarli solo dopo successo della proiezione, nessun payload/licenza/permesso booleano in stato. Gestire LicenseError, SettingsError e ReferenceExportError nel pannello; assenza trust non blocca la ricerca.
-- [ ] **Step 4: GREEN**: comando del task 4 insieme a `tests.test_reference_exports tests.test_feature_license_ui`. Verifica browser su server Streamlit loopback con fixture senza Google: click, decode dei byte inline, nuovo rerun dopo scadenza negato, nessuna registrazione del file nel media manager; non dedurre il requisito solo dal pulsante disabilitato.
-- [ ] **Step 5: Commit/push**: i tre file; `git commit -m "feat(gui): deliver licensed reference exports inline"`, poi `git push`.
+- [x] **Step 2: RED**: `& $exportUv run --frozen --group test python -m unittest tests.test_reference_export_ui -v`; pannello/stato mancanti.
+- [x] **Step 3: Implementare pannello e wiring**. Bottone `reference_export_prepare`, testo che specifica solo ID e link; factory invocata durante l'operazione, export_bytes, costruzione HTML da costanti e base64, ulteriore require_access(action=VIEW) immediatamente prima di `streamlit.components.v1.html`. Nessun st.download_button per questo export e nessun file pubblico. Azzerare ID a inizio nuova ricerca, popolarli solo dopo successo della proiezione, nessun payload/licenza/permesso booleano in stato. Gestire LicenseError, SettingsError e ReferenceExportError nel pannello; assenza trust non blocca la ricerca.
+- [x] **Step 4: GREEN**: comando del task 4 insieme a `tests.test_reference_exports tests.test_feature_license_ui`. Verifica browser su server Streamlit loopback con fixture senza Google: click, decode dei byte inline, nuovo rerun dopo scadenza negato, nessuna registrazione del file nel media manager; non dedurre il requisito solo dal pulsante disabilitato.
+- [x] **Step 5: Commit/push**: i tre file; `git commit -m "feat(gui): deliver licensed reference exports inline"`, poi `git push`.
 
 ### Task 5: Disponibilità, regressioni e istruzioni per l'utente
 
@@ -224,7 +224,7 @@ Testare rerun di successo con sole stringhe ID in stato, contenuti provider/toke
 - Consumes: flussi verificati dei task 1–4.
 - Produces: `FeatureCatalog.get("export.no_website")` con label `Export riferimenti senza sito`, status `available`, execute/view permissions `(Permission.EXPORT_RESULTS,)`; gli altri moduli mantengono i valori precedenti.
 
-- [ ] **Step 1: Aggiornare i test del catalogo**, sostituendo la vecchia aspettativa dei tre moduli planned. Gli ingressi provati con licenze reali non devono dipendere dal catalogo di fixture.
+- [x] **Step 1: Aggiornare i test del catalogo**, sostituendo la vecchia aspettativa dei tre moduli planned. Gli ingressi provati con licenze reali non devono dipendere dal catalogo di fixture.
 
 ```python
 def test_catalog_exposes_only_completed_export(self):
@@ -237,11 +237,11 @@ def test_catalog_exposes_only_completed_export(self):
         self.assertEqual(catalog.get(feature).module_status, "planned")
 ```
 
-- [ ] **Step 2: RED**: `& $exportUv run --frozen --group test python -m unittest tests.test_feature_license_contract tests.test_reference_export_cli tests.test_reference_export_ui -v`; disponibile atteso, planned corrente.
-- [ ] **Step 3: Aggiornare catalogo e documentazione** con esempio CLI `python main.py --mode no_website --lat 45.4642 --lng 9.1900 --keywords ristorante --export-references --out riferimenti.xlsx`, passi GUI/licenza, esattamente due colonne, significato snapshot e necessità di accesso corrente. Segnare completato soltanto il modulo export, worker/filtri/diagnostica e NLTK ancora aperti. Non dichiarare vendibile la release mentre i gate aperti persistono.
+- [x] **Step 2: RED**: `& $exportUv run --frozen --group test python -m unittest tests.test_feature_license_contract tests.test_reference_export_cli tests.test_reference_export_ui -v`; disponibile atteso, planned corrente.
+- [x] **Step 3: Aggiornare catalogo e documentazione** con esempio CLI `python main.py --mode no_website --lat 45.4642 --lng 9.1900 --keywords ristorante --export-references --out riferimenti.xlsx`, passi GUI/licenza, esattamente due colonne, significato snapshot e necessità di accesso corrente. Segnare completato soltanto il modulo export, worker/filtri/diagnostica e NLTK ancora aperti. Non dichiarare vendibile la release mentre i gate aperti persistono.
 - [ ] **Step 4: Verifica completa e review**: `& $exportUv lock --check`; `& $exportUv run --frozen --group test python -m compileall -q src tests main.py`; `& $exportUv run --frozen --group test python -m unittest discover -s tests -v`; `git diff --check`. PASS, nessuna nuova esclusione; eseguire i test PostgreSQL/container obbligatori con le fixture previste da CI, oppure registrare esplicitamente limiti locali e ottenere le prove CI prima dell'integrazione. Richiedere una review indipendente dell'intero diff export, correggere le osservazioni e ripetere i controlli interessati. Audit dipendenze: registrare il risultato reale, nessuna eccezione al blocco noto NLTK.
 - [ ] **Step 5: Commit/push e PR draft**: commit selettivo `feat(export): enable licensed reference export and document usage`, push. Creare una PR draft verso `codex/expiring-feature-licenses` per un diff export circoscritto, dichiarando dipendenza dalla PR #7; attach_artifact dopo creazione. Le pull_request attivano CI su ogni base: verificare Python 3.10–3.13, PostgreSQL, container/packaging sul nuovo HEAD. Nessun merge o release. Registrare esiti/limiti, stato milestone e commit nel resoconto finale.
 
 ## Esito della revisione interna del piano
 
-Copertura: specifica §§1–4 -> task 1–2; §5 -> task 2 e 4; §6 -> task 3–4; §7 -> task 2 e 5; §8 -> prove per task e gate finali. Cinque Review Focus assegnati ai test indicati; interfacce producer/consumer allineate. Nessun recupero delle vecchie colonne Google e nessuna integrazione worker aggiunta. Stato: pronto per revisione del proprietario; esecuzione native preservata, implementazione in attesa della conferma del piano.
+Copertura: specifica §§1–4 -> task 1–2; §5 -> task 2 e 4; §6 -> task 3–4; §7 -> task 2 e 5; §8 -> prove per task e gate finali. Cinque Review Focus assegnati ai test indicati; interfacce producer/consumer allineate. Nessun recupero delle vecchie colonne Google e nessuna integrazione worker aggiunta. Piano approvato il 9 ottobre 2026; task 1–4 implementati, task 5 verifiche finali in corso.
