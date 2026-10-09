@@ -2,8 +2,9 @@
 
 Data: 8 ottobre 2026.
 
-Stato: design conversazionale approvato dal proprietario; specifica scritta pronta
-per revisione. Implementazione e piano operativo non ancora approvati.
+Stato: design conversazionale approvato dal proprietario; specifica scritta
+approvata il 9 ottobre 2026. Il piano operativo è pronto per revisione;
+implementazione e metodo di esecuzione non ancora approvati.
 
 ## 1. Risultato richiesto
 
@@ -385,6 +386,7 @@ campi report individuati nella ricognizione restano candidati da concordare.
 - [Documentazione PyJWT](https://pyjwt.readthedocs.io/en/stable/usage.html).
 - [Documentazione Ed25519 di cryptography](https://cryptography.io/en/latest/hazmat/primitives/asymmetric/ed25519/).
 
-Questa specifica deve essere revisionata dal proprietario. L'approvazione della
-specifica consente di redigere il piano operativo con Superpowers writing-plans;
-il piano verrà poi revisionato scegliendo il metodo di esecuzione prima del codice.
+Il proprietario ha approvato questa specifica il 9 ottobre 2026. È stato redatto il
+[piano operativo](../plans/2026-10-09-autorizzazioni-modulari-a-scadenza-implementation-plan.md)
+con Superpowers writing-plans; il piano deve essere revisionato scegliendo il
+metodo di esecuzione prima del codice.

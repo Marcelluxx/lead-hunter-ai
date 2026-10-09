@@ -24,7 +24,9 @@ separata rimangono quelle del design commerciale precedente.
 Questo file è una ricognizione e una proposta di ordine del lavoro. Il design
 conversazionale del primo sottoprogetto è stato approvato dal proprietario.
 La [specifica scritta](superpowers/specs/2026-10-08-autorizzazioni-modulari-a-scadenza-design.md)
-è pronta per revisione; il piano e l'implementazione non sono ancora approvati.
+è stata approvata il 9 ottobre 2026. Il
+[piano operativo](superpowers/plans/2026-10-09-autorizzazioni-modulari-a-scadenza-implementation-plan.md)
+è pronto per revisione; implementazione e metodo di esecuzione non sono ancora approvati.
 
 ## Baseline recuperata
 
@@ -196,6 +198,7 @@ rimangono nel percorso concordato, ma non risultano implementati da questa nota.
 - [x] Preparare la proposta del primo sottoprogetto e il comportamento alla scadenza.
 - [x] Approvare il design conversazionale del primo sottoprogetto.
 - [x] Scrivere la specifica del primo sottoprogetto.
-- [ ] Completare la revisione del proprietario sulla specifica scritta.
-- [ ] Scrivere e rivedere il piano operativo e scegliere il metodo di esecuzione.
+- [x] Completare la revisione del proprietario sulla specifica scritta (9 ottobre 2026).
+- [x] Scrivere il piano operativo e completare la revisione interna.
+- [ ] Completare la revisione del proprietario sul piano e scegliere il metodo di esecuzione.
 - [ ] Implementare e verificare il primo sottoprogetto.
