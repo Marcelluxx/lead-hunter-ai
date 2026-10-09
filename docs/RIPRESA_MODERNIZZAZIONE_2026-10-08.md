@@ -90,7 +90,7 @@ le vecchie versioni dei file.
 | Esecuzione job commerciali sul server | Aperto: `process_job` termina con `pipeline_not_configured` e libera la prenotazione budget |
 | Correttezza funzionale | Aperta: età dominio, e-commerce/franchise/social, High-Fidelity, CMS, normalizzazione e altri P1 |
 | Qualità audit misurabile | Aperta: citazioni, scoring calibrato, gold set e benchmark |
-| Licensing prodotto | Previsto dal design, senza modulo di emissione/verifica o permessi per funzione |
+| Licensing prodotto | Core di emissione/verifica, scadenze e permessi per funzione implementato nella PR draft #7; gate release NLTK ancora bloccante |
 | Interfaccia clienti e operatività | Aperte: frontend, osservabilità, backup/restore e continuità operativa |
 | Distribuzione commerciale | Aperte: firme immagini, attestazioni, aggiornamenti firmati e rollback |
 
@@ -211,3 +211,23 @@ rimangono nel percorso concordato, ma non risultano implementati da questa nota.
 - [x] Implementare e verificare il primo sottoprogetto, correggere la review indipendente e pubblicare il branch (PR draft #7).
 - [ ] Risolvere il blocco NLTK del gate Security prima della release commerciale.
 - [ ] Recuperare i tre moduli e collegarli ai controlli di accesso comuni.
+
+## Recupero export senza sito — scelta del 9 ottobre 2026
+
+Il proprietario ha scelto i risultati delle ricerche Google Places e usa una
+normale chiave API, senza un accordo di export specifico dichiarato. È stata
+approvata la variante **Excel dei riferimenti: Place ID e link Google Maps**,
+senza duplicati, protetta da `export.no_website`. Questa variante non ripristina
+le colonne Google del vecchio report completo. Il servizio comune è riutilizzabile
+sul server; il collegamento ai job commerciali resta nella milestone del worker.
+
+La [specifica scritta](superpowers/specs/2026-10-09-export-riferimenti-senza-sito-design.md)
+è pronta per revisione del proprietario. Branch dedicato
+`codex/no-website-reference-export`, basato sul core della PR #7.
+
+- [x] Chiarire fonte e variante dell'export.
+- [x] Approvare il comportamento conversazionale.
+- [x] Scrivere e revisionare internamente la specifica.
+- [ ] Approvare la specifica scritta.
+- [ ] Preparare e approvare il piano operativo e il metodo di esecuzione.
+- [ ] Implementare, verificare e pubblicare il modulo.
