@@ -222,12 +222,13 @@ le colonne Google del vecchio report completo. Il servizio comune è riutilizzab
 sul server; il collegamento ai job commerciali resta nella milestone del worker.
 
 La [specifica scritta](superpowers/specs/2026-10-09-export-riferimenti-senza-sito-design.md)
-è pronta per revisione del proprietario. Branch dedicato
+è stata approvata dal proprietario il 9 ottobre 2026. Branch dedicato
 `codex/no-website-reference-export`, basato sul core della PR #7.
 
 - [x] Chiarire fonte e variante dell'export.
 - [x] Approvare il comportamento conversazionale.
 - [x] Scrivere e revisionare internamente la specifica.
-- [ ] Approvare la specifica scritta.
-- [ ] Preparare e approvare il piano operativo e il metodo di esecuzione.
+- [x] Approvare la specifica scritta (9 ottobre 2026).
+- [x] Preparare e revisionare internamente il [piano operativo](superpowers/plans/2026-10-09-export-riferimenti-senza-sito-implementation-plan.md).
+- [ ] Approvare il piano operativo; mantenere il metodo native già scelto.
 - [ ] Implementare, verificare e pubblicare il modulo.

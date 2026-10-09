@@ -2,9 +2,9 @@
 
 Data: 9 ottobre 2026, Europe/Rome.
 
-Stato: comportamento conversazionale approvato dal proprietario; questa specifica
-scritta è pronta per la sua revisione. Piano operativo e implementazione di questo
-sottoprogetto non sono ancora approvati.
+Stato: specifica scritta approvata dal proprietario il 9 ottobre 2026.
+Il piano operativo viene preparato per revisione; l'implementazione di questo
+sottoprogetto segue la conferma del piano. Metodo di esecuzione già scelto: native.
 
 Base: `876c839`, core delle licenze nella PR draft #7.
 Branch dedicato: `codex/no-website-reference-export`, derivato da
@@ -193,7 +193,7 @@ distinto; la specifica non propone eccezioni all'audit o aggiornamenti dipendenz
 
 ## 9. Passo successivo
 
-Dopo l'approvazione di questa specifica scritta, preparare il piano operativo
-con Superpowers writing-plans e farlo revisionare, scegliendo il metodo di
-esecuzione. Solo dopo quel passaggio inizia l'implementazione con commit/push
-dei cambiamenti principali nel branch dedicato.
+Preparare il piano operativo con Superpowers writing-plans e farlo revisionare.
+Conservare il metodo native già scelto dal proprietario. Dopo la conferma del
+piano inizia l'implementazione con commit/push dei cambiamenti principali nel
+branch dedicato.
