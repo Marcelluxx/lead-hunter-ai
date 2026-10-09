@@ -19,7 +19,7 @@ dependencies = [
     "psycopg[binary]>=3.2,<4",
     "pwdlib[argon2]>=0.3,<1",
     "pydantic-settings>=2.10,<3",
-    "pyjwt[crypto]>=2.10,<3",
+    "pyjwt[crypto]>=2.15.1,<3",
     "pyotp>=2.9,<3",
     "python-dotenv>=1,<2",
     "python-multipart>=0.0.20,<1",
@@ -45,3 +45,11 @@ audit = [
 package = false
 default-groups = ["test"]
 required-version = ">=0.11.15,<0.12"
+# Security floors verified by the October 2026 release audit. Keep GitPython
+# within its existing minor line while upgrading the affected transitive packages.
+constraint-dependencies = [
+    "gitpython>=3.1.60,<3.2",
+    "multidict>=6.9.1,<7",
+    "nltk>=3.10.3,<4",
+    "urllib3>=2.8.0,<3",
+]
