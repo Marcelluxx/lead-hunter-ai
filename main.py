@@ -12,13 +12,16 @@ import argparse
 import textwrap
 import subprocess
 from datetime import datetime
-from typing import Dict, List, Callable, Optional
+from pathlib import Path
+from typing import Dict, List, Callable, Optional, Sequence
 
 from src.scraper import LeadScraper
 from src.auditor import LeadAuditor
 from src.application.container import ApplicationContainer
 from src.application.provenance import build_verified_lead
 from src.domain.discovery import TransientCandidate
+from src.domain.feature_licenses import LicenseError
+from src.domain.place_references import ReferenceExportError, project_google_place_references
 from src.domain.provenance import VerifiedLead
 from src.exporter import DataExporter
 from src.crawler import HybridCrawler
@@ -364,7 +367,7 @@ def show_examples():
     sys.exit(0)
 
 
-if __name__ == "__main__":
+def main(argv: Sequence[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if hasattr(sys.stderr, "reconfigure"):
@@ -374,7 +377,7 @@ if __name__ == "__main__":
         runtime_settings = ApplicationSettings.from_environment()
     except SettingsError as exc:
         print(f"Configurazione non valida: {exc}")
-        sys.exit(2)
+        return 2
     parser = argparse.ArgumentParser(
         prog="LeadHunter",
         description="Agente AI B2B per Scraping & Auditing di contatti commerciali.",
@@ -387,6 +390,8 @@ if __name__ == "__main__":
     parser.add_argument("--lng", type=float, help="Longitudine (es. 9.1900 per Milano)")
     parser.add_argument("--keywords", type=str, nargs='+', help="Lista di keyword (es. ristorante bar)")
     parser.add_argument("--out", type=str, default="leads_output.xlsx", help="Nome file Excel in uscita")
+    parser.add_argument("--export-references", action="store_true",
+                        help="Esporta soltanto Place ID e link Maps; richiede la licenza export.no_website")
 
     # Modalità operativa
     parser.add_argument("--mode", type=str, choices=["no_website", "with_website"],
@@ -423,7 +428,9 @@ if __name__ == "__main__":
     parser.add_argument("--gui", action="store_true", help="Avvia l'interfaccia grafica Streamlit")
     parser.add_argument("--examples", action="store_true", help="Mostra gli esempi d'uso ed esci")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    if args.export_references and args.mode != "no_website":
+        parser.error("--export-references richiede --mode no_website")
 
     if args.examples:
         show_examples()
@@ -443,8 +450,8 @@ if __name__ == "__main__":
             )
         except SettingsError as exc:
             print(f"Configurazione non valida: {exc}")
-            sys.exit(2)
-        sys.exit(0)
+            return 2
+        return 0
 
     if args.gui:
         print("🎨 Avvio interfaccia grafica Streamlit...")
@@ -455,18 +462,25 @@ if __name__ == "__main__":
             print("❌ Errore: Impossibile avviare Streamlit. Installa con: pip install streamlit")
         except KeyboardInterrupt:
             print("\n👋 GUI chiusa correttamente.")
-        sys.exit(0)
+        return 0
 
     if not args.lat or not args.lng or not args.keywords:
         print("❌ Errore: --lat, --lng e --keywords sono obbligatori.")
         print("Usa 'python main.py --help' per assistenza.")
-        sys.exit(1)
+        return 1
 
+    reference_export = None
     try:
+        if args.export_references:
+            reference_export = ApplicationContainer(runtime_settings).build_local_reference_export_service()
+            reference_export.require_access()
         orchestrator = create_orchestrator(args.mode, runtime_settings)
+    except LicenseError as exc:
+        print(f"Export riferimenti non autorizzato: {exc.code}")
+        return 2
     except SettingsError as exc:
         print(f"Configurazione non valida: {exc}")
-        sys.exit(2)
+        return 2
 
     print(f"\n🚀 Avvio Lead Hunter V3 CLI — Modalità: {args.mode.upper()}")
     print(f"   Coordinate: {args.lat}, {args.lng}")
@@ -498,12 +512,19 @@ if __name__ == "__main__":
         if results and args.mode == "with_website":
             DataExporter.export_to_excel(results, mode=args.mode, filename=out_file)
             print(f"✅ Completato. {len(results)} leads esportati in {out_file}")
+        elif results and reference_export is not None:
+            references = project_google_place_references(results)
+            if references:
+                count = reference_export.save(references, Path(out_file))
+                print(f"✅ Completato. {count} riferimenti esportati in {out_file}")
+            else:
+                print("⚠️ Nessun riferimento Google senza sito da esportare.")
         elif results:
             attribution = orchestrator.scraper.attribution
             print(f"✅ {len(results)} risultati transitori trovati — dati {attribution.label}.")
             print(
-                "ℹ️ L'esportazione è disabilitata: i risultati senza sito possono "
-                "essere consultati solo durante questa sessione con attribuzione."
+                "ℹ️ I contenuti Google sono transitori. Con --export-references e una "
+                "licenza valida puoi esportare soltanto Place ID e link Google Maps."
             )
             for candidate in results:
                 print(f"   • {candidate.display_name or 'Attività senza nome'}")
@@ -511,6 +532,12 @@ if __name__ == "__main__":
         else:
             print("⚠️ Nessun lead utile trovato nell'area.")
 
+    except (LicenseError, ReferenceExportError) as exc:
+        print(f"Export riferimenti non completato: {exc.code}")
+        return 2
+    except SettingsError as exc:
+        print(f"Configurazione non valida: {exc}")
+        return 2
     except KeyboardInterrupt:
         print("\n⚠️ Interrotto. Esporto dati parziali...")
         if args.mode == "with_website" and orchestrator.all_leads:
@@ -520,3 +547,8 @@ if __name__ == "__main__":
                 mode=args.mode,
                 filename=emergency_file
             )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
