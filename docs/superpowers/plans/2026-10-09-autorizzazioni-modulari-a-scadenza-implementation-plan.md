@@ -10,7 +10,8 @@
 
 **Spec:** [Specifica approvata il 9 ottobre 2026](../specs/2026-10-08-autorizzazioni-modulari-a-scadenza-design.md).
 
-Stato del piano: pronto per revisione; metodo di esecuzione ancora da scegliere. Nessuna attività implementativa è iniziata.
+Stato del piano: approvato il 9 ottobre 2026; esecuzione native in corso sul branch
+`codex/expiring-feature-licenses`, con commit/push dei blocchi principali e review indipendente finale.
 
 ## Global Constraints
 
@@ -419,4 +420,4 @@ in questa chat, con verifiche per task e revisione indipendente del branch al te
 Le attività dipendono strettamente dallo stesso contratto di licenza e contesto;
 questa modalità riduce i passaggi di contesto. L'alternativa è subagent-driven,
 con implementazione e review indipendenti di ogni task prima del successivo.
-Il proprietario deve revisionare il piano e scegliere il metodo prima del codice.
+Il proprietario ha approvato piano e implementazione il 9 ottobre 2026; metodo native.

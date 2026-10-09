@@ -200,5 +200,5 @@ rimangono nel percorso concordato, ma non risultano implementati da questa nota.
 - [x] Scrivere la specifica del primo sottoprogetto.
 - [x] Completare la revisione del proprietario sulla specifica scritta (9 ottobre 2026).
 - [x] Scrivere il piano operativo e completare la revisione interna.
-- [ ] Completare la revisione del proprietario sul piano e scegliere il metodo di esecuzione.
+- [x] Completare la revisione del proprietario sul piano e scegliere il metodo di esecuzione (9 ottobre 2026, native).
 - [ ] Implementare e verificare il primo sottoprogetto.

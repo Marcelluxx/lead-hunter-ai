@@ -12,6 +12,8 @@ check succeeds on the exact commit being released.
 - PostgreSQL migration round trip (`upgrade`, `downgrade`, `upgrade`);
 - API startup and `/health/live` smoke check;
 - full-history Gitleaks scan;
+- real customer-image exclusion of licensing issuer, private keys, grants and local state;
+- expiring feature-license lifecycle, including renewal/revocation and scoped delivery;
 - dependency vulnerability and license policy checks;
 - CycloneDX SBOM generation.
 

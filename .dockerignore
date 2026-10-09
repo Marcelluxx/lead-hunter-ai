@@ -14,3 +14,13 @@ secrets
 tests
 test_output
 output
+tools/license_issuer
+.secrets
+.leadhunter-state
+.superpowers
+src/prompts.py
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.lh

@@ -35,6 +35,7 @@
 - [Local CLI and GUI setup](#local-cli-and-gui-setup)
 - [Configuration reference](#configuration-reference)
 - [Operations manual](#operations-manual)
+- [Expiring feature licenses](#expiring-feature-licenses)
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [Project structure](#project-structure)
@@ -421,6 +422,30 @@ The server exposes routes for:
 Use the OpenAPI interface at `/docs` for the current request/response schemas. Protected
 routes require a bearer access token; workspace permissions and MFA requirements are
 enforced server-side.
+
+## Expiring feature licenses
+
+The common licensing core supports offline local installations and individual
+user/workspace grants on a managed server. Owner-issued Ed25519 signatures use
+keys separate from authentication; additional feature access always expires.
+Base operations do not require a feature license.
+
+The initial catalog contains `export.no_website`, `discovery.rating_filters`
+and `diagnostics.full`. All three modules are **planned**: a valid grant displays
+“authorized, module not yet available” and cannot execute them. Their restoration
+and commercial worker pipeline remain subsequent milestones.
+
+See the [feature-license operations manual](docs/FEATURE_LICENSES.md) for encrypted
+key generation, issuance, public trust configuration, activation, server API,
+renewal, revocation, backups, clock recovery and offline limits. The owner issuer
+and private state are excluded from the customer container.
+
+Quick local status, without Google/OpenRouter credentials:
+
+```powershell
+uv run --frozen python -m src.cli.feature_licenses installation-id
+uv run --frozen python -m src.cli.feature_licenses status
+```
 
 ## Testing
 

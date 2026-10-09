@@ -3,8 +3,8 @@
 Data: 8 ottobre 2026.
 
 Stato: design conversazionale approvato dal proprietario; specifica scritta
-approvata il 9 ottobre 2026. Il piano operativo è pronto per revisione;
-implementazione e metodo di esecuzione non ancora approvati.
+approvata il 9 ottobre 2026. Piano e implementazione approvati il 9 ottobre 2026;
+esecuzione native con Superpowers executing-plans e review indipendente finale.
 
 ## 1. Risultato richiesto
 
@@ -388,5 +388,4 @@ campi report individuati nella ricognizione restano candidati da concordare.
 
 Il proprietario ha approvato questa specifica il 9 ottobre 2026. È stato redatto il
 [piano operativo](../plans/2026-10-09-autorizzazioni-modulari-a-scadenza-implementation-plan.md)
-con Superpowers writing-plans; il piano deve essere revisionato scegliendo il
-metodo di esecuzione prima del codice.
+con Superpowers writing-plans; approvato il 9 ottobre 2026 e in esecuzione native.
