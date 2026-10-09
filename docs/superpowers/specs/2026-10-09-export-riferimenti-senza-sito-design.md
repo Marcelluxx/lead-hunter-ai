@@ -3,7 +3,7 @@
 Data: 9 ottobre 2026, Europe/Rome.
 
 Stato: specifica scritta approvata dal proprietario il 9 ottobre 2026.
-Piano operativo approvato il 9 ottobre 2026; implementazione avviata.
+Piano operativo approvato il 9 ottobre 2026; implementazione pubblicata nella PR draft #8.
 Metodo di esecuzione scelto: native.
 
 Base: `876c839`, core delle licenze nella PR draft #7.
@@ -193,7 +193,8 @@ distinto; la specifica non propone eccezioni all'audit o aggiornamenti dipendenz
 
 ## 9. Passo successivo
 
-Preparare il piano operativo con Superpowers writing-plans e farlo revisionare.
-Conservare il metodo native già scelto dal proprietario. Dopo la conferma del
-piano inizia l'implementazione con commit/push dei cambiamenti principali nel
-branch dedicato.
+Il modulo è implementato e la review indipendente è stata recepita con test
+RED→GREEN. Verificare i gate della PR draft #8 sull'HEAD finale; l'integrazione
+dipende dalla PR #7 e il gate NLTK resta bloccante per la release commerciale.
+I recuperi successivi sono filtri rating/recensioni e diagnostica completa,
+seguiti dal collegamento della pipeline commerciale al worker.

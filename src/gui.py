@@ -30,7 +30,7 @@ from main import create_orchestrator
 from src.settings import ApplicationSettings, SettingsError
 from src.application.container import ApplicationContainer
 from src.domain.feature_licenses import LicenseError
-from src.domain.place_references import project_google_place_references
+from src.domain.place_references import ReferenceExportError, project_google_place_references
 from src.ui.feature_license_panel import render_feature_license_panel
 from src.ui.reference_export_panel import render_reference_export_panel
 from src.exporter import DataExporter
@@ -444,8 +444,11 @@ if start_btn:
 
             # --- RISULTATI ---
             if mode_key == "no_website":
-                references = project_google_place_references(results)
-                st.session_state.no_website_place_ids = tuple(reference.place_id for reference in references)
+                try:
+                    references = project_google_place_references(results)
+                    st.session_state.no_website_place_ids = tuple(reference.place_id for reference in references)
+                except ReferenceExportError as exc:
+                    st.warning(f"Export riferimenti non disponibile per questa ricerca: {exc.code}")
             total_elapsed = format_elapsed(time.time() - pipeline_start)
             
             if mode_key == "with_website":

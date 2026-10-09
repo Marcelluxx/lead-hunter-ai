@@ -231,9 +231,14 @@ La [specifica scritta](superpowers/specs/2026-10-09-export-riferimenti-senza-sit
 - [x] Approvare la specifica scritta (9 ottobre 2026).
 - [x] Preparare e revisionare internamente il [piano operativo](superpowers/plans/2026-10-09-export-riferimenti-senza-sito-implementation-plan.md).
 - [x] Approvare il piano operativo (9 ottobre 2026); mantenere il metodo native già scelto.
-- [ ] Implementare, verificare e pubblicare il modulo.
+- [x] Implementare, verificare e pubblicare il modulo ([PR draft #8](https://github.com/Marcelluxx/lead-hunter-ai/pull/8)).
 
 Il modulo è implementato nel branch dedicato: contratto ID, servizio comune con
 verifica a generazione/consegna, salvataggio atomico CLI e consegna inline GUI.
-Sono in corso i gate finali e la review indipendente prima della chiusura della
-milestone. Nessun endpoint job o collegamento worker introdotto.
+La review indipendente ha individuato una regressione della ricerca base GUI,
+corretta con test prima/dopo: input non esportabile non nasconde i risultati.
+I gate Python 3.10–3.13, PostgreSQL e container sono passati sul codice precedente
+alla correzione; gli stessi gate devono passare anche sull'HEAD finale prima
+dell'integrazione. [Esiti e decisioni](REFERENCE_EXPORT_IMPLEMENTATION_REVIEW.md).
+Nessun endpoint job o collegamento worker introdotto. Integrazione della PR #7
+e blocco NLTK rimangono aperti; questo completamento non è una release commerciale.

@@ -134,3 +134,22 @@ class ReferenceExportUiTests(unittest.TestCase):
         app.run(); app.radio[0].set_value('Con Sito Web + Audit').run()
         self.start_search(app)
         self.assertEqual(app.session_state['no_website_place_ids'], ())
+
+    def test_export_validation_does_not_hide_base_results(self):
+        from dataclasses import replace
+        candidate = TransientCandidate('google_places', 'A/B', 'discard-business', None,
+            datetime.now(timezone.utc), ProviderAttribution('google_places', 'discard-provider',
+                                                          'https://example.test/terms', 'https://example.test/privacy'))
+        for results, code in [([candidate], 'reference_export_invalid'),
+                               ([replace(candidate, external_id=f'A{i}') for i in range(10001)],
+                                'reference_export_limit')]:
+            with self.subTest(code=code):
+                app = self.search_app(results)
+                app.session_state['no_website_place_ids'] = ('old',)
+                app.run(); self.start_search(app)
+                self.assertEqual(app.session_state['no_website_place_ids'], ())
+                self.assertEqual(len(app.dataframe), 1)
+                self.assertEqual(len(app.dataframe[0].value), len(results))
+                self.assertEqual(len(app.error), 0)
+                self.assertTrue(any(code in warning.value for warning in app.warning))
+                self.assertEqual(len(app.get('iframe')), 0)
