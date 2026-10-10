@@ -31,11 +31,17 @@ from .security import (
     build_untrusted_pages_payload,
     sanitize_untrusted_text,
 )
+from .application.diagnostics import DiagnosticError
+from .domain.feature_licenses import LicenseError
 
 logger = logging.getLogger(__name__)
 
 
 class LeadAuditor:
+    def _diagnostic_error(self, stage, exc):
+        if self.diagnostics is not None:
+            self.diagnostics.capture('error', {'stage': stage, 'code': 'llm_call_failed', 'error_type': type(exc).__name__})
+
     def __init__(
         self,
         *,
@@ -45,7 +51,11 @@ class LeadAuditor:
         model_free: str,
         client: Any = None,
         prompt_provider: AuditPromptProvider | None = None,
+        diagnostics=None,
     ):
+        self.diagnostics = diagnostics
+        if diagnostics is not None:
+            diagnostics.require_execute()
         if client is None and not api_key.strip():
             raise ValueError("OPENROUTER_API_KEY mancante.")
         self.client = client or OpenAI(
@@ -143,6 +153,8 @@ class LeadAuditor:
         configurato in LLM_MODEL_FREE per ridurre i token inutili ed eliminare codice
         broken o boilerplate non necessario.
         """
+        if self.diagnostics is not None:
+            self.diagnostics.require_execute()
         safe_url = sanitize_untrusted_text(page_url, max_length=2048).text
         label = self._label_page(safe_url)
         sanitized_input = sanitize_untrusted_text(content, max_length=25_000)
@@ -163,6 +175,9 @@ class LeadAuditor:
         )
 
         for attempt in range(max_retries):
+            if self.diagnostics is not None:
+                self.diagnostics.capture('llm_request', {'stage': 'page_clean', 'source': safe_url,
+                    'model': self.model_free, 'content': self.prompt_provider.system_page_clean + '\n' + UNTRUSTED_DATA_SYSTEM_RULES + '\n' + user_prompt})
             try:
                 response = self.client.chat.completions.create(
                     model=self.model_free,
@@ -176,23 +191,28 @@ class LeadAuditor:
                     temperature=0.3
                 )
                 raw_response = response.choices[0].message.content
+                if self.diagnostics is not None:
+                    self.diagnostics.capture('llm_response', {'stage': 'page_clean', 'source': safe_url, 'content': raw_response})
                 if not raw_response:
                     continue
                 # Rimuove spazi finali di riga, linee vuote inutili per l'efficienza massima dei token
                 sanitized_output = sanitize_untrusted_text(raw_response, max_length=8000)
                 lines = [line.rstrip() for line in sanitized_output.text.splitlines() if line.strip()]
                 return "\n".join(lines)
+            except (LicenseError, DiagnosticError):
+                raise
             except openai.RateLimitError:
                 wait = (3 ** attempt) + random.uniform(1, 3)
                 if attempt < max_retries - 1:
-                    logger.warning(f"Rate limit per pulizia pagina '{page_url}', attendo {wait:.1f}s...")
+                    logger.warning("Rate limit per pulizia pagina, attendo %.1fs", wait)
                     time.sleep(wait)
             except Exception as e:
-                logger.error(f"Errore pulizia pagina con LLM gratuito '{page_url}': {e}")
+                self._diagnostic_error('page_clean', e)
+                logger.error("Errore pulizia pagina con LLM gratuito (%s)", type(e).__name__)
                 break
 
         # Fallback al testo originale se la chiamata fallisce
-        logger.warning(f"Fallback al testo originale per la pagina '{page_url}'")
+        logger.warning("Fallback al testo originale per la pagina")
         orig_lines = [line.rstrip() for line in sanitized_input.text.splitlines() if line.strip()]
         return "\n".join(orig_lines)[:4000]
 
@@ -212,6 +232,8 @@ class LeadAuditor:
         Audit completo del sito web tramite LLM.
         Output: website_score, diagnosis, site_brief, cold_message.
         """
+        if self.diagnostics is not None:
+            self.diagnostics.require_execute()
         ensure_auditable_pages(crawl_pages)
 
         # Pulisci le pagine in parallelo usando ThreadPoolExecutor
@@ -229,8 +251,11 @@ class LeadAuditor:
                     future = future_to_url[url]
                     try:
                         cleaned_crawl_pages[url] = future.result()
+                    except (LicenseError, DiagnosticError):
+                        raise
                     except Exception as exc:
-                        logger.error(f"Eccezione durante la pulizia parallela per {url}: {exc}")
+                        self._diagnostic_error('page_clean', exc)
+                        logger.error("Eccezione durante la pulizia parallela (%s)", type(exc).__name__)
                         # Fallback
                         safe_fallback = sanitize_untrusted_text(
                             crawl_pages[url], max_length=4000
@@ -263,6 +288,9 @@ class LeadAuditor:
         )
 
         for attempt in range(max_retries):
+            if self.diagnostics is not None:
+                self.diagnostics.capture('llm_request', {'stage': 'website_audit', 'model': self.model,
+                    'content': self.prompt_provider.system_website_audit + '\n' + UNTRUSTED_DATA_SYSTEM_RULES + '\n' + prompt})
             try:
                 response = self.client.chat.completions.create(
                     model=self.model,
@@ -277,6 +305,8 @@ class LeadAuditor:
                 )
 
                 raw = response.choices[0].message.content
+                if self.diagnostics is not None:
+                    self.diagnostics.capture('llm_response', {'stage': 'website_audit', 'content': raw})
                 data = json.loads(self._clean_json_output(raw))
                 if isinstance(data, dict):
                     data = {
@@ -288,17 +318,21 @@ class LeadAuditor:
                 validated = WebsiteAuditResult.from_llm(data)
                 return validated.to_public_dict()
 
+            except (LicenseError, DiagnosticError):
+                raise
             except openai.RateLimitError:
                 wait = (3 ** attempt) + random.uniform(1, 3)
                 if attempt < max_retries - 1:
                     logger.warning(f"Rate limit audit sito '{business_name}', attendo {wait:.1f}s...")
                     time.sleep(wait)
             except (json.JSONDecodeError, AuditValidationError) as e:
-                logger.warning(f"Output audit non valido per {safe_business_name}: {e}")
+                self._diagnostic_error('website_audit', e)
+                logger.warning("Output audit non valido (%s)", type(e).__name__)
                 if attempt == max_retries - 1:
                     break
             except Exception as e:
-                logger.error(f"Errore audit sito {business_name}: {e}")
+                self._diagnostic_error('website_audit', e)
+                logger.error("Errore audit sito (%s)", type(e).__name__)
                 break
 
         return {
