@@ -40,6 +40,28 @@ from src.config import (
     SOCIAL_MEDIA_DOMAINS, OUTPUT_DIR,
 )
 from src.settings import ApplicationSettings, SettingsError
+from functools import wraps
+from src.application.rating_filters import RatingFilterGuard
+from src.domain.rating_filters import RatingFilterCriteria
+
+
+def _result_operation(method):
+    @wraps(method)
+    def guarded(self, *args, **kwargs):
+        self.all_leads.clear()
+        self.transient_results.clear()
+        try:
+            if self.result_origin is not None:
+                self.result_origin.require_execute()
+            result = method(self, *args, **kwargs)
+            self.require_result_view()
+            return result
+        except BaseException:
+            if self.result_origin is not None:
+                self.all_leads.clear()
+                self.transient_results.clear()
+            raise
+    return guarded
 
 
 class LeadHunterOrchestrator:
@@ -51,16 +73,25 @@ class LeadHunterOrchestrator:
         *,
         scraper: LeadScraper,
         auditor: Optional[LeadAuditor] = None,
+        result_origin: RatingFilterGuard | None = None,
     ):
         self.mode = mode
         self.scraper = scraper
         self.auditor = auditor
+        if result_origin is not None and not isinstance(result_origin, RatingFilterGuard):
+            raise ValueError('rating_filter_invalid')
+        self.result_origin = result_origin
         self.all_leads: Dict[str, VerifiedLead] = {}
         self.transient_results: List[TransientCandidate] = []
+
+    def require_result_view(self) -> None:
+        if self.result_origin is not None:
+            self.result_origin.require_view()
 
     # ==========================================
     # MODALITÀ 1: LEAD SENZA SITO WEB
     # ==========================================
+    @_result_operation
     def run_no_website(
         self,
         lat: float, lng: float, keywords: List[str],
@@ -102,11 +133,10 @@ class LeadHunterOrchestrator:
     # ==========================================
     # MODALITÀ 2: LEAD CON SITO WEB + AUDIT
     # ==========================================
+    @_result_operation
     def run_with_website(
         self,
         lat: float, lng: float, keywords: List[str],
-        min_rating: float = MIN_RATING,
-        max_reviews: int = MAX_REVIEWS,
         min_age: int = MIN_BUSINESS_AGE_YEARS,
         max_pages: int = MAX_CRAWL_PAGES,
         token_mode: str = DEFAULT_TOKEN_MODE,
@@ -203,9 +233,16 @@ class LeadHunterOrchestrator:
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
+
+        def authorized_audit(**payload):
+            if self.result_origin is not None:
+                self.result_origin.require_execute()
+            return self.auditor.audit_website(**payload)
         
         try:
             for idx, (place, keyword) in enumerate(filtered_places, 1):
+                if self.result_origin is not None:
+                    self.result_origin.require_execute()
                 p_id = place.external_id
                 website = place.website_url or ""
                 
@@ -254,12 +291,14 @@ class LeadHunterOrchestrator:
                         "rating": 0,
                         "review_count": 0,
                     }
-                    future = audit_executor.submit(self.auditor.audit_website, **audit_payload)
+                    future = audit_executor.submit(authorized_audit, **audit_payload)
                     audit_futures[future] = (p_id, crawl_res, keyword)
                     
                     if on_audit_progress:
                         on_audit_progress(audits_completed, total_to_audit)
                         
+                except LicenseError:
+                    raise
                 except Exception as e:
                     log(f"      ❌ Errore crawling ({type(e).__name__})")
 
@@ -274,15 +313,20 @@ class LeadHunterOrchestrator:
                         )
                         audits_completed += 1
                         log("   🧠 Audit completato su dati del sito ufficiale")
+                    except LicenseError:
+                        raise
                     except Exception as e:
-                        log(f"   ❌ Errore Audit per {pid}: {e}")
+                        log(f"   ❌ Errore Audit ({type(e).__name__})")
                         audits_completed += 1
                     if on_audit_progress:
                         on_audit_progress(audits_completed, total_to_audit)
 
         finally:
-            loop.run_until_complete(crawler.close())
-            loop.close()
+            try:
+                loop.run_until_complete(crawler.close())
+            finally:
+                loop.close()
+                audit_executor.shutdown(wait=True)
             
         if audit_futures:
             log(f"\n⏳ Attesa completamento di {len(audit_futures)} audit AI in background...")
@@ -295,14 +339,15 @@ class LeadHunterOrchestrator:
                     )
                     audits_completed += 1
                     log("   🧠 Audit completato su dati del sito ufficiale")
+                except LicenseError:
+                    raise
                 except Exception as e:
-                    log(f"   ❌ Errore Audit per {pid}: {e}")
+                    log(f"   ❌ Errore Audit ({type(e).__name__})")
                     audits_completed += 1
                     
                 if on_audit_progress:
                     on_audit_progress(audits_completed, total_to_audit)
 
-        audit_executor.shutdown(wait=True)
         log(f"\n✅ Pipeline completata: {len(self.all_leads)} lead verificati su {len(all_places)}.")
         return [self.all_leads[p_id] for p_id in valid_lead_ids if p_id in self.all_leads]
 
@@ -328,15 +373,26 @@ class LeadHunterOrchestrator:
 def create_orchestrator(
     mode: str,
     settings: Optional[ApplicationSettings] = None,
+    *,
+    rating_criteria: RatingFilterCriteria | None = None,
+    rating_guard: RatingFilterGuard | None = None,
 ) -> LeadHunterOrchestrator:
     """Build provider dependencies at an explicit application boundary."""
+    if ((rating_criteria is not None and not isinstance(rating_criteria, RatingFilterCriteria)) or
+        (rating_guard is not None and (rating_criteria is None or not isinstance(rating_guard, RatingFilterGuard)))):
+        raise ValueError('rating_filter_invalid')
     runtime_settings = settings or ApplicationSettings.from_environment()
-    runtime_settings.require_pipeline(mode)
     container = ApplicationContainer(runtime_settings)
+    if rating_criteria is not None:
+        rating_guard = rating_guard or container.build_local_rating_filter_guard()
+        rating_guard.require_execute()
+    runtime_settings.require_pipeline(mode)
     return LeadHunterOrchestrator(
         mode=mode,
-        scraper=container.build_scraper(),
+        scraper=(container.build_scraper(rating_criteria=rating_criteria, rating_guard=rating_guard)
+                 if rating_criteria is not None else container.build_scraper()),
         auditor=container.build_auditor() if mode == "with_website" else None,
+        result_origin=rating_guard,
     )
 
 
@@ -499,8 +555,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.mode == "with_website":
             results = orchestrator.run(
                 args.lat, args.lng, args.keywords,
-                min_rating=args.min_rating,
-                max_reviews=args.max_reviews,
                 min_age=args.min_age,
                 max_pages=args.max_pages,
                 token_mode=args.token_mode,

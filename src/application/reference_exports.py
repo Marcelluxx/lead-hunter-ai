@@ -13,6 +13,7 @@ from openpyxl import Workbook
 from openpyxl.packaging.core import DocumentProperties
 
 from src.application.feature_access import FeatureAccessService
+from src.application.rating_filters import RatingFilterGuard
 from src.domain.feature_licenses import FeatureAction, FeatureContext
 from src.domain.place_references import GooglePlaceReference, ReferenceExportError, normalize_references
 
@@ -51,14 +52,22 @@ class ReferenceExportService:
     def require_access(self, *, action: FeatureAction = FeatureAction.EXECUTE) -> None:
         self.access.require(self.context_factory(), 'export.no_website', action=action)
 
-    def export_bytes(self, references: Iterable[GooglePlaceReference]) -> bytes:
+    def export_bytes(self, references: Iterable[GooglePlaceReference], *,
+                     origin: RatingFilterGuard | None = None) -> bytes:
+        if origin is not None:
+            origin.require_view()
         self.require_access()
         normalized = normalize_references(references)
         data = _serialize_reference_workbook(normalized)
         self.require_access(action=FeatureAction.VIEW)
+        if origin is not None:
+            origin.require_view()
         return data
 
-    def save(self, references: Iterable[GooglePlaceReference], destination: Path) -> int:
+    def save(self, references: Iterable[GooglePlaceReference], destination: Path, *,
+             origin: RatingFilterGuard | None = None) -> int:
+        if origin is not None:
+            origin.require_view()
         self.require_access()
         normalized = normalize_references(references)
         data = _serialize_reference_workbook(normalized)
@@ -74,6 +83,8 @@ class ReferenceExportService:
                     handle.flush()
                     os.fsync(handle.fileno())
                 self.require_access(action=FeatureAction.VIEW)
+                if origin is not None:
+                    origin.require_view()
                 os.replace(temporary, destination)
                 return len(normalized)
             finally:

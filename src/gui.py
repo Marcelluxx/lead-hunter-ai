@@ -429,8 +429,6 @@ if start_btn:
                         st.session_state.target_coords["lat"],
                         st.session_state.target_coords["lng"],
                         keywords,
-                        min_rating=min_rating,
-                        max_reviews=max_reviews,
                         min_age=min_age,
                         max_pages=max_pages,
                         token_mode=token_mode_str,

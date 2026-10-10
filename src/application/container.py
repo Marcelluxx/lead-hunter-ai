@@ -10,6 +10,8 @@ from ..config import FIELD_MASK
 from ..prompting import AuditPromptProvider
 from ..scraper import LeadScraper
 from ..settings import ApplicationSettings
+from ..domain.rating_filters import RatingFilterCriteria
+from .rating_filters import RatingFilterGuard, RatingFilteredDiscoveryService
 
 
 @dataclass(frozen=True)
@@ -21,14 +23,24 @@ class ApplicationContainer:
     def from_environment(cls) -> "ApplicationContainer":
         return cls(ApplicationSettings.from_environment())
 
-    def build_scraper(self) -> LeadScraper:
+    def build_scraper(self, *, rating_criteria: RatingFilterCriteria | None = None,
+                      rating_guard: RatingFilterGuard | None = None) -> LeadScraper:
+        if ((rating_criteria is None) != (rating_guard is None) or
+            (rating_criteria is not None and (not isinstance(rating_criteria, RatingFilterCriteria)
+                                             or not isinstance(rating_guard, RatingFilterGuard)))):
+            raise ValueError('rating_filter_invalid')
+        if rating_guard is not None:
+            rating_guard.require_execute()
         self.settings.require_google()
-        return LeadScraper(
+        scraper = LeadScraper(
             api_key=self.settings.google_api_key,
             places_url=self.settings.google_places_url,
             geocoding_url=self.settings.google_geocoding_url,
             field_mask=FIELD_MASK,
         )
+        if rating_guard is not None:
+            scraper.provider = RatingFilteredDiscoveryService(scraper.provider, rating_criteria, rating_guard)
+        return scraper
 
     def build_auditor(self) -> LeadAuditor:
         self.settings.require_openrouter()
@@ -39,7 +51,6 @@ class ApplicationContainer:
             model_free=self.settings.llm_model_free,
             prompt_provider=self.prompt_provider,
         )
-
     def build_local_license_service(self):
         from .feature_licenses import LicenseService
         from .feature_access import FeatureAccessService
@@ -65,3 +76,9 @@ class ApplicationContainer:
         scope, _, access = self.build_local_license_service()
         return ReferenceExportService(access, lambda: FeatureContext(
             scope, frozenset(Permission), False, True))
+
+    def build_local_rating_filter_guard(self) -> RatingFilterGuard:
+        from ..domain.feature_licenses import FeatureContext
+        from ..domain.identity import Permission
+        scope, _, access = self.build_local_license_service()
+        return RatingFilterGuard(access, lambda: FeatureContext(scope, frozenset(Permission), False, True))
