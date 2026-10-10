@@ -58,6 +58,9 @@ class FeatureLicenseUiTests(unittest.TestCase):
                                                        app.success, app.error) for item in group)
 
     def test_planned_feature_shows_granted_but_unavailable(self):
+        from src.application.feature_access import FeatureAccessService
+        from tests.test_feature_access import PlannedDiagnosticCatalog
+        self.access = FeatureAccessService(self.licenses, PlannedDiagnosticCatalog())
         self.licenses.import_license(self.scope, self.token)
         app = self.app().run()
         self.assertEqual(len(app.exception), 0)

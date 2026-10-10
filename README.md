@@ -457,7 +457,7 @@ Base operations do not require a feature license.
 The initial catalog contains `export.no_website`, `discovery.rating_filters`
 and `diagnostics.full`. **Export riferimenti senza sito** is available in local CLI/GUI;
 its shared service is reusable with a current server context. Rating/review filters and
-full diagnostics remain **planned**: a valid grant cannot execute unavailable modules.
+full diagnostics are available in local CLI/GUI. Unavailable modules remain blocked even with a valid grant.
 Connecting the commercial worker and job export endpoints remains a subsequent milestone.
 
 See the [feature-license operations manual](docs/FEATURE_LICENSES.md) for encrypted
@@ -767,8 +767,7 @@ an existing destination. GUI downloads are delivered inline after current checks
 Previously delivered files/screenshots cannot be withdrawn retroactively.
 
 The shared service also accepts current server authorization contexts; this does
-not connect the commercial job worker or add endpoints. `diagnostics.full` remains
-planned. Offline access still depends on the guarded local clock and imported
+not connect the commercial job worker or add endpoints. Offline access still depends on the guarded local clock and imported
 revocation state. Google pricing, quotas and contract depend on the deployment;
 the commercial/legal review in the roadmap remains open. No dependencies or
 database migrations were added for this module.
@@ -813,3 +812,32 @@ or report-service commercial terms.
 <p align="center">
   Built and maintained by <a href="https://github.com/Marcelluxx">Marcelluxx</a>.
 </p>
+
+## Licensed full diagnostics
+
+Use the dedicated **Diagnostica completa riservata** panel in the internal GUI,
+or run a single independent website diagnostic with a grant for `diagnostics.full`:
+
+```bash
+uv run --frozen python main.py --test-url https://example.com --full-diagnostics --max-pages 3 --diagnostic-retention-hours 4
+```
+
+The ZIP includes redacted loaded HTML, accessible CSS rules, processed text,
+evidence, full AI prompts/responses and the final public report. No extra CSS
+requests or cross-origin bypasses are made; inaccessible stylesheets are recorded.
+Google Places responses/metrics, authentication context and keys are excluded.
+Diagnostic data stays separate from customer reports and is never executed as HTML.
+
+Limits: 1–20 pages, 1 MiB per record, 8 MiB per run and 256 records. Exceeding a
+limit fails explicitly. Retention is 1–168 hours (default 24), capped by the license.
+Fresh authorization guards browser/AI attempts, captures and delivery. Server use
+also requires current permissions and MFA. Revocation or expiry stops the operation.
+
+CLI saves atomically under `test_output/private/<UUID>.zip`; `--diagnostic-output`
+selects a custom path. Only recognized expired UUID archives in that dedicated
+folder are purged on the next authorized default-output run. Custom files and
+symlinks are excluded. GUI downloads use an inline ZIP with a final authorization
+check and retain no diagnostic bytes in application session state. Files already
+saved/downloaded cannot be recalled: delete them according to the manifest deadline.
+The basic URL tester remains available separately. Commercial worker integration
+is the next roadmap item.

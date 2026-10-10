@@ -19,6 +19,12 @@ class AvailableCatalog(FeatureCatalog):
         return tuple(replace(item, module_status='available') for item in super().all())
 
 
+class PlannedDiagnosticCatalog(FeatureCatalog):
+    def all(self):
+        return tuple(replace(item, module_status='planned') if item.feature_id == 'diagnostics.full' else item
+                     for item in super().all())
+
+
 class FeatureAccessTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
@@ -69,7 +75,7 @@ class FeatureAccessTests(unittest.TestCase):
 
     def test_planned_feature_is_not_executable(self):
         self.activate()
-        access = FeatureAccessService(self.licenses, FeatureCatalog())
+        access = FeatureAccessService(self.licenses, PlannedDiagnosticCatalog())
         with self.assertRaises(LicenseError) as caught:
             access.require(self.context, 'diagnostics.full')
         self.assertEqual(caught.exception.code, 'feature_unavailable')

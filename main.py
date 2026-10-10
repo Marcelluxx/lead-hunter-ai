@@ -472,6 +472,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     # Flag speciali
     parser.add_argument("--test-url", type=str, help="Esegue un test diagnostico completo su un singolo URL")
+    parser.add_argument('--full-diagnostics', action='store_true', help='Diagnostica completa riservata con licenza valida')
+    parser.add_argument('--diagnostic-output', type=str, help='Percorso del ZIP diagnostico privato')
     parser.add_argument(
         "--save-diagnostic-artifacts",
         action="store_true",
@@ -487,6 +489,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--examples", action="store_true", help="Mostra gli esempi d'uso ed esci")
 
     args = parser.parse_args(argv)
+    if args.full_diagnostics and (not args.test_url or args.gui or args.examples or args.save_diagnostic_artifacts):
+        parser.error('--full-diagnostics richiede --test-url ed è incompatibile con --gui, --examples e --save-diagnostic-artifacts')
+    if args.diagnostic_output and not args.full_diagnostics:
+        parser.error('--diagnostic-output richiede --full-diagnostics')
+    if args.full_diagnostics and (not 1 <= args.diagnostic_retention_hours <= 168 or not 1 <= args.max_pages <= 20):
+        print('Parametri diagnostici non validi: diagnostic_invalid')
+        return 2
     thresholds_present = args.min_rating is not None or args.max_reviews is not None
     if (args.rating_filters or thresholds_present) and (args.test_url or args.gui or args.examples):
         parser.error('Le opzioni rating non sono compatibili con --test-url, --gui o --examples')
@@ -514,6 +523,30 @@ def main(argv: Sequence[str] | None = None) -> int:
         show_examples()
 
     if args.test_url:
+        if args.full_diagnostics:
+            from src.application.diagnostics import DiagnosticError
+            from src.application.diagnostic_runner import run_full_diagnostic
+            from src.application.diagnostics import purge_diagnostic_archives
+            try:
+                container = ApplicationContainer(runtime_settings)
+                diagnostic = container.build_local_diagnostic_session(retention_hours=args.diagnostic_retention_hours)
+                if not args.diagnostic_output:
+                    purge_diagnostic_archives(Path('test_output/private'))
+                auditor = container.build_auditor(diagnostics=diagnostic)
+                crawler = HybridCrawler(max_pages=args.max_pages, token_mode=args.token_mode,
+                                        headless=not args.no_headless, diagnostics=diagnostic)
+                run_full_diagnostic(args.test_url, session=diagnostic, crawler=crawler, auditor=auditor)
+                destination = Path(args.diagnostic_output) if args.diagnostic_output else Path('test_output/private') / f'{diagnostic.run_id}.zip'
+                diagnostic.save(destination)
+                diagnostic.require_view()
+                print('Diagnostica salvata: archivio privato completato.')
+                return 0
+            except (LicenseError, SettingsError) as exc:
+                print(f'Diagnostica non disponibile: {getattr(exc, "code", "configuration_invalid")}')
+                return 2
+            except (Exception, KeyboardInterrupt):
+                print('Diagnostica non disponibile: diagnostic_run_failed')
+                return 1
         from src.tester import run_url_test
         try:
             container = ApplicationContainer(runtime_settings)
