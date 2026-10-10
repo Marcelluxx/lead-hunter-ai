@@ -58,6 +58,24 @@ class FullDiagnosticTests(unittest.TestCase):
         with self.assertRaisesRegex(TypeError, 'runtime_diagnostics_not_serializable'):
             pickle.dumps(run)
 
+    def test_common_credential_formats_are_redacted_in_reopened_archive(self):
+        samples = [
+            '{"authorization": "Basic QUJDREVGRw==", "cookie": "session=COOKIE_SENTINEL"}',
+            '<input type="hidden" name="csrf_token" value="HTML_SENTINEL"><meta name="api-key" content="META_SENTINEL"><h1>Useful heading</h1>',
+            json.dumps({'page': '{"token": "ESCAPED_SENTINEL"}'}),
+            'https://site.test/?api%5Fkey=URL_SENTINEL',
+        ]
+        run = self.session()
+        for content in samples:
+            run.capture('page', {'content': content})
+        with ZipFile(BytesIO(run.export_bytes())) as archive:
+            raw = b''.join(archive.read(name) for name in archive.namelist())
+            events = [json.loads(archive.read(name)) for name in archive.namelist() if name.startswith('event-')]
+        for secret in [b'QUJDREVGRw==', b'COOKIE_SENTINEL', b'HTML_SENTINEL', b'META_SENTINEL', b'ESCAPED_SENTINEL', b'URL_SENTINEL']:
+            self.assertNotIn(secret, raw)
+        self.assertIn(b'Useful heading', raw)
+        self.assertIsInstance(json.loads(events[2]['payload']['content']), dict)
+
     def test_denied_license_never_collects_or_exports(self):
         run = self.session()
         self.fx.licenses.revoke_license(self.fx.scope, self.fx.claims.license_id)

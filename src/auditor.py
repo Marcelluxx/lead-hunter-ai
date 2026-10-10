@@ -61,7 +61,11 @@ class LeadAuditor:
         self.client = client or OpenAI(
             base_url=base_url,
             api_key=api_key.strip(),
+            **({'max_retries': 0} if diagnostics is not None else {}),
         )
+        if diagnostics is not None and hasattr(self.client, 'with_options'):
+            # Each retry must pass our fresh authorization boundary, including injected SDK clients.
+            self.client = self.client.with_options(max_retries=0)
         self.model = model
         self.model_free = model_free
         self.prompt_provider = (

@@ -7,6 +7,8 @@ import re
 import tempfile
 import time
 import uuid
+import html
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from io import BytesIO
 from pathlib import Path
 from threading import RLock
@@ -22,6 +24,20 @@ MAX_RECORDS = 256
 KINDS = frozenset({'page', 'css', 'processed_page', 'evidence', 'llm_request',
                    'llm_response', 'summary', 'error'})
 SECRET_KEY = re.compile(r'(?i)(password|secret|token|authorization|cookie|api.?key|private.?key)')
+
+
+def _redact_url(match):
+    try:
+        parts = urlsplit(match.group(0))
+        query = parse_qsl(parts.query, keep_blank_values=True, max_num_fields=256)
+        query = [(key, '[REDACTED_SECRET]' if SECRET_KEY.search(key) or key.lower() == 'key' else value)
+                 for key, value in query]
+        authority = parts.netloc
+        if '@' in authority:
+            authority = '[REDACTED_CREDENTIALS]@' + authority.rsplit('@', 1)[1]
+        return urlunsplit((parts.scheme, authority, parts.path, urlencode(query), parts.fragment))
+    except ValueError:
+        return '[REDACTED_URL]'
 
 
 class DiagnosticError(ValueError):
@@ -106,11 +122,38 @@ class DiagnosticSession:
         if type(value) is str:
             if len(value) > MAX_RECORD_BYTES:
                 raise DiagnosticError('diagnostic_limit_exceeded')
+            # Decode JSON envelopes structurally before falling back to embedded-text redaction.
+            try:
+                parsed = json.loads(value)
+            except (ValueError, RecursionError):
+                parsed = None
+            if type(parsed) in (dict, list):
+                return json.dumps(self._redact(parsed, depth + 1), ensure_ascii=False, allow_nan=False)
+            value = html.unescape(value)
+            value = re.sub(r'\\+(?=["\x27])', '', value)
+            if re.search(r'<[A-Za-z!][^>]*>', value):
+                from bs4 import BeautifulSoup
+                document = BeautifulSoup(value, 'html.parser')
+                for element in document.find_all(True):
+                    identity = ' '.join(str(element.get(key, '')) for key in ('name', 'id'))
+                    if SECRET_KEY.search(identity):
+                        for attribute in ('value', 'content'):
+                            if element.has_attr(attribute):
+                                element[attribute] = '[REDACTED_SECRET]'
+                        if element.name == 'textarea':
+                            element.string = '[REDACTED_SECRET]'
+                    for attribute in tuple(element.attrs):
+                        if SECRET_KEY.search(attribute):
+                            element[attribute] = '[REDACTED_SECRET]'
+                value = str(document)
             for secret in self._secrets:
                 value = value.replace(secret, '[REDACTED_SECRET]')
-            # Quoted JSON keys and JWTs need coverage beyond the shared log redactor.
-            value = re.sub(r'(?i)([\"\x27](?:password|secret|token|api[_-]?key)[\"\x27]\s*:\s*[\"\x27])[^\"\x27]*',
-                           r'\1[REDACTED_SECRET]', value)
+            value = re.sub(r'(["\x27])([^"\x27]{1,256})\1(\s*:\s*)(["\x27])(.*?)\4',
+                lambda match: match.group(1) + match.group(2) + match.group(1) + match.group(3)
+                + match.group(4) + ('[REDACTED_SECRET]' if SECRET_KEY.search(match.group(2)) else match.group(5))
+                + match.group(4), value, flags=re.DOTALL)
+            value = re.sub(r'https?://[^\s"\x27<>]+', _redact_url, value)
+            value = re.sub(r'(?im)^(\s*(?:authorization|cookie)\s*:\s*)[^\r\n]+', r'\1[REDACTED_SECRET]', value)
             value = re.sub(r'\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b', '[REDACTED_TOKEN]', value)
             return redact_sensitive_text(value, max_length=MAX_RECORD_BYTES + 1)
         if value is None or type(value) in (int, float, bool):

@@ -59,6 +59,29 @@ class DiagnosticRuntimeTests(unittest.TestCase):
             self.auditor(create).audit_website({'https://x.test/': 'Website content ' * 40}, 'Clinic', 'test', 0, 0)
         self.assertEqual(len(calls), 1)
 
+    def test_real_sdk_never_retries_transport_after_revocation(self):
+        import httpx
+        from openai import OpenAI
+        for injected in [False, True]:
+            with self.subTest(injected=injected):
+                fx = diagnostic_fixture(self)
+                run = DiagnosticSession(fx.access, lambda: fx.context)
+                requests = []
+                def respond(request):
+                    requests.append(request)
+                    fx.licenses.revoke_license(fx.scope, fx.claims.license_id)
+                    return httpx.Response(429, headers={'retry-after-ms': '1'},
+                                          json={'error': {'message': 'rate limit', 'type': 'rate_limit_error'}})
+                with httpx.Client(transport=httpx.MockTransport(respond)) as http_client:
+                    def factory(**kwargs): return OpenAI(**kwargs, http_client=http_client)
+                    client = factory(api_key='test', base_url='https://test.invalid') if injected else None
+                    with patch('src.auditor.OpenAI', side_effect=factory):
+                        auditor = LeadAuditor(api_key='test', base_url='https://test.invalid', model='audit', model_free='clean',
+                            client=client, prompt_provider=_FakePromptProvider(), diagnostics=run)
+                        with self.assertRaisesRegex(LicenseError, '^license_revoked$'):
+                            auditor.audit_website({'https://site.test/': 'website text ' * 40}, 'Diagnostic', 'test', 0, 0)
+                self.assertEqual(len(requests), 1)
+
     def test_revoked_preflight_prevents_prompt_and_api_work(self):
         auditor = self.auditor(lambda **_: self.fail('API called'))
         self.fx.licenses.revoke_license(self.fx.scope, self.fx.claims.license_id)
