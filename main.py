@@ -101,7 +101,7 @@ class LeadHunterOrchestrator:
         seen: set[tuple[str, str]] = set()
         results: list[TransientCandidate] = []
 
-        print("\n🔍 --- FASE 1: Scraping Google Maps ---")
+        print(normalize_console_text("\n🔍 --- FASE 1: Scraping Google Maps ---"))
         for keyword in keywords:
             if on_kw_start:
                 on_kw_start(keyword)
@@ -121,13 +121,13 @@ class LeadHunterOrchestrator:
 
             if on_kw_end:
                 on_kw_end(keyword, new_count)
-            print(f"✅ Trovati {new_count} nuovi lead per '{keyword}'.")
+            print(normalize_console_text(f"✅ Trovati {new_count} nuovi lead per '{keyword}'."))
 
         if not results:
-            print("⚠️ Nessun lead senza sito web trovato.")
+            print(normalize_console_text("⚠️ Nessun lead senza sito web trovato."))
             return []
         self.transient_results = results
-        print("\n✅ Tutte le fasi completate.")
+        print(normalize_console_text("\n✅ Tutte le fasi completate."))
         return results
 
     # ==========================================

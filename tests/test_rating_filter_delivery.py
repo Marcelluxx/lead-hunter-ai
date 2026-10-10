@@ -4,7 +4,7 @@ import os
 import unittest
 from dataclasses import replace
 from datetime import datetime, timezone
-from io import BytesIO, StringIO
+from io import BytesIO, StringIO, TextIOWrapper
 from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
@@ -56,6 +56,12 @@ class RatingFilterDeliveryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, '^rating_filter_invalid$'):
                 create_orchestrator('no_website', rating_criteria='invalid')
             loader.assert_not_called()
+
+    def test_windows_console_encoding_does_not_abort_no_website_search(self):
+        output = TextIOWrapper(BytesIO(), encoding='cp1252')
+        with contextlib.redirect_stdout(output):
+            results = self.orchestrator('no_website').run_no_website(45, 9, ['dentista'])
+        self.assertEqual(len(results), 1)
 
     def test_both_modes_preserve_order_and_first_qualifying_keyword_duplicate(self):
         def rows(index, kwargs):

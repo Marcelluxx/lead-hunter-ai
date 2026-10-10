@@ -11,7 +11,7 @@ from openpyxl import load_workbook
 from streamlit.testing.v1 import AppTest
 
 from src.domain.discovery import ProviderAttribution, TransientCandidate
-from src.ui.reference_export_panel import _reference_download_html
+from src.ui.inline_download import _xlsx_download_html
 from tests.reference_export_helpers import ReferenceExportFixture
 
 SCRIPT = '''
@@ -65,11 +65,11 @@ class ReferenceExportUiTests(unittest.TestCase):
 
     def test_delivery_rechecks_after_html_construction(self):
         self.fx.activate()
-        def html_and_revoke(data):
-            html = _reference_download_html(data)
+        def html_and_revoke(data, **kwargs):
+            html = _xlsx_download_html(data, **kwargs)
             self.fx.licenses.revoke_license(self.fx.scope, self.fx.claims.license_id)
             return html
-        with patch('src.ui.reference_export_panel._reference_download_html', side_effect=html_and_revoke):
+        with patch('src.ui.inline_download._xlsx_download_html', side_effect=html_and_revoke):
             app = self.prepare(AppTest.from_string(SCRIPT).run())
         self.assertEqual(len(app.get('iframe')), 0)
         self.assertIn('license_revoked', app.error[0].value)
