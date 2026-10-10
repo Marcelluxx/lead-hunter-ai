@@ -25,6 +25,8 @@ class PlatformSchemaTests(unittest.TestCase):
     def test_schema_contains_control_boundary_tables(self):
         expected = {
             "users",
+            "feature_license_grants",
+            "license_clock_state",
             "sessions",
             "mfa_credentials",
             "oidc_identities",

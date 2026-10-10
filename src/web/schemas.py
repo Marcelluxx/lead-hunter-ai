@@ -3,8 +3,35 @@ from __future__ import annotations
 import uuid
 from decimal import Decimal
 from typing import Any
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class LicenseImportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    token: str = Field(min_length=1, max_length=16384, repr=False)
+
+
+class LicenseSummaryResponse(BaseModel):
+    license_id: uuid.UUID | None
+    installation_id: uuid.UUID
+    subject_kind: str
+    subject_id: uuid.UUID
+    workspace_id: uuid.UUID | None
+    license_status: str
+    not_before: datetime | None
+    expires_at: datetime | None
+    features: tuple[str, ...]
+
+
+class FeatureStatusResponse(BaseModel):
+    feature_id: str
+    label: str
+    granted: bool
+    module_status: str
+    license_status: str
+    expires_at: datetime | None
 
 
 class LoginRequest(BaseModel):

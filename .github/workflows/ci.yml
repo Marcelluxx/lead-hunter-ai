@@ -59,6 +59,19 @@ jobs:
       - name: Run security boundary tests
         run: uv run --frozen --group test python -m unittest discover -s tests -v
 
+      - name: Run explicit feature-license lifecycle
+        run: uv run --frozen --group test python -m unittest tests.test_feature_license_lifecycle -v
+
+      - name: Install Chromium for crawler compatibility check
+        if: matrix.python-version == '3.11'
+        run: uv run --frozen --group test playwright install --with-deps chromium
+
+      - name: Verify real crawler without unused NLP dependency
+        if: matrix.python-version == '3.11'
+        env:
+          LEADHUNTER_BROWSER_TESTS: "1"
+        run: uv run --frozen --group test python -m unittest tests.test_crawler_runtime -v
+
   postgres-integration:
     name: PostgreSQL 17 integration
     runs-on: ubuntu-latest
@@ -164,6 +177,9 @@ jobs:
 
       - name: Build the locked application image
         run: docker compose build api
+
+      - name: Verify customer image excludes license issuer and private state
+        run: docker compose run --rm --no-deps api python scripts/check_customer_image.py
 
       - name: Verify PostgreSQL migration round trip
         shell: bash

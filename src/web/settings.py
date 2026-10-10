@@ -22,6 +22,27 @@ class ServerSettings(BaseSettings):
     jwt_public_key_file: Path
     jwt_issuer: str = "lead-hunter"
     jwt_audience: str = "lead-hunter-api"
+    license_issuer: str = "lead-hunter-owner"
+    license_trust_file: Path | None = None
+    license_state_dir: Path = Path(".leadhunter-state")
+    installation_id: str | None = None
+
+    @field_validator("license_trust_file", mode="before")
+    @classmethod
+    def optional_license_trust_path(cls, value):
+        return None if value == "" else value
+
+    def license_configuration(self):
+        from uuid import UUID
+        from ..licensing.settings import LicenseSettings
+        from ..settings import SettingsError
+        try:
+            settings = LicenseSettings(self.license_issuer, self.license_trust_file,
+                self.license_state_dir.resolve(), UUID(self.installation_id) if self.installation_id else None)
+            settings.validate_server()
+            return settings
+        except ValueError:
+            raise SettingsError("Configurazione licenze server non valida.") from None
 
     @field_validator("database_url")
     @classmethod

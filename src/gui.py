@@ -28,6 +28,13 @@ from src.config import (
 )
 from main import create_orchestrator
 from src.settings import ApplicationSettings, SettingsError
+from src.application.container import ApplicationContainer
+from src.domain.feature_licenses import LicenseError
+from src.domain.place_references import ReferenceExportError, project_google_place_references
+from src.ui.feature_license_panel import render_feature_license_panel
+from src.ui.reference_export_panel import render_reference_export_panel
+from src.ui.rating_filter_controls import render_rating_filter_controls
+from src.ui.inline_download import render_inline_xlsx_download
 from src.exporter import DataExporter
 from src.security.presentation import (
     build_keyword_card_html,
@@ -52,6 +59,14 @@ try:
 except SettingsError as exc:
     st.error(f"Configurazione non valida: {exc}")
     st.stop()
+
+with st.sidebar.expander("Licenze e funzioni riservate"):
+    try:
+        license_scope, license_service, feature_access = ApplicationContainer(
+            runtime_settings).build_local_license_service()
+        render_feature_license_panel(scope=license_scope, licenses=license_service, access=feature_access)
+    except (LicenseError, SettingsError):
+        st.warning("Stato delle licenze non disponibile. Le funzioni base rimangono utilizzabili.")
 
 # --- CUSTOM CSS PREMIUM ---
 st.markdown("""
@@ -147,6 +162,17 @@ def calculate_grid_circles(center_lat, center_lng):
 
 
 # --- SESSION STATE ---
+if "no_website_place_ids" not in st.session_state:
+    st.session_state.no_website_place_ids = ()
+if 'no_website_result_origin' not in st.session_state:
+    st.session_state.no_website_result_origin = None
+if st.session_state.no_website_result_origin is not None:
+    try:
+        st.session_state.no_website_result_origin.require_view()
+    except LicenseError as exc:
+        st.session_state.no_website_place_ids = ()
+        st.session_state.no_website_result_origin = None
+        st.warning(f'Risultati filtrati precedenti non disponibili: {exc.code}')
 if "target_coords" not in st.session_state:
     # Nessuna chiamata esterna automatica: Roma è un default modificabile.
     st.session_state.target_coords = {"lat": 41.9028, "lng": 12.4964}
@@ -181,15 +207,15 @@ with col1:
     if custom_kw and custom_kw not in keywords:
         keywords.append(custom_kw)
 
+    rating_criteria = render_rating_filter_controls(
+        guard_factory=ApplicationContainer(runtime_settings).build_local_rating_filter_guard)
+
     # --- PARAMETRI MODALITÀ CON SITO WEB ---
     if mode_key == "with_website":
         st.markdown("<hr style='margin: 12px 0; border: none; border-top: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
         st.markdown("#### 🎯 Filtri Lead")
-        min_rating = MIN_RATING
-        max_reviews = MAX_REVIEWS
         st.caption(
-            "Rating e recensioni Google non vengono richiesti né usati. "
-            "La qualificazione si basa sul sito ufficiale verificato."
+            "Il report e la qualificazione del sito si basano su fonti verificate indipendenti."
         )
 
         min_age = st.number_input("📅 Età minima attività (anni)", min_value=1, max_value=30, value=MIN_BUSINESS_AGE_YEARS, step=1)
@@ -282,6 +308,8 @@ with col2:
 # ESECUZIONE PIPELINE
 # ==========================================
 if start_btn:
+    st.session_state.no_website_place_ids = ()
+    st.session_state.no_website_result_origin = None
     if not keywords:
         st.error("⚠️ Seleziona almeno una keyword per procedere.")
     else:
@@ -329,7 +357,9 @@ if start_btn:
         update_log("🚀 Inizializzazione Engine V3...")
 
         try:
-            orchestrator = create_orchestrator(mode_key, runtime_settings)
+            orchestrator = (create_orchestrator(mode_key, runtime_settings, rating_criteria=rating_criteria)
+                            if rating_criteria is not None else create_orchestrator(mode_key, runtime_settings))
+            result_origin = orchestrator.result_origin if rating_criteria is not None else None
             if mode_key == "no_website":
                 # === PIPELINE NO WEBSITE ===
                 def on_kw_start(kw):
@@ -413,8 +443,6 @@ if start_btn:
                         st.session_state.target_coords["lat"],
                         st.session_state.target_coords["lng"],
                         keywords,
-                        min_rating=min_rating,
-                        max_reviews=max_reviews,
                         min_age=min_age,
                         max_pages=max_pages,
                         token_mode=token_mode_str,
@@ -427,6 +455,15 @@ if start_btn:
                     )
 
             # --- RISULTATI ---
+            if result_origin is not None:
+                result_origin.require_view()
+            if mode_key == "no_website":
+                try:
+                    references = project_google_place_references(results)
+                    st.session_state.no_website_place_ids = tuple(reference.place_id for reference in references)
+                    st.session_state.no_website_result_origin = result_origin if references else None
+                except ReferenceExportError as exc:
+                    st.warning(f"Export riferimenti non disponibile per questa ricerca: {exc.code}")
             total_elapsed = format_elapsed(time.time() - pipeline_start)
             
             if mode_key == "with_website":
@@ -448,28 +485,36 @@ if start_btn:
                     date_str = datetime.now().strftime("%d_%m_%Y")
                     filename = f"Lead_Hunter_Report_{date_str}.xlsx"
                     filepath = os.path.join(OUTPUT_DIR, filename)
-                    DataExporter.export_to_excel(results, mode=mode_key, filename=filepath)
+                    if result_origin is None:
+                        DataExporter.export_to_excel(results, mode=mode_key, filename=filepath)
                 else:
                     cols = DataExporter._get_no_website_columns()
                     rows = DataExporter._format_no_website_rows(results)
                 df = pd.DataFrame(rows, columns=cols)
+                if result_origin is not None:
+                    result_origin.require_view()
                 st.dataframe(df, use_container_width=True)
 
                 if mode_key == "with_website":
-                    with open(filepath, "rb") as f:
-                        st.download_button(
-                            label=f"📥 SCARICA REPORT: {filename}",
-                            data=f,
-                            file_name=filename,
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True,
-                        )
+                    if result_origin is not None:
+                        data = DataExporter.export_bytes(results, mode=mode_key, origin=result_origin)
+                        render_inline_xlsx_download(data, filename=filename, label=f'Scarica report: {filename}',
+                                                    before_delivery=result_origin.require_view)
+                    else:
+                        with open(filepath, "rb") as f:
+                            st.download_button(
+                                label=f"📥 SCARICA REPORT: {filename}",
+                                data=f,
+                                file_name=filename,
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                use_container_width=True,
+                            )
                 else:
                     attribution = orchestrator.scraper.attribution
                     st.info(
-                        "Questi risultati sono transitori: non vengono salvati né "
-                        "esportati. Per ottenere un report persistente serve verificare "
-                        "i dati su una fonte indipendente."
+                        "I contenuti Google sono transitori. L'export riservato permette "
+                        "di conservare soltanto Place ID e link Google Maps. Per un report "
+                        "con altri dati serve verificarli su una fonte indipendente."
                     )
                     st.markdown(
                         f"Dati: **{attribution.label}** — "
@@ -479,13 +524,26 @@ if start_btn:
             else:
                 st.warning("⚠️ La ricerca è terminata ma non sono stati trovati lead idonei in quest'area.")
 
+        except LicenseError as exc:
+            st.session_state.no_website_place_ids = ()
+            st.session_state.no_website_result_origin = None
+            st.error(f'Ricerca filtrata non disponibile: {exc.code}')
         except SettingsError as exc:
             st.error(f"Configurazione non valida: {exc}")
             update_log("CONFIGURAZIONE NON VALIDA: verifica le credenziali richieste")
         except Exception as exc:
+            st.session_state.no_website_place_ids = ()
+            st.session_state.no_website_result_origin = None
             logger.error(
                 "Errore non gestito durante l'esecuzione della pipeline (%s)",
                 type(exc).__name__,
             )
             st.error("❌ Errore interno durante l'esecuzione. Consulta i log applicativi.")
             update_log("ERRORE CRITICO: dettagli registrati lato server")
+
+if mode_key == "no_website":
+    render_reference_export_panel(
+        place_ids=st.session_state.no_website_place_ids,
+        service_factory=ApplicationContainer(runtime_settings).build_local_reference_export_service,
+        origin=st.session_state.no_website_result_origin,
+    )

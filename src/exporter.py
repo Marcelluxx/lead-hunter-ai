@@ -6,6 +6,10 @@ Export duale:
 """
 
 import os
+import tempfile
+from io import BytesIO
+from pathlib import Path
+from src.application.rating_filters import RatingFilterGuard
 from typing import Callable, Union, List, Dict, Any
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -47,104 +51,123 @@ class DataExporter:
     SCORE_RED = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
 
     @staticmethod
+    def export_bytes(
+        leads: Union[List[Dict], Dict[str, Dict]],
+        mode: str = "with_website",
+        privacy_policy: WorkspacePrivacyPolicy | None = None,
+        suppression_checker: Callable[[Any], bool] | None = None,
+        *, origin: RatingFilterGuard | None = None,
+    ) -> bytes:
+        if origin is not None:
+            origin.require_view()
+        leads_list = list(leads.values()) if isinstance(leads, dict) else list(leads)
+        ExportPolicy.require_exportable(leads_list, mode, privacy_policy, suppression_checker)
+        if mode != "with_website":
+            raise RuntimeError("Esportazione no_website non consentita.")
+        columns = DataExporter._get_website_columns()
+        rows = DataExporter._format_website_rows(leads_list)
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Leads"
+
+        # --- HEADER ROW ---
+        for col_idx, col_name in enumerate(columns, 1):
+            cell = ws.cell(row=1, column=col_idx, value=col_name)
+            cell.font = DataExporter.HEADER_FONT
+            cell.fill = DataExporter.HEADER_FILL
+            cell.alignment = DataExporter.HEADER_ALIGNMENT
+            cell.border = DataExporter.HEADER_BORDER
+
+        # Altezza header
+        ws.row_dimensions[1].height = 30
+
+        # --- DATA ROWS ---
+        for row_idx, row_data in enumerate(rows, 2):
+            for col_idx, value in enumerate(row_data, 1):
+                safe_value = sanitize_spreadsheet_value(value)
+                cell = ws.cell(row=row_idx, column=col_idx, value=safe_value)
+                if is_text_cell(safe_value):
+                    cell.data_type = "s"
+                cell.font = DataExporter.DATA_FONT
+                cell.alignment = DataExporter.DATA_ALIGNMENT
+
+                # Righe alternate
+                if row_idx % 2 == 0:
+                    cell.fill = DataExporter.ALT_ROW_FILL
+
+            # Colorazione condizionale per Website Score
+            if mode == "with_website":
+                score_col = columns.index("Website Score") + 1 if "Website Score" in columns else None
+                if score_col:
+                    score_cell = ws.cell(row=row_idx, column=score_col)
+                    try:
+                        score_val = int(score_cell.value) if score_cell.value else 0
+                        if score_val <= 3:
+                            score_cell.fill = DataExporter.SCORE_RED
+                        elif score_val <= 6:
+                            score_cell.fill = DataExporter.SCORE_YELLOW
+                        else:
+                            score_cell.fill = DataExporter.SCORE_GREEN
+                    except (ValueError, TypeError):
+                        pass
+
+        # --- AUTO-FIT COLONNE ---
+        col_widths = DataExporter._calculate_column_widths(columns, rows)
+        for col_idx, width in enumerate(col_widths, 1):
+            col_letter = get_column_letter(col_idx)
+            ws.column_dimensions[col_letter].width = width
+
+        # Freeze header row
+        ws.freeze_panes = "A2"
+
+        # Auto-filter
+        ws.auto_filter.ref = ws.dimensions
+
+        output = BytesIO()
+        wb.save(output)
+        if origin is not None:
+            origin.require_view()
+        return output.getvalue()
+
+    @staticmethod
     def export_to_excel(
         leads: Union[List[Dict], Dict[str, Dict]],
         mode: str = "no_website",
         filename: str = "leads_v3_premium.xlsx",
         privacy_policy: WorkspacePrivacyPolicy | None = None,
         suppression_checker: Callable[[Any], bool] | None = None,
+        *, origin: RatingFilterGuard | None = None,
     ) -> None:
-        """
-        Esporta lead in Excel con formattazione professionale.
-        mode: "no_website" | "with_website"
-        """
+        if origin is not None:
+            origin.require_view()
         if not leads:
             print("[Exporter] Nessun lead da esportare.")
             return
-
-        leads_list = list(leads.values()) if isinstance(leads, dict) else list(leads)
-        ExportPolicy.require_exportable(
-            leads_list, mode, privacy_policy, suppression_checker
-        )
-
-        # Assicurati che la cartella di destinazione esista
-        dir_name = os.path.dirname(filename)
-        if dir_name:
-            os.makedirs(dir_name, exist_ok=True)
-
-        # Definisci colonne in base alla modalità
-        if mode == "with_website":
-            columns = DataExporter._get_website_columns()
-            rows = DataExporter._format_website_rows(leads_list)
-        else:
-            # ExportPolicy rejects this branch. Kept explicit for defensive typing.
-            raise RuntimeError("Esportazione no_website non consentita.")
-
+        # Policy rejection stays outside the legacy write-error reporting path.
+        data = DataExporter.export_bytes(leads, mode, privacy_policy, suppression_checker, origin=origin)
+        destination = Path(filename)
+        temporary = None
         try:
-            wb = Workbook()
-            ws = wb.active
-            ws.title = "Leads"
-
-            # --- HEADER ROW ---
-            for col_idx, col_name in enumerate(columns, 1):
-                cell = ws.cell(row=1, column=col_idx, value=col_name)
-                cell.font = DataExporter.HEADER_FONT
-                cell.fill = DataExporter.HEADER_FILL
-                cell.alignment = DataExporter.HEADER_ALIGNMENT
-                cell.border = DataExporter.HEADER_BORDER
-
-            # Altezza header
-            ws.row_dimensions[1].height = 30
-
-            # --- DATA ROWS ---
-            for row_idx, row_data in enumerate(rows, 2):
-                for col_idx, value in enumerate(row_data, 1):
-                    safe_value = sanitize_spreadsheet_value(value)
-                    cell = ws.cell(row=row_idx, column=col_idx, value=safe_value)
-                    if is_text_cell(safe_value):
-                        cell.data_type = "s"
-                    cell.font = DataExporter.DATA_FONT
-                    cell.alignment = DataExporter.DATA_ALIGNMENT
-
-                    # Righe alternate
-                    if row_idx % 2 == 0:
-                        cell.fill = DataExporter.ALT_ROW_FILL
-
-                # Colorazione condizionale per Website Score
-                if mode == "with_website":
-                    score_col = columns.index("Website Score") + 1 if "Website Score" in columns else None
-                    if score_col:
-                        score_cell = ws.cell(row=row_idx, column=score_col)
-                        try:
-                            score_val = int(score_cell.value) if score_cell.value else 0
-                            if score_val <= 3:
-                                score_cell.fill = DataExporter.SCORE_RED
-                            elif score_val <= 6:
-                                score_cell.fill = DataExporter.SCORE_YELLOW
-                            else:
-                                score_cell.fill = DataExporter.SCORE_GREEN
-                        except (ValueError, TypeError):
-                            pass
-
-            # --- AUTO-FIT COLONNE ---
-            col_widths = DataExporter._calculate_column_widths(columns, rows)
-            for col_idx, width in enumerate(col_widths, 1):
-                col_letter = get_column_letter(col_idx)
-                ws.column_dimensions[col_letter].width = width
-
-            # Freeze header row
-            ws.freeze_panes = "A2"
-
-            # Auto-filter
-            ws.auto_filter.ref = ws.dimensions
-
-            wb.save(filename)
-            print(f"\n[OK] Esportazione premium completata: {len(leads_list)} lead in '{filename}'")
-
-        except PermissionError:
-            print(f"[Errore] Il file '{filename}' è aperto in un altro programma. Chiudilo e riprova.")
-        except Exception as e:
-            print(f"[Errore] Eccezione durante l'esportazione: {e}")
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if origin is None:
+                destination.write_bytes(data)
+            else:
+                with tempfile.NamedTemporaryFile(mode='wb', dir=destination.parent,
+                                                  prefix='.website-export-', delete=False) as handle:
+                    temporary = Path(handle.name)
+                    handle.write(data)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                origin.require_view()
+                os.replace(temporary, destination)
+            print(f"\n[OK] Esportazione premium completata: {len(leads)} lead in '{filename}'")
+        except OSError:
+            if origin is not None:
+                raise OSError('website_export_write_failed') from None
+            print("[Errore] Scrittura del file non riuscita. Verifica percorso e permessi.")
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
 
     @staticmethod
     def _get_no_website_columns() -> list:

@@ -8,6 +8,8 @@
 *.jks
 *.keystore
 .secrets/
+.leadhunter-state/
+*.lh
 __pycache__/
 *.xlsx
 outputs/

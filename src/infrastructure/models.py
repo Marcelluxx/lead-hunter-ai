@@ -532,3 +532,7 @@ class DataSubjectRequestModel(Base):
         DateTime(timezone=True), default=utc_now, nullable=False
     )
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+
+# Module import (rather than class import) also supports importing license_models first.
+from . import license_models as _license_models

@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from contextlib import contextmanager
 from typing import Iterator, Optional
+from threading import Lock
 
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
@@ -27,6 +28,37 @@ class Database:
             expire_on_commit=False,
             autoflush=False,
         )
+        self._license_clock_lock = Lock()
+        self._license_clock_engine = None
+        self._license_clock_factory = None
+
+    @contextmanager
+    def license_clock_session(self) -> Iterator[Session]:
+        # In-memory SQLite fixtures have only one database connection. Production
+        # PostgreSQL uses a separate bounded pool: callers may hold every request
+        # connection while the monotonic clock commits independently.
+        if self.engine.dialect.name == "sqlite" and isinstance(self.engine.pool, StaticPool):
+            with self.session() as session:
+                yield session
+            return
+        with self._license_clock_lock:
+            if self._license_clock_engine is None:
+                self._license_clock_engine = create_engine(
+                    self.engine.url, pool_pre_ping=True, pool_size=2,
+                    max_overflow=0, pool_timeout=5)
+                self._license_clock_factory = sessionmaker(
+                    bind=self._license_clock_engine, expire_on_commit=False, autoflush=False)
+            factory = self._license_clock_factory
+        with factory() as session, session.begin():
+            yield session
+
+    def close_license_clock_pool(self) -> None:
+        """Close the dedicated pool when the owning API/worker runtime stops."""
+        with self._license_clock_lock:
+            if self._license_clock_engine is not None:
+                self._license_clock_engine.dispose()
+                self._license_clock_engine = None
+                self._license_clock_factory = None
 
     @contextmanager
     def session(

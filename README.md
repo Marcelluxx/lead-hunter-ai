@@ -35,6 +35,7 @@
 - [Local CLI and GUI setup](#local-cli-and-gui-setup)
 - [Configuration reference](#configuration-reference)
 - [Operations manual](#operations-manual)
+- [Expiring feature licenses](#expiring-feature-licenses)
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [Project structure](#project-structure)
@@ -54,7 +55,7 @@ The product supports two direct operating modes:
 
 | Mode | Purpose | Current output |
 |---|---|---|
-| `no_website` | Discover businesses without an official website | Transient, attributed Google Places results displayed only for the active session; export is intentionally disabled |
+| `no_website` | Discover businesses without an official website | Transient, attributed Google Places results; optional licensed XLSX containing only Place ID and Google Maps link |
 | `with_website` | Verify official sites, crawl selected pages, run an AI audit, and qualify opportunities | Verified leads exported to a protected XLSX report |
 
 Core capabilities include:
@@ -289,6 +290,14 @@ uv sync --frozen --group test --no-install-project
 uv run playwright install chromium
 ```
 
+The locked runtime excludes NLTK, an unused dependency declared by Crawl4AI,
+because its published release has an unpatched model-file vulnerability.
+Lead Hunter uses pruning and Markdown generation rather than NLTK chunking or
+model utilities. Crawl4AI is pinned to the tested version; revalidate the exclusion
+before upgrading it or adding NLP strategies. Install through `uv sync --frozen`;
+an independent pip installation of Crawl4AI would pull NLTK back in.
+See [the remediation evidence](docs/NLTK_SECURITY_REMEDIATION.md).
+
 Create `.env` as described above. The direct pipeline reads:
 
 - `GOOGLE_API_KEY` for both operating modes;
@@ -367,7 +376,23 @@ uv run python main.py \
 ```
 
 This mode intentionally prints transient, attributed results and does not export Google
-Places data.
+Places content. With an active `export.no_website` license, export only reusable references:
+
+```bash
+uv run python main.py --mode no_website --lat 45.4642 --lng 9.1900 --keywords ristorante --export-references --out riferimenti.xlsx
+```
+
+The workbook has exactly two columns, **Place ID** and **Link Google Maps**, deduplicated
+in first-occurrence order. It contains no business names, addresses, phones, ratings,
+reviews or search keywords. References describe the search snapshot; they do not certify
+that a business is still without a website or that its ID remains resolvable. Without
+the flag the base search remains available without a feature license.
+
+In the GUI, run a search without websites, then use **Prepara Excel dei riferimenti**
+and **Scarica Excel dei riferimenti**. Only IDs are retained for this panel across reruns;
+starting a new search clears them. Preparation and delivery each require current access.
+The GUI delivers the authorized workbook inline, without a reusable static server URL.
+CLI saves atomically and preserves an existing file if delivery is denied or saving fails.
 
 ### Crawl and audit businesses with websites
 
@@ -421,6 +446,31 @@ The server exposes routes for:
 Use the OpenAPI interface at `/docs` for the current request/response schemas. Protected
 routes require a bearer access token; workspace permissions and MFA requirements are
 enforced server-side.
+
+## Expiring feature licenses
+
+The common licensing core supports offline local installations and individual
+user/workspace grants on a managed server. Owner-issued Ed25519 signatures use
+keys separate from authentication; additional feature access always expires.
+Base operations do not require a feature license.
+
+The initial catalog contains `export.no_website`, `discovery.rating_filters`
+and `diagnostics.full`. **Export riferimenti senza sito** is available in local CLI/GUI;
+its shared service is reusable with a current server context. Rating/review filters and
+full diagnostics remain **planned**: a valid grant cannot execute unavailable modules.
+Connecting the commercial worker and job export endpoints remains a subsequent milestone.
+
+See the [feature-license operations manual](docs/FEATURE_LICENSES.md) for encrypted
+key generation, issuance, public trust configuration, activation, server API,
+renewal, revocation, backups, clock recovery and offline limits. The owner issuer
+and private state are excluded from the customer container.
+
+Quick local status, without Google/OpenRouter credentials:
+
+```powershell
+uv run --frozen python -m src.cli.feature_licenses installation-id
+uv run --frozen python -m src.cli.feature_licenses status
+```
 
 ## Testing
 
@@ -673,6 +723,55 @@ ordered by commercial risk and architectural leverage:
 
 The intentionally deferred local credential rotation described in the audit remains an
 operator decision; no credential is embedded in the repository history examined by CI.
+
+## Licensed rating and review-count filters
+
+Local CLI and Streamlit support optional Google Places filters in **both** search
+modes. The GUI toggle starts off. The CLI requires `--rating-filters`; explicit
+`--min-rating` or `--max-reviews` without that flag is a usage error. These options
+cannot be combined with `--test-url`, `--gui`, or `--examples`.
+
+```bash
+# Base discovery: no rating-filter license required.
+uv run --frozen python main.py --lat 45.4642 --lng 9.1900 --keywords dentista
+
+# Filtered discovery and reference-only export: both feature grants required.
+uv run --frozen python main.py --lat 45.4642 --lng 9.1900 --keywords dentista \
+  --rating-filters --min-rating 3.9 --max-reviews 100 --export-references
+
+# The same filter before independent website crawling/auditing.
+uv run --frozen python main.py --lat 45.4642 --lng 9.1900 --keywords dentista \
+  --mode with_website --rating-filters
+```
+
+When enabled, defaults are 3.9 and 100. A result qualifies only with **rating
+strictly above the threshold** and **1 to the maximum review count inclusive**.
+Missing/invalid metrics exclude that result. The threshold accepts finite numbers
+0–5; the maximum accepts integers 1–2,147,483,647. Threshold 5 is valid and yields
+no qualifying results. The first qualifying duplicate wins in grid/keyword order.
+
+The signed, expiring grant must include `discovery.rating_filters`. Authorization
+is refreshed before each Places attempt (including retries) and before results or
+derived reports are delivered. Revocation/expiry stops the filtered operation;
+there is no automatic base fallback or emergency export of partial results.
+Switching the GUI toggle off keeps previous filtered references protected. After
+expiry, **Usa la ricerca base** explicitly selects a new base search.
+
+Only authorized filtered requests add `places.rating` and `places.userRatingCount`
+to the unchanged base field mask. The adapter immediately discards these metrics;
+candidate DTOs, website reports, AI prompts, logs, sessions, queues and databases
+do not retain them. No-website XLSX still contains only Place ID and Maps link,
+and additionally requires `export.no_website`. Website report provenance/privacy
+checks remain in force. Protected CLI saves are atomic; rejected delivery preserves
+an existing destination. GUI downloads are delivered inline after current checks.
+Previously delivered files/screenshots cannot be withdrawn retroactively.
+
+The shared service also accepts current server authorization contexts; this does
+not connect the commercial job worker or add endpoints. `diagnostics.full` remains
+planned. Offline access still depends on the guarded local clock and imported
+revocation state. Google pricing, quotas and contract depend on the deployment;
+the commercial/legal review in the roadmap remains open. No dependencies or
+database migrations were added for this module.
 
 ## Development workflow
 
