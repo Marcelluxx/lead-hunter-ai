@@ -415,7 +415,7 @@ def show_examples():
 
     4. Audit con parametri personalizzati:
        python main.py --mode with_website --lat 45.4642 --lng 9.1900 --keywords dentista \\
-           --min-rating 4.0 --max-reviews 80 --min-age 3 --token-mode optimized --max-pages 3
+           --rating-filters --min-rating 4.0 --max-reviews 80 --min-age 3 --token-mode optimized --max-pages 3
 
     Suggerimento: Le coordinate (lat/lng) in formato decimale (es. Google Maps).
     """
@@ -429,11 +429,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-    try:
-        runtime_settings = ApplicationSettings.from_environment()
-    except SettingsError as exc:
-        print(f"Configurazione non valida: {exc}")
-        return 2
     parser = argparse.ArgumentParser(
         prog="LeadHunter",
         description="Agente AI B2B per Scraping & Auditing di contatti commerciali.",
@@ -453,16 +448,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--mode", type=str, choices=["no_website", "with_website"],
                         default="no_website", help="Modalità: no_website | with_website")
 
-    # Parametri modalità with_website
-    parser.add_argument("--min-rating", type=float, default=MIN_RATING,
-                        help=f"Rating minimo Google (default: {MIN_RATING})")
-    parser.add_argument("--max-reviews", type=int, default=MAX_REVIEWS,
-                        help=f"Max recensioni (default: {MAX_REVIEWS})")
+    parser.add_argument('--rating-filters', action='store_true',
+                        help='Filtra per rating e recensioni in entrambe le modalità; richiede discovery.rating_filters')
+    parser.add_argument("--min-rating", type=float, default=None,
+                        help=f"Rating strettamente superiore alla soglia, con --rating-filters (default: {MIN_RATING})")
+    parser.add_argument("--max-reviews", type=int, default=None,
+                        help=f"Recensioni da 1 al massimo, con --rating-filters (default: {MAX_REVIEWS})")
     parser.add_argument("--min-age", type=int, default=MIN_BUSINESS_AGE_YEARS,
                         help=f"Età minima attività in anni (default: {MIN_BUSINESS_AGE_YEARS})")
     parser.add_argument("--token-mode", type=str, choices=["high_fidelity", "optimized"],
-                        default=runtime_settings.token_mode,
-                        help=f"Modalità token LLM (default: {runtime_settings.token_mode})")
+                        default=None,
+                        help=f"Modalità token LLM (default: TOKEN_MODE configurato oppure {DEFAULT_TOKEN_MODE})")
     parser.add_argument("--max-pages", type=int, default=MAX_CRAWL_PAGES,
                         help=f"Max pagine da crawlare per sito (default: {MAX_CRAWL_PAGES})")
     parser.add_argument("--no-headless", action="store_true",
@@ -485,8 +481,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--examples", action="store_true", help="Mostra gli esempi d'uso ed esci")
 
     args = parser.parse_args(argv)
+    thresholds_present = args.min_rating is not None or args.max_reviews is not None
+    if (args.rating_filters or thresholds_present) and (args.test_url or args.gui or args.examples):
+        parser.error('Le opzioni rating non sono compatibili con --test-url, --gui o --examples')
+    if thresholds_present and not args.rating_filters:
+        parser.error('--min-rating e --max-reviews richiedono --rating-filters')
+    rating_criteria = None
+    if args.rating_filters:
+        try:
+            rating_criteria = RatingFilterCriteria(MIN_RATING if args.min_rating is None else args.min_rating,
+                                                  MAX_REVIEWS if args.max_reviews is None else args.max_reviews)
+        except ValueError:
+            print('Parametri del filtro non validi: rating_filter_invalid')
+            return 2
     if args.export_references and args.mode != "no_website":
         parser.error("--export-references richiede --mode no_website")
+    try:
+        runtime_settings = ApplicationSettings.from_environment()
+    except SettingsError as exc:
+        print(f"Configurazione non valida: {exc}")
+        return 2
+    if args.token_mode is None:
+        args.token_mode = runtime_settings.token_mode
 
     if args.examples:
         show_examples()
@@ -530,28 +546,37 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.export_references:
             reference_export = ApplicationContainer(runtime_settings).build_local_reference_export_service()
             reference_export.require_access()
-        orchestrator = create_orchestrator(args.mode, runtime_settings)
+        orchestrator = (create_orchestrator(args.mode, runtime_settings, rating_criteria=rating_criteria)
+                        if rating_criteria is not None else create_orchestrator(args.mode, runtime_settings))
     except LicenseError as exc:
-        print(f"Export riferimenti non autorizzato: {exc.code}")
+        print(f"Operazione riservata non autorizzata: {exc.code}")
         return 2
     except SettingsError as exc:
         print(f"Configurazione non valida: {exc}")
         return 2
 
+    except Exception:
+        if rating_criteria is not None:
+            print('Ricerca filtrata non completata: pipeline_failed')
+            return 1
+        raise
+
     print(f"\n🚀 Avvio Lead Hunter V3 CLI — Modalità: {args.mode.upper()}")
     print(f"   Coordinate: {args.lat}, {args.lng}")
 
-    out_file = args.out
-    if out_file == "leads_output.xlsx":
-        city = orchestrator.scraper.get_city_name(args.lat, args.lng)
-        date_str = datetime.now().strftime("%d_%m_%Y")
-        out_file = f"Lead_Hunter_{city}_{date_str}.xlsx"
-
-    # Prepend OUTPUT_DIR if it's a bare filename
-    if not os.path.dirname(out_file):
-        out_file = os.path.join(OUTPUT_DIR, out_file)
-
     try:
+        if rating_criteria is not None:
+            orchestrator.result_origin.require_execute()
+        out_file = args.out
+        if out_file == "leads_output.xlsx":
+            city = orchestrator.scraper.get_city_name(args.lat, args.lng)
+            date_str = datetime.now().strftime("%d_%m_%Y")
+            out_file = f"Lead_Hunter_{city}_{date_str}.xlsx"
+
+        # Prepend OUTPUT_DIR if it's a bare filename
+        if not os.path.dirname(out_file):
+            out_file = os.path.join(OUTPUT_DIR, out_file)
+
         if args.mode == "with_website":
             results = orchestrator.run(
                 args.lat, args.lng, args.keywords,
@@ -563,36 +588,49 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             results = orchestrator.run(args.lat, args.lng, args.keywords)
 
+        origin = orchestrator.result_origin if rating_criteria is not None else None
+        origin_args = {'origin': origin} if origin is not None else {}
+        if origin is not None:
+            orchestrator.require_result_view()
+
         if results and args.mode == "with_website":
-            DataExporter.export_to_excel(results, mode=args.mode, filename=out_file)
+            DataExporter.export_to_excel(results, mode=args.mode, filename=out_file, **origin_args)
+            if origin is not None:
+                origin.require_view()
             print(f"✅ Completato. {len(results)} leads esportati in {out_file}")
         elif results and reference_export is not None:
             references = project_google_place_references(results)
             if references:
-                count = reference_export.save(references, Path(out_file))
+                count = reference_export.save(references, Path(out_file), **origin_args)
+                if origin is not None:
+                    origin.require_view()
                 print(f"✅ Completato. {count} riferimenti esportati in {out_file}")
             else:
                 print("⚠️ Nessun riferimento Google senza sito da esportare.")
         elif results:
             attribution = orchestrator.scraper.attribution
-            print(f"✅ {len(results)} risultati transitori trovati — dati {attribution.label}.")
-            print(
+            lines = [f"✅ {len(results)} risultati transitori trovati — dati {attribution.label}.",
                 "ℹ️ I contenuti Google sono transitori. Con --export-references e una "
-                "licenza valida puoi esportare soltanto Place ID e link Google Maps."
-            )
-            for candidate in results:
-                print(f"   • {candidate.display_name or 'Attività senza nome'}")
-            print(f"   Termini: {attribution.terms_url}")
+                "licenza valida puoi esportare soltanto Place ID e link Google Maps."]
+            lines.extend(f"   • {candidate.display_name or 'Attività senza nome'}" for candidate in results)
+            lines.append(f"   Termini: {attribution.terms_url}")
+            message = '\n'.join(lines)
+            if origin is not None:
+                origin.require_view()
+            print(message)
         else:
             print("⚠️ Nessun lead utile trovato nell'area.")
 
     except (LicenseError, ReferenceExportError) as exc:
-        print(f"Export riferimenti non completato: {exc.code}")
+        print(f"Operazione riservata non completata: {exc.code}")
         return 2
     except SettingsError as exc:
         print(f"Configurazione non valida: {exc}")
         return 2
     except KeyboardInterrupt:
+        if rating_criteria is not None:
+            print('Ricerca filtrata interrotta; nessun risultato parziale consegnato.')
+            return 1
         print("\n⚠️ Interrotto. Esporto dati parziali...")
         if args.mode == "with_website" and orchestrator.all_leads:
             emergency_file = os.path.join(OUTPUT_DIR, "salvataggio_emergenza.xlsx")
@@ -601,6 +639,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 mode=args.mode,
                 filename=emergency_file
             )
+    except Exception:
+        if rating_criteria is not None:
+            print('Ricerca filtrata non completata: pipeline_failed')
+            return 1
+        raise
     return 0
 
 
