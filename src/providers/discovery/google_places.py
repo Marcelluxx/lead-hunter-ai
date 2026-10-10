@@ -6,8 +6,11 @@ import math
 import time
 from datetime import datetime, timezone
 from typing import Any, Callable
+from collections.abc import Mapping
 
 import requests
+from ...application.rating_filters import RatingFilterGuard
+from ...domain.rating_filters import RatingFilterCriteria
 
 from ...domain.discovery import (
     DiscoveryBatch,
@@ -25,6 +28,15 @@ GOOGLE_ATTRIBUTION = ProviderAttribution(
     terms_url="https://cloud.google.com/terms/maps-platform/eea",
     privacy_url="https://policies.google.com/privacy",
 )
+
+_BASE_FIELDS = frozenset({'places.id', 'places.displayName', 'places.websiteUri', 'places.attributions'})
+
+
+def _matches_rating_criteria(raw: Mapping[str, Any], criteria: RatingFilterCriteria) -> bool:
+    rating, count = raw.get('rating'), raw.get('userRatingCount')
+    return (type(rating) in (int, float) and 0 <= rating <= 5 and math.isfinite(rating)
+            and type(count) is int and 1 <= count <= 2147483647
+            and rating > criteria.min_rating and count <= criteria.max_reviews)
 
 
 class DiscoveryProviderError(RuntimeError):
@@ -58,6 +70,10 @@ class GooglePlacesDiscoveryProvider:
     ):
         if not api_key.strip():
             raise ValueError("GOOGLE_API_KEY mancante.")
+        fields = tuple(field.strip() for field in field_mask.split(',')) if isinstance(field_mask, str) else ()
+        if not fields or any(field not in _BASE_FIELDS for field in fields):
+            raise ValueError('provider_field_mask_invalid')
+        self._base_field_mask = ','.join(fields)
         self.places_url = places_url
         self.http_client = http_client
         self.grid_size = grid_size
@@ -70,7 +86,7 @@ class GooglePlacesDiscoveryProvider:
         self.headers = {
             "Content-Type": "application/json",
             "X-Goog-Api-Key": api_key.strip(),
-            "X-Goog-FieldMask": field_mask,
+            "X-Goog-FieldMask": self._base_field_mask,
         }
 
     def discover(
@@ -79,12 +95,22 @@ class GooglePlacesDiscoveryProvider:
         *,
         on_progress: Callable[[int, int], None] | None = None,
     ) -> DiscoveryBatch:
+        return self._discover(query, on_progress=on_progress)
+
+    def _discover_filtered(self, query: DiscoveryQuery, *, criteria: RatingFilterCriteria,
+                           guard: RatingFilterGuard, on_progress=None) -> DiscoveryBatch:
+        if not isinstance(criteria, RatingFilterCriteria) or not isinstance(guard, RatingFilterGuard):
+            raise ValueError('rating_filter_invalid')
+        guard.require_execute()
+        return self._discover(query, criteria=criteria, guard=guard, on_progress=on_progress)
+
+    def _discover(self, query, *, criteria=None, guard=None, on_progress=None) -> DiscoveryBatch:
         candidates: list[TransientCandidate] = []
         grid = self._generate_grid(query.center_lat, query.center_lng)
         for index, (lat, lng) in enumerate(grid, 1):
             if on_progress:
                 on_progress(index, len(grid))
-            candidates.extend(self._fetch(query.text, query.language, lat, lng))
+            candidates.extend(self._fetch(query.text, query.language, lat, lng, criteria=criteria, guard=guard))
             if index < len(grid) and self.inter_request_delay_s > 0:
                 self.sleep(self.inter_request_delay_s)
         return DiscoveryBatch(unique_candidates(candidates), self.attribution)
@@ -100,7 +126,13 @@ class GooglePlacesDiscoveryProvider:
             for j in range(-offset, offset + 1)
         ]
 
-    def _fetch(self, text: str, language: str, lat: float, lng: float) -> list[TransientCandidate]:
+    def _fetch(self, text: str, language: str, lat: float, lng: float, *,
+               criteria: RatingFilterCriteria | None = None,
+               guard: RatingFilterGuard | None = None) -> list[TransientCandidate]:
+        if ((criteria is None) != (guard is None) or
+            (criteria is not None and (not isinstance(criteria, RatingFilterCriteria) or
+                                      not isinstance(guard, RatingFilterGuard)))):
+            raise ValueError('rating_filter_invalid')
         payload = {
             "textQuery": text,
             "languageCode": language,
@@ -114,11 +146,16 @@ class GooglePlacesDiscoveryProvider:
         }
         response = None
         for attempt in range(1, self.max_attempts + 1):
+            headers = dict(self.headers)
+            headers['X-Goog-FieldMask'] = self._base_field_mask
+            if guard is not None:
+                headers['X-Goog-FieldMask'] += ',places.rating,places.userRatingCount'
+                guard.require_execute()
             try:
                 response = self.http_client.post(
                     self.places_url,
                     json=payload,
-                    headers=self.headers,
+                    headers=headers,
                     timeout=self.request_timeout_s,
                 )
                 response.raise_for_status()
@@ -149,6 +186,8 @@ class GooglePlacesDiscoveryProvider:
         collected_at = datetime.now(timezone.utc)
         result: list[TransientCandidate] = []
         for raw in raw_places:
+            if criteria is not None and (not isinstance(raw, Mapping) or not _matches_rating_criteria(raw, criteria)):
+                continue
             external_id = str(raw.get("id") or "").strip()
             if not external_id:
                 continue
