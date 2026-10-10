@@ -249,3 +249,27 @@ alla correzione; gli stessi gate devono passare anche sull'HEAD finale prima
 dell'integrazione. [Esiti e decisioni](REFERENCE_EXPORT_IMPLEMENTATION_REVIEW.md).
 Nessun endpoint job o collegamento worker introdotto. Integrazione della PR #7
 e blocco NLTK rimangono aperti; questo completamento non è una release commerciale.
+
+## Recupero filtri rating/recensioni — 10 ottobre 2026
+
+Il proprietario ha confermato l'uso in **entrambe le modalità** e il design:
+opzione disattivata inizialmente, rating superiore alla soglia e conteggio da 1
+al massimo scelto, accesso `discovery.rating_filters` a scadenza. Se l'accesso
+scade, la ricerca filtrata fallisce senza tornare silenziosamente a quella base.
+Il confronto resta nell'adapter Google; metriche escluse da Excel, storage e AI.
+
+La [specifica scritta](superpowers/specs/2026-10-10-filtri-rating-recensioni-design.md)
+è stata preparata e autorevisionata sul branch `codex/licensed-rating-filters`,
+basato su `6491f66` della [PR draft #9](https://github.com/Marcelluxx/lead-hunter-ai/pull/9).
+Per la base sono passati tutti i gate GitHub, incluso Security dopo la rimozione
+di NLTK inutilizzato. Le indicazioni di blocco precedenti restano storiche.
+
+- [x] Recuperare regole e limiti precedenti.
+- [x] Confermare entrambe le modalità.
+- [x] Approvare il design conversazionale.
+- [x] Scrivere e autorevisionare la specifica.
+- [ ] Approvare la specifica scritta.
+- [ ] Scrivere/revisionare e approvare il piano operativo.
+- [ ] Implementare, verificare e pubblicare il modulo.
+
+Il modulo rimane `planned`; non è stato modificato codice applicativo.
