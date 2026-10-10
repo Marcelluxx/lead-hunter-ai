@@ -8,7 +8,7 @@ class FeatureCatalog:
         return (
             FeatureDefinition("export.no_website", "Export riferimenti senza sito", "available",
                               (Permission.EXPORT_RESULTS,), (Permission.EXPORT_RESULTS,)),
-            FeatureDefinition("discovery.rating_filters", "Filtri rating e recensioni", "planned",
+            FeatureDefinition("discovery.rating_filters", "Filtri rating e recensioni", "available",
                               (Permission.START_JOB,), (Permission.VIEW_RESULTS,)),
             FeatureDefinition("diagnostics.full", "Diagnostica completa", "planned",
                               (Permission.START_JOB,), (Permission.VIEW_AUDIT_LOG,), True, True),

@@ -724,6 +724,55 @@ ordered by commercial risk and architectural leverage:
 The intentionally deferred local credential rotation described in the audit remains an
 operator decision; no credential is embedded in the repository history examined by CI.
 
+## Licensed rating and review-count filters
+
+Local CLI and Streamlit support optional Google Places filters in **both** search
+modes. The GUI toggle starts off. The CLI requires `--rating-filters`; explicit
+`--min-rating` or `--max-reviews` without that flag is a usage error. These options
+cannot be combined with `--test-url`, `--gui`, or `--examples`.
+
+```bash
+# Base discovery: no rating-filter license required.
+uv run --frozen python main.py --lat 45.4642 --lng 9.1900 --keywords dentista
+
+# Filtered discovery and reference-only export: both feature grants required.
+uv run --frozen python main.py --lat 45.4642 --lng 9.1900 --keywords dentista \
+  --rating-filters --min-rating 3.9 --max-reviews 100 --export-references
+
+# The same filter before independent website crawling/auditing.
+uv run --frozen python main.py --lat 45.4642 --lng 9.1900 --keywords dentista \
+  --mode with_website --rating-filters
+```
+
+When enabled, defaults are 3.9 and 100. A result qualifies only with **rating
+strictly above the threshold** and **1 to the maximum review count inclusive**.
+Missing/invalid metrics exclude that result. The threshold accepts finite numbers
+0–5; the maximum accepts integers 1–2,147,483,647. Threshold 5 is valid and yields
+no qualifying results. The first qualifying duplicate wins in grid/keyword order.
+
+The signed, expiring grant must include `discovery.rating_filters`. Authorization
+is refreshed before each Places attempt (including retries) and before results or
+derived reports are delivered. Revocation/expiry stops the filtered operation;
+there is no automatic base fallback or emergency export of partial results.
+Switching the GUI toggle off keeps previous filtered references protected. After
+expiry, **Usa la ricerca base** explicitly selects a new base search.
+
+Only authorized filtered requests add `places.rating` and `places.userRatingCount`
+to the unchanged base field mask. The adapter immediately discards these metrics;
+candidate DTOs, website reports, AI prompts, logs, sessions, queues and databases
+do not retain them. No-website XLSX still contains only Place ID and Maps link,
+and additionally requires `export.no_website`. Website report provenance/privacy
+checks remain in force. Protected CLI saves are atomic; rejected delivery preserves
+an existing destination. GUI downloads are delivered inline after current checks.
+Previously delivered files/screenshots cannot be withdrawn retroactively.
+
+The shared service also accepts current server authorization contexts; this does
+not connect the commercial job worker or add endpoints. `diagnostics.full` remains
+planned. Offline access still depends on the guarded local clock and imported
+revocation state. Google pricing, quotas and contract depend on the deployment;
+the commercial/legal review in the roadmap remains open. No dependencies or
+database migrations were added for this module.
+
 ## Development workflow
 
 The repository uses `develop` as the integration branch.

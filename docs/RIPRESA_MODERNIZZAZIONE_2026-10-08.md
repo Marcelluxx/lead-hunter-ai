@@ -270,7 +270,10 @@ di NLTK inutilizzato. Le indicazioni di blocco precedenti restano storiche.
 - [x] Scrivere e autorevisionare la specifica.
 - [x] Approvare la specifica scritta (10 ottobre 2026).
 - [x] Scrivere e autorevisionare il [piano operativo](superpowers/plans/2026-10-10-filtri-rating-recensioni-implementation-plan.md).
-- [ ] Approvare il piano operativo; mantenere il metodo native già scelto.
+- [x] Approvare il piano operativo (10 ottobre 2026); mantenere il metodo native già scelto.
 - [ ] Implementare, verificare e pubblicare il modulo.
 
-Il modulo rimane `planned`; non è stato modificato codice applicativo.
+I flussi GUI/CLI e i servizi comuni sono implementati, inclusi export protetti
+e test di scadenza/revoca. Il catalogo viene attivato dopo le prove dei flussi;
+review indipendente e gate GitHub finali rimangono in corso.
+[Evidenze e decisioni](RATING_FILTER_IMPLEMENTATION_REVIEW.md).

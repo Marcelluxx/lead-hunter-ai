@@ -10,7 +10,7 @@
 
 **Spec:** [Specifica approvata](../specs/2026-10-10-filtri-rating-recensioni-design.md).
 
-Stato: piano preparato e autorevisionato il 10 ottobre 2026; attende la revisione del proprietario. Esecuzione **native** già scelta: stesso implementer, una review indipendente finale. Nessuna implementazione eseguita da questo documento.
+Stato: piano preparato, autorevisionato e approvato dal proprietario il 10 ottobre 2026; implementazione e verifiche finali in corso. Esecuzione **native** già scelta: stesso implementer, una review indipendente finale. Task 1–5 implementati; completamento Task 6 subordinato a review e gate finali.
 
 ## Global Constraints
 
@@ -81,7 +81,7 @@ Non usare uv globale 0.12.20. Le prove intermediamente disponibili usano un cata
 - Guard = origine operativa fidata, non una concessione in cache. Non serializzabile (`__reduce_ex__` rifiuta il pickle), repr neutro, nessun campo di metriche/token/claims; mantiene riferimenti ai servizi necessari alla verifica corrente.
 - Fixture `RatingFilterFixture(testcase, *, features=('discovery.rating_filters',), available=True)` espone `scope`, `claims`, `clock`, `licenses`, `access`, `guard`, `activate(claims=None)`; usare gli helper Ed25519 esistenti e catalogo di test che cambia soltanto disponibilità dei moduli necessari. Nessuna chiave privata permanente.
 
-- [ ] **Step 1: Scrivere le prove di criteri e guard** in `RatingFilterCriteriaTests`; includere queste asserzioni:
+- [x] **Step 1: Scrivere le prove di criteri e guard** in `RatingFilterCriteriaTests`; includere queste asserzioni:
 
 ```python
 # test_defaults_and_exact_types
@@ -107,10 +107,10 @@ with self.assertRaises(TypeError):
 
 Aggiungere immutabilità, aggiornamento del context factory a ogni azione e licenze assenti/non concesse/alterate/revocate/installazione diversa; verificare i codici del contratto esistente, senza mock della decisione autorizzativa.
 
-- [ ] **Step 2: RED**: `& $ratingUv run --frozen --group test python -m unittest tests.test_rating_filter_criteria -v`; atteso fallimento per nuove interfacce mancanti.
-- [ ] **Step 3: Implementare** criteri e guard con le firme sopra; guard senza I/O provider né flag di autorizzazione. La disponibilità produttiva resta `planned`.
-- [ ] **Step 4: GREEN**: stesso comando, tutti PASS.
-- [ ] **Step 5: Commit** solo i quattro file del task: `feat: add validated rating criteria and runtime access guard`.
+- [x] **Step 2: RED**: `& $ratingUv run --frozen --group test python -m unittest tests.test_rating_filter_criteria -v`; atteso fallimento per nuove interfacce mancanti.
+- [x] **Step 3: Implementare** criteri e guard con le firme sopra; guard senza I/O provider né flag di autorizzazione. La disponibilità produttiva resta `planned`.
+- [x] **Step 4: GREEN**: stesso comando, tutti PASS.
+- [x] **Step 5: Commit** solo i quattro file del task: `feat: add validated rating criteria and runtime access guard`.
 
 ### Task 2: Discovery filtrata autorizzata dentro Google
 
@@ -123,7 +123,7 @@ Aggiungere immutabilità, aggiornamento del context factory a ogni azione e lice
 - Privato `_matches_rating_criteria(raw: Mapping[str, Any], criteria: RatingFilterCriteria) -> bool` nell'adapter. Estendere `_fetch(text, language, lat, lng, *, criteria: RatingFilterCriteria | None = None, guard: RatingFilterGuard | None = None) -> list[TransientCandidate]`; criteri/guard devono essere entrambi presenti oppure assenti.
 - Conservare il mask base validato come dato privato: il parametro constructor accetta soltanto sottoinsiemi non vuoti di `places.id`, `places.displayName`, `places.websiteUri`, `places.attributions`, mantenendo l'ordine. Campi protetti/wildcard/altri campi: `ValueError('provider_field_mask_invalid')` prima di I/O. Gli header effettivi ricompongono sempre questo mask, anche se i metadati pubblici `headers` vengono modificati. Usare TYPE_CHECKING/import locali dove necessario per evitare il ciclo servizio→adapter→guard.
 
-- [ ] **Step 1: Scrivere prove con HTTP fixture completo**, adapter reale, clock e licenze firmate. Asserzioni in `RatingFilterDiscoveryTests`:
+- [x] **Step 1: Scrivere prove con HTTP fixture completo**, adapter reale, clock e licenze firmate. Asserzioni in `RatingFilterDiscoveryTests`:
 
 ```python
 # test_strict_boundaries_and_missing_metrics
@@ -158,10 +158,10 @@ Testare mask concorrenti con barriera/thread e stessa istanza, sequenza filtered
 
 Aggiungere `test_server_context_is_current_per_attempt_and_delivery` usando DB/helper correnti, SQL repository e firma reale: ruolo viewer impedisce il prossimo EXECUTE ma conserva VIEW_RESULTS; membership rimossa, utente/workspace inattivo impediscono consegna; scope errato non concede nulla. Mutare da una seconda sessione per verificare il refresh effettivo, non un context fake in cache.
 
-- [ ] **Step 2: RED**: `& $ratingUv run --frozen --group test python -m unittest tests.test_rating_filter_discovery -v`; nuove interfacce/behavior assenti.
-- [ ] **Step 3: Implementare** servizio EXECUTE→adapter→VIEW; adapter filtra prima di costruire candidati, poi deduplica. Costruire una copia degli header per ogni richiesta; guard EXECUTE immediatamente prima di ogni POST effettivo, fuori dal catch generico provider o con `LicenseError` esplicitamente propagato. Le callback ricevono solo stato/avanzamento, mai raw/candidati. Nessun salvataggio delle metriche.
-- [ ] **Step 4: GREEN**: `& $ratingUv run --frozen --group test python -m unittest tests.test_rating_filter_discovery tests.test_discovery_contract -v`; tutti PASS, contratti base invariati.
-- [ ] **Step 5: Commit** file del task: `feat: filter Places results behind fresh per-attempt authorization`.
+- [x] **Step 2: RED**: `& $ratingUv run --frozen --group test python -m unittest tests.test_rating_filter_discovery -v`; nuove interfacce/behavior assenti.
+- [x] **Step 3: Implementare** servizio EXECUTE→adapter→VIEW; adapter filtra prima di costruire candidati, poi deduplica. Costruire una copia degli header per ogni richiesta; guard EXECUTE immediatamente prima di ogni POST effettivo, fuori dal catch generico provider o con `LicenseError` esplicitamente propagato. Le callback ricevono solo stato/avanzamento, mai raw/candidati. Nessun salvataggio delle metriche.
+- [x] **Step 4: GREEN**: `& $ratingUv run --frozen --group test python -m unittest tests.test_rating_filter_discovery tests.test_discovery_contract -v`; tutti PASS, contratti base invariati.
+- [x] **Step 5: Commit** file del task: `feat: filter Places results behind fresh per-attempt authorization`.
 
 ### Task 3: Origine protetta nella pipeline e negli export
 
@@ -174,7 +174,7 @@ Aggiungere `test_server_context_is_current_per_attempt_and_delivery` usando DB/h
 - Estende `ReferenceExportService.export_bytes(references, *, origin: RatingFilterGuard | None = None) -> bytes` e `save(references, destination, *, origin=None) -> int`: guard VIEW all'ingresso e prima della consegna/replace, oltre agli EXECUTE/VIEW export esistenti.
 - Aggiunge `DataExporter.export_bytes(leads, mode='with_website', privacy_policy=None, suppression_checker=None, *, origin: RatingFilterGuard | None = None) -> bytes`; stessa ExportPolicy/formattazione/sanitizzazione, workbook in memoria, guard VIEW prima di lavorare e prima del ritorno. Estende `export_to_excel` con keyword-only `origin=None`, usando lo stesso serializer: per origine filtrata temp sul filesystem destinazione, flush/fsync, nuova VIEW, `os.replace`, cleanup anche su interrupt. Il percorso base conserva il comportamento pubblico. Il percorso protetto propaga `LicenseError`; errori scrittura `OSError('website_export_write_failed')` senza path/payload sensibili.
 
-- [ ] **Step 1: Scrivere prove end-to-end di servizio/pipeline con trasporto e auditor fixture**, non matcher/decisione licenze mockati:
+- [x] **Step 1: Scrivere prove end-to-end di servizio/pipeline con trasporto e auditor fixture**, non matcher/decisione licenze mockati:
 
 ```python
 # test_denial_precedes_google_auditor_crawler_and_geocoding
@@ -202,11 +202,11 @@ self.assertEqual(candidate_callbacks, [])
 
 Copertura: entrambe le combinazioni feature mancanti, rifiuto in chiamata diretta ai servizi, scadenza durante crawl/audit e prima di ritorno/esportazione; social/site classification invariati; base senza trust/store; workbook sito riaperto con sanitizzazione e policy privacy/suppression esistenti. Ispezionare tutti gli entry del ZIP, DTO, payload auditor, log catturati e messaggi: nessun valore sentinel rating/conteggio né risposta grezza. Controllare che nessuna nuova scrittura DB/queue riceva payload provider; aggiungere ai test boundary esistenti i campi proibiti, senza inventare un nuovo percorso di persistenza.
 
-- [ ] **Step 2: RED**: `& $ratingUv run --frozen --group test python -m unittest tests.test_rating_filter_delivery -v`; wiring/origine/export protetto mancanti.
-- [ ] **Step 3: Implementare composizione e origine** con firme sopra; stessa dipendenza discovery per entrambe le modalità. Rifiuti licenze non vengono assorbiti dai catch generici. Progresso solo aggregato; errori audit non stampano Place ID, eccezioni grezze o risultati parziali. Conservare ordine e confini Google/sito; ai risultati derivati si associa il guard della ricerca, non i valori provider.
-- [ ] **Step 4: Implementare serializer e consegna protetta** nelle due classi export, condividendo il serializer esistente tra bytes/file; VIEW subito prima di return/replace. Non indebolire ExportPolicy né aggiungere `export.no_website` al report sito.
-- [ ] **Step 5: GREEN**: `& $ratingUv run --frozen --group test python -m unittest tests.test_rating_filter_delivery tests.test_compliant_pipeline tests.test_dependency_injection tests.test_reference_exports tests.test_export_policy tests.test_privacy_export_gate -v`; tutti PASS.
-- [ ] **Step 6: Commit e push major** selettivi: `feat: preserve rating-filter authorization through pipeline and exports`; `git push -u origin codex/licensed-rating-filters`. Modulo produttivo ancora `planned`.
+- [x] **Step 2: RED**: `& $ratingUv run --frozen --group test python -m unittest tests.test_rating_filter_delivery -v`; wiring/origine/export protetto mancanti.
+- [x] **Step 3: Implementare composizione e origine** con firme sopra; stessa dipendenza discovery per entrambe le modalità. Rifiuti licenze non vengono assorbiti dai catch generici. Progresso solo aggregato; errori audit non stampano Place ID, eccezioni grezze o risultati parziali. Conservare ordine e confini Google/sito; ai risultati derivati si associa il guard della ricerca, non i valori provider.
+- [x] **Step 4: Implementare serializer e consegna protetta** nelle due classi export, condividendo il serializer esistente tra bytes/file; VIEW subito prima di return/replace. Non indebolire ExportPolicy né aggiungere `export.no_website` al report sito.
+- [x] **Step 5: GREEN**: `& $ratingUv run --frozen --group test python -m unittest tests.test_rating_filter_delivery tests.test_compliant_pipeline tests.test_dependency_injection tests.test_reference_exports tests.test_export_policy tests.test_privacy_export_gate -v`; tutti PASS.
+- [x] **Step 6: Commit e push major** selettivi: `feat: preserve rating-filter authorization through pipeline and exports`; `git push -u origin codex/licensed-rating-filters`. Modulo produttivo ancora `planned`.
 
 ### Task 4: CLI esplicita e consegna controllata
 
@@ -214,7 +214,7 @@ Copertura: entrambe le combinazioni feature mancanti, rifiuto in chiamata dirett
 
 **Interfaces:** consuma criteri/guard e `create_orchestrator(..., rating_criteria=...)` Task 3. `main(argv: Sequence[str] | None = None) -> int` mantiene la firma; nuovo flag `--rating-filters`, argomenti soglia default `None` per distinguere presenza esplicita, valori 3.9/100 applicati soltanto quando abilitato.
 
-- [ ] **Step 1: Scrivere le prove CLI**, per entrambe le modalità e le combinazioni export:
+- [x] **Step 1: Scrivere le prove CLI**, per entrambe le modalità e le combinazioni export:
 
 ```python
 # test_explicit_flag_applies_defaults_in_both_modes
@@ -239,10 +239,10 @@ license_factory.assert_not_called()
 
 Parametrizzare `--min-rating`/`--max-reviews` senza flag (anche esplicitamente pari ai default), NaN/inf/negative/oltre limite e combinazioni rating con `--test-url`, `--gui`, `--examples`. Testare revoca immediatamente prima della stampa e save, e eccezione provider con sentinel: fallimento redatto senza file. I test base export già esistenti devono continuare a passare.
 
-- [ ] **Step 2: RED**: `& $ratingUv run --frozen --group test python -m unittest tests.test_rating_filter_cli -v`; flag/preflight/delivery mancanti.
-- [ ] **Step 3: Implementare parsing/preflight**: parse e validazione rating prima di `ApplicationSettings.from_environment()` (carica `.env`). Per `--token-mode` usare sentinel e applicare il default settings dopo parsing; preservare i default runtime. Soglie isolate/combinazioni speciali: `parser.error`, code 2. Invalidità/licenza/config: code 2; altri fallimenti runtime filtrati: code 1, redatti. Verificare EXECUTE prima di dipendenze/geocoding e inoltrare origine a ogni export; preparare il blocco completo di risultati console in memoria e chiamare `require_result_view` immediatamente prima della stampa unica, senza streaming di singoli candidati. Interruzione filtrata: niente export d'emergenza né successo parziale, codice non zero; base conserva il comportamento esistente. Aggiornare help/esempi con `--rating-filters`; niente vecchie soglie noop.
-- [ ] **Step 4: GREEN**: `& $ratingUv run --frozen --group test python -m unittest tests.test_rating_filter_cli tests.test_reference_export_cli tests.test_dependency_injection -v`; tutti PASS.
-- [ ] **Step 5: Commit** file del task: `feat(cli): expose licensed rating filters for both search modes`.
+- [x] **Step 2: RED**: `& $ratingUv run --frozen --group test python -m unittest tests.test_rating_filter_cli -v`; flag/preflight/delivery mancanti.
+- [x] **Step 3: Implementare parsing/preflight**: parse e validazione rating prima di `ApplicationSettings.from_environment()` (carica `.env`). Per `--token-mode` usare sentinel e applicare il default settings dopo parsing; preservare i default runtime. Soglie isolate/combinazioni speciali: `parser.error`, code 2. Invalidità/licenza/config: code 2; altri fallimenti runtime filtrati: code 1, redatti. Verificare EXECUTE prima di dipendenze/geocoding e inoltrare origine a ogni export; preparare il blocco completo di risultati console in memoria e chiamare `require_result_view` immediatamente prima della stampa unica, senza streaming di singoli candidati. Interruzione filtrata: niente export d'emergenza né successo parziale, codice non zero; base conserva il comportamento esistente. Aggiornare help/esempi con `--rating-filters`; niente vecchie soglie noop.
+- [x] **Step 4: GREEN**: `& $ratingUv run --frozen --group test python -m unittest tests.test_rating_filter_cli tests.test_reference_export_cli tests.test_dependency_injection -v`; tutti PASS.
+- [x] **Step 5: Commit** file del task: `feat(cli): expose licensed rating filters for both search modes`.
 
 ### Task 5: GUI, rerun e download senza concessioni in cache
 
@@ -254,7 +254,7 @@ Parametrizzare `--min-rating`/`--max-reviews` senza flag (anche esplicitamente p
 - `render_reference_export_panel(*, place_ids, service_factory, origin: RatingFilterGuard | None = None) -> None`: origine VIEW prima di mostrare riferimenti/preparare, inoltrarla a `export_bytes`; callback finale ricontrolla export VIEW e origine VIEW. Mantenere la semantica reference-only e gli errori sicuri esistenti.
 - Stato aggiuntivo `no_website_result_origin: RatingFilterGuard | None`, scritto soltanto dalla pipeline fidata insieme a `no_website_place_ids`. Non ricostruire origine dal toggle corrente; non salvare claim, token, risposta provider, criteri di matching ricevuti o workbook. Su nuova ricerca cancellare entrambi prima di eseguire; su rifiuto/fallimento cancellare entrambi. Su rerun verificare VIEW prima di esporre riferimenti/export filtrati.
 
-- [ ] **Step 1: Scrivere AppTest sulla GUI reale e sui componenti**, con licenze reali fixture e provider trasporto controllato:
+- [x] **Step 1: Scrivere AppTest sulla GUI reale e sui componenti**, con licenze reali fixture e provider trasporto controllato:
 
 ```python
 # test_default_off_and_controls_in_both_modes
@@ -282,11 +282,11 @@ self.assertTrue(website_report_reopens_with_expected_columns)
 
 Testare modalità cambiata/rerun/prepare dopo scadenza o rimozione permesso, preflight UI valido seguito da rifiuto al click Avvia, e VIEW negato subito prima del dataframe. Dopo toggle off gli ID rimangono protetti finché accesso valido; nuova ricerca base sostituisce origine con `None`. Verificare ZIP/metadata e stato sessione senza metriche; guard runtime non è serializzato né rappresentato come claim/token. Mantenere i test base dei riferimenti invalidi/>10.000 senza nascondere il dataframe.
 
-- [ ] **Step 2: RED**: `& $ratingUv run --frozen --group test python -m unittest tests.test_rating_filter_ui -v`; nuovi controlli/guard/rerun mancanti.
-- [ ] **Step 3: Implementare controlli e gestione origine**: chiamata comune fuori dal blocco solo-with-site, niente attivazione al cambio modalità; passare criteri al factory, memorizzare origine soltanto dai risultati del motore. VIEW prima di ogni rendering/consegna; `LicenseError` con messaggio sicuro, reset su nuovo avvio o rifiuto, nessun fallback. Rerun base non richiede licensing discovery.
-- [ ] **Step 4: Implementare consegne inline**: reference panel usa helper e verifica doppia; report sito filtrato usa `DataExporter.export_bytes(..., origin=...)` e helper con `origin.require_view`, senza scrivere un file statico/download_button. Report sito base mantiene il percorso corrente. Non conservare bytes nei rerun; una pagina/file già validamente consegnata non viene revocata retroattivamente.
-- [ ] **Step 5: GREEN**: `& $ratingUv run --frozen --group test python -m unittest tests.test_rating_filter_ui tests.test_reference_export_ui tests.test_feature_license_ui -v`; tutti PASS. Verifica browser locale con fixture e licenza effimera: toggle nelle due modalità, risultati attesi, download XLSX riaperto, scadenza e nuova ricerca base. Nessuna API Google/LLM a pagamento per lo smoke; registrare eventuali limiti dell'effettivo salvataggio browser.
-- [ ] **Step 6: Commit e push major** selettivi: `feat(gui): expose guarded rating filters and derived downloads`; `git push origin codex/licensed-rating-filters`.
+- [x] **Step 2: RED**: `& $ratingUv run --frozen --group test python -m unittest tests.test_rating_filter_ui -v`; nuovi controlli/guard/rerun mancanti.
+- [x] **Step 3: Implementare controlli e gestione origine**: chiamata comune fuori dal blocco solo-with-site, niente attivazione al cambio modalità; passare criteri al factory, memorizzare origine soltanto dai risultati del motore. VIEW prima di ogni rendering/consegna; `LicenseError` con messaggio sicuro, reset su nuovo avvio o rifiuto, nessun fallback. Rerun base non richiede licensing discovery.
+- [x] **Step 4: Implementare consegne inline**: reference panel usa helper e verifica doppia; report sito filtrato usa `DataExporter.export_bytes(..., origin=...)` e helper con `origin.require_view`, senza scrivere un file statico/download_button. Report sito base mantiene il percorso corrente. Non conservare bytes nei rerun; una pagina/file già validamente consegnata non viene revocata retroattivamente.
+- [x] **Step 5: GREEN**: `& $ratingUv run --frozen --group test python -m unittest tests.test_rating_filter_ui tests.test_reference_export_ui tests.test_feature_license_ui -v`; tutti PASS. Verifica browser locale con fixture e licenza effimera: toggle nelle due modalità, risultati attesi, download XLSX riaperto, scadenza e nuova ricerca base. Nessuna API Google/LLM a pagamento per lo smoke; registrare eventuali limiti dell'effettivo salvataggio browser.
+- [x] **Step 6: Commit e push major** selettivi: `feat(gui): expose guarded rating filters and derived downloads`; `git push origin codex/licensed-rating-filters`.
 
 ### Task 6: Attivazione, verifica completa e pubblicazione della PR draft
 
@@ -325,5 +325,5 @@ Autorevisione inline completata il 10 ottobre 2026: criteri/confine dati (Task 1
 
 - [x] Specifica scritta approvata dal proprietario.
 - [x] Piano scritto e autorevisionato.
-- [ ] Piano revisionato e approvato dal proprietario; mantenere metodo native.
+- [x] Piano revisionato e approvato dal proprietario (10 ottobre 2026); metodo native mantenuto.
 - [ ] Esecuzione dei sei task, review e gate finali.

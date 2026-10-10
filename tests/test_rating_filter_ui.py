@@ -21,7 +21,7 @@ class RatingFilterUiTests(unittest.TestCase):
     def setUp(self):
         original_main = sys.modules['__main__']
         self.addCleanup(lambda: sys.modules.__setitem__('__main__', original_main))
-        self.fx = RatingFilterFixture(self, features=('discovery.rating_filters', 'export.no_website'))
+        self.fx = RatingFilterFixture(self, features=('discovery.rating_filters', 'export.no_website'), available=False)
         self.http = Transport()
         self.output = StringIO()
         redirect = contextlib.redirect_stdout(self.output); redirect.__enter__()

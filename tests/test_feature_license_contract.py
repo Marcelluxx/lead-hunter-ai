@@ -9,14 +9,14 @@ from tests.license_helpers import license_claims, local_scope, managed_scope
 
 
 class FeatureLicenseContractTests(unittest.TestCase):
-    def test_catalog_exposes_only_completed_export(self):
+    def test_catalog_exposes_completed_rating_filters_and_reference_export(self):
         catalog = FeatureCatalog()
         self.assertEqual({x.feature_id for x in catalog.all()},
                          {'export.no_website', 'discovery.rating_filters', 'diagnostics.full'})
         self.assertEqual(catalog.get('export.no_website').module_status, 'available')
         self.assertEqual(catalog.get('export.no_website').label, 'Export riferimenti senza sito')
-        for feature_id in ['discovery.rating_filters', 'diagnostics.full']:
-            self.assertEqual(catalog.get(feature_id).module_status, 'planned')
+        self.assertEqual(catalog.get('discovery.rating_filters').module_status, 'available')
+        self.assertEqual(catalog.get('diagnostics.full').module_status, 'planned')
         diag = catalog.get('diagnostics.full')
         self.assertEqual(diag.execute_permissions, (Permission.START_JOB,))
         self.assertEqual(diag.view_permissions, (Permission.VIEW_AUDIT_LOG,))
@@ -27,6 +27,7 @@ class FeatureLicenseContractTests(unittest.TestCase):
         filters = catalog.get('discovery.rating_filters')
         self.assertEqual(filters.execute_permissions, (Permission.START_JOB,))
         self.assertEqual(filters.view_permissions, (Permission.VIEW_RESULTS,))
+        self.assertFalse(filters.execute_mfa or filters.view_mfa)
 
     def test_scope_and_claim_types_are_strict(self):
         scope = local_scope()

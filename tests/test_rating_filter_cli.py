@@ -16,7 +16,7 @@ from tests.test_compliant_pipeline import _Auditor, _Crawler
 
 class RatingFilterCliTests(unittest.TestCase):
     def setUp(self):
-        self.fx = RatingFilterFixture(self, features=('discovery.rating_filters', 'export.no_website'))
+        self.fx = RatingFilterFixture(self, features=('discovery.rating_filters', 'export.no_website'), available=False)
         self.output = StringIO()
         redirect = contextlib.redirect_stdout(self.output); redirect.__enter__()
         self.addCleanup(redirect.__exit__, None, None, None)
