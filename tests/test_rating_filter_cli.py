@@ -9,7 +9,7 @@ from main import main, LeadHunterOrchestrator, create_orchestrator
 from src.application.container import ApplicationContainer
 from src.domain.rating_filters import RatingFilterCriteria
 from src.scraper import LeadScraper
-from tests.rating_filter_helpers import RatingFilterFixture
+from tests.rating_filter_helpers import RatingFilterFixture, mixed_website_failure
 from tests.test_rating_filter_discovery import Transport, make_provider, place
 from tests.test_compliant_pipeline import _Auditor, _Crawler
 
@@ -99,6 +99,20 @@ class RatingFilterCliTests(unittest.TestCase):
             self.assertEqual(main(self.args + ['--mode', 'with_website', '--rating-filters']), 1)
         self.assertNotIn('provider-secret-sentinel', self.output.getvalue())
         self.assertFalse(self.destination.exists())
+
+    def test_mixed_website_failures_never_replace_report_or_report_success(self):
+        self.fx.activate()
+        self.http.places = [place('first', websiteUri='https://first.example.test'),
+                            place('second', websiteUri='https://second.example.test')]
+        for failure in ['crawl', 'audit_early', 'audit_late']:
+            self.destination.write_bytes(b'previous-export')
+            self.output.truncate(0); self.output.seek(0)
+            with self.subTest(failure=failure), mixed_website_failure(failure) as auditor, \
+                    patch.object(ApplicationContainer, 'build_auditor', return_value=auditor):
+                self.assertEqual(main(self.args + ['--mode', 'with_website', '--rating-filters']), 1)
+            self.assertEqual(self.destination.read_bytes(), b'previous-export')
+            self.assertNotIn('provider-secret-sentinel', self.output.getvalue())
+            self.assertNotIn('Esportazione premium completata', self.output.getvalue())
 
     def test_base_needs_no_license_configuration(self):
         with patch.object(ApplicationContainer, 'build_local_license_service', side_effect=AssertionError('base licensing I/O')):

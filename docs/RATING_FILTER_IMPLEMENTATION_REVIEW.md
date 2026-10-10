@@ -49,9 +49,32 @@ eseguito sullo staging di ogni commit; gate remoti ancora da ottenere.
 3. Commit locale dell'attivazione prima della review, per fornire al revisore uno
    snapshot esatto dell'intero ramo. Push/PR restano successivi alla review.
    Costo: un commit aggiuntivo per documentare i gate conclusivi.
+4. Worker commerciale e diagnostica rimangono nelle milestone successive,
+   secondo la specifica approvata. Costo: funzionalità ancora indisponibili fino
+   al rispettivo sottoprogetto.
+5. Il rifiuto CLI di latitudine/longitudine zero è comportamento precedente,
+   estraneo al recupero dei filtri e lasciato invariato. Costo: ricerche CLI
+   sull'equatore o sul meridiano zero ancora rifiutate, da correggere separatamente.
+6. Prezzi/contratti Google e comportamento live rimangono nella revisione del
+   deployment: queste prove usano trasporti e fonti simulati, senza chiamate a
+   pagamento. Costo: le fixture non convalidano termini/prezzi o servizio live.
 
 ## Review indipendente e gate remoti
 
-In attesa della review finale e della PR draft. L'integrazione delle PR licensing,
-reference export e rimozione NLTK rimane separata. Worker commerciale e diagnostica
-completa restano nelle milestone successive; questo documento non è una release.
+Review fresca `gpt-6-astra`, effort high, dell'intero intervallo `6491f66..fec6e39`:
+37 test rating eseguiti indipendentemente, nessuna modifica al checkout. Nessun
+Critical o Minor; un Important accettato: tre handler legacy crawl/audit assorbivano
+errori ordinari e permettevano successo/esportazione parziale filtrata. Riprodotto
+RED in orchestratore, CLI (destinazione sovrascritta) e GUI; aggiunta propagazione
+sicura `pipeline_failed` in tutti e tre i percorsi, così il wrapper cancella lo stato
+e impedisce la consegna. Test con due candidati e future reali distinguono crawl,
+audit già completato e audit atteso alla fine; comportamento base conservato.
+Il test di sola redazione ora richiede anche il fallimento. GREEN 29 test mirati,
+poi suite completa 237 test: 225 passati, 12 skip espliciti come sopra. Compilazione
+e diff check dopo la correzione PASS; gate remoti ancora in corso. Nessuna seconda
+review richiesta: il rilievo è verificato RED→GREEN in un unico passaggio.
+
+Il revisore ha lasciato fuori giudizio worker/diagnostica, coordinate zero CLI e
+contratto/billing live; le decisioni 4–6 sopra motivano ciascun limite. Nessun
+rilievo minore differito. L'integrazione delle PR licensing, reference export e
+rimozione NLTK rimane separata; questo documento non è una release.

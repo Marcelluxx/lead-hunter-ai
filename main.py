@@ -301,6 +301,8 @@ class LeadHunterOrchestrator:
                     raise
                 except Exception as e:
                     log(f"      ❌ Errore crawling ({type(e).__name__})")
+                    if self.result_origin is not None:
+                        raise RuntimeError('pipeline_failed') from None
 
                 # Poll per audit completati nel frattempo (non bloccante)
                 done_futures = [f for f in audit_futures if f.done()]
@@ -317,6 +319,8 @@ class LeadHunterOrchestrator:
                         raise
                     except Exception as e:
                         log(f"   ❌ Errore Audit ({type(e).__name__})")
+                        if self.result_origin is not None:
+                            raise RuntimeError('pipeline_failed') from None
                         audits_completed += 1
                     if on_audit_progress:
                         on_audit_progress(audits_completed, total_to_audit)
@@ -343,6 +347,8 @@ class LeadHunterOrchestrator:
                     raise
                 except Exception as e:
                     log(f"   ❌ Errore Audit ({type(e).__name__})")
+                    if self.result_origin is not None:
+                        raise RuntimeError('pipeline_failed') from None
                     audits_completed += 1
                     
                 if on_audit_progress:

@@ -21,7 +21,7 @@ from src.domain.provenance import VerifiedLead, FieldProvenance, DataSource
 from src.exporter import DataExporter
 from src.scraper import LeadScraper
 from src.settings import ApplicationSettings
-from tests.rating_filter_helpers import RatingFilterFixture
+from tests.rating_filter_helpers import RatingFilterFixture, mixed_website_failure
 from tests.test_compliant_pipeline import _Crawler, _Auditor
 from tests.test_rating_filter_discovery import Transport, make_provider, place, Response
 
@@ -139,7 +139,8 @@ class RatingFilterDeliveryTests(unittest.TestCase):
         auditor = _Auditor(); auditor.audit_website = failing
         output = StringIO()
         with contextlib.redirect_stdout(output), patch('main.HybridCrawler', return_value=_Crawler()), patch('main.filter_by_business_age', return_value=True), patch('main.filter_franchise', return_value=False):
-            self.orchestrator('with_website', Transport([place(websiteUri='https://official.example.test')]), auditor).run(45, 9, ['dentista'])
+            with self.assertRaisesRegex(RuntimeError, '^pipeline_failed$'):
+                self.orchestrator('with_website', Transport([place(websiteUri='https://official.example.test')]), auditor).run(45, 9, ['dentista'])
         self.assertNotIn('provider-secret-sentinel', output.getvalue())
         for data in [self.fx.service().export_bytes(self.refs, origin=self.fx.guard),
                      DataExporter.export_bytes([verified_lead()], origin=self.fx.guard)]:
@@ -147,6 +148,24 @@ class RatingFilterDeliveryTests(unittest.TestCase):
                 payload = b''.join(archive.read(name) for name in archive.namelist())
             for forbidden in [b'userRatingCount', b'provider-secret-sentinel', b'rating']:
                 self.assertNotIn(forbidden, payload)
+
+    def test_mixed_crawl_and_both_audit_failures_abort_filtered_operation(self):
+        rows = [place('first', websiteUri='https://first.example.test'),
+                place('second', websiteUri='https://second.example.test')]
+        for failure in ['crawl', 'audit_early', 'audit_late']:
+            with self.subTest(failure=failure), mixed_website_failure(failure) as auditor:
+                engine = self.orchestrator('with_website', Transport(rows), auditor)
+                output = StringIO()
+                with contextlib.redirect_stdout(output), self.assertRaisesRegex(RuntimeError, '^pipeline_failed$'):
+                    engine.run(45, 9, ['dentista'])
+                self.assertEqual(engine.all_leads, {})
+                self.assertEqual(engine.transient_results, [])
+                self.assertNotIn('provider-secret-sentinel', output.getvalue())
+                self.assertNotIn('Pipeline completata', output.getvalue())
+            with self.subTest(base=failure), mixed_website_failure(failure) as auditor:
+                base = LeadHunterOrchestrator('with_website', scraper=LeadScraper(provider=make_provider(Transport(rows))), auditor=auditor)
+                with contextlib.redirect_stdout(StringIO()):
+                    self.assertEqual(len(base.run(45, 9, ['dentista'])), 1)
 
     def test_write_failure_is_redacted_and_preserves_old_destination(self):
         with patch('src.exporter.os.replace', side_effect=OSError('provider-secret-sentinel')):

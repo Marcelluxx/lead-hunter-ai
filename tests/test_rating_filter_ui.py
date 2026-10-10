@@ -12,7 +12,7 @@ from streamlit.testing.v1 import AppTest
 from src.application.container import ApplicationContainer
 from src.application.rating_filters import RatingFilterGuard
 from src.scraper import LeadScraper
-from tests.rating_filter_helpers import RatingFilterFixture
+from tests.rating_filter_helpers import RatingFilterFixture, mixed_website_failure
 from tests.test_rating_filter_discovery import Transport, make_provider, place
 from tests.test_compliant_pipeline import _Crawler, _Auditor
 
@@ -145,3 +145,21 @@ class RatingFilterUiTests(unittest.TestCase):
                 self.assertEqual(len(app.get('iframe')), 0)
                 self.assertEqual(len(app.get('download_button')), 0)
                 self.assertEqual(len(app.exception), 0)
+
+    def test_mixed_website_failures_never_display_or_deliver_partial_results(self):
+        self.fx.activate()
+        self.http.places = [place('first', websiteUri='https://first.example.test'),
+                            place('second', websiteUri='https://second.example.test')]
+        for failure in ['crawl', 'audit_early', 'audit_late']:
+            with self.subTest(failure=failure), mixed_website_failure(failure) as auditor, \
+                    patch.object(ApplicationContainer, 'build_auditor', return_value=auditor):
+                app = self.app(); self.toggle(app).set_value(True).run()
+                app.radio[0].set_value('Con Sito Web + Audit').run()
+                self.start(app)
+            self.assertTrue(app.error)
+            self.assertEqual(len(app.dataframe), 0)
+            self.assertEqual(len(app.get('iframe')), 0)
+            self.assertEqual(len(app.get('download_button')), 0)
+            self.assertEqual(app.session_state['no_website_place_ids'], ())
+            self.assertIsNone(app.session_state['no_website_result_origin'])
+            self.assertNotIn('provider-secret-sentinel', self.output.getvalue())
