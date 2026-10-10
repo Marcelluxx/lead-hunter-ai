@@ -5,11 +5,12 @@ import json
 import os
 import re
 import tempfile
+import time
 import uuid
 from io import BytesIO
 from pathlib import Path
 from threading import RLock
-from zipfile import ZipFile, ZIP_DEFLATED
+from zipfile import ZipFile, ZIP_DEFLATED, BadZipFile
 
 from src.domain.discovery import ensure_provider_payload_absent, ProviderPayloadError
 from src.domain.feature_licenses import FeatureAction
@@ -29,6 +30,40 @@ class DiagnosticError(ValueError):
         super().__init__(code)
 
 
+def purge_diagnostic_archives(root: Path, *, now=None) -> int:
+    """Remove expired owned archives only from the dedicated, non-symlink root."""
+    root = Path(root)
+    if root.is_symlink() or not root.is_dir():
+        return 0
+    now = int(time.time()) if now is None else now
+    if type(now) is not int:
+        raise DiagnosticError('diagnostic_invalid')
+    resolved = root.resolve()
+    removed = 0
+    for path in root.iterdir():
+        if path.is_symlink() or not path.is_file() or path.suffix != '.zip':
+            continue
+        try:
+            if str(uuid.UUID(path.stem)) != path.stem or path.resolve().parent != resolved:
+                continue
+            if path.stat().st_size > 16 * MAX_RECORD_BYTES:
+                continue
+            with ZipFile(path) as archive:
+                if archive.getinfo('manifest.json').file_size > 4096:
+                    continue
+                manifest = json.loads(archive.read('manifest.json'))
+            if (type(manifest) is dict and manifest.get('schema_version') == 1
+                    and manifest.get('classification') == 'PRIVATE_REDACTED_DIAGNOSTICS'
+                    and manifest.get('run_id') == path.stem
+                    and type(manifest.get('expires_at')) is int
+                    and manifest['expires_at'] <= now):
+                path.unlink()
+                removed += 1
+        except (OSError, ValueError, KeyError, BadZipFile, RuntimeError):
+            continue
+    return removed
+
+
 class DiagnosticSession:
     def __init__(self, access, context_factory, *, retention_hours=24, secrets=()):
         if type(retention_hours) is not int or not 1 <= retention_hours <= 168:
@@ -45,7 +80,10 @@ class DiagnosticSession:
         self._expires_at = min(claims.expires_at, self._created_at + retention_hours * 3600)
 
     def require_execute(self):
-        return self._access.require(self._context_factory(), 'diagnostics.full', action=FeatureAction.EXECUTE)
+        claims = self._access.require(self._context_factory(), 'diagnostics.full', action=FeatureAction.EXECUTE)
+        if hasattr(self, '_expires_at') and self._access.licenses.clock.now_epoch() >= self._expires_at:
+            raise DiagnosticError('diagnostic_expired')
+        return claims
 
     def require_view(self):
         claims = self._access.require(self._context_factory(), 'diagnostics.full', action=FeatureAction.VIEW)

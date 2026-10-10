@@ -39,7 +39,7 @@ chiavi, licenze, contesti di autorizzazione o tracebacks. Il collector rifiuta
 strutture provider; URL/prompt/HTML/output vengono oscurati per credenziali
 note e pattern segreti/PII. I file sono JSON/text nel ZIP, mai HTML eseguito in UI.
 
-Limiti: 1 MiB per record, 8 MiB totali UTF-8, 256 record; rifiuto esplicito al
+Limiti: 1–20 pagine per diagnostica CLI/GUI, 1 MiB per record, 8 MiB totali UTF-8, 256 record; rifiuto esplicito al
 superamento, nessun archivio parziale spacciato per completo. Lock per capture
 concorrenti dell'auditor. Retention intera 1–168 ore, default 24; il manifest
 riporta created/expires, con scadenza non oltre la licenza. Sessione chiusa dopo

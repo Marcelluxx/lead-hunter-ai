@@ -10,8 +10,8 @@ inventare credenziali, attivare acquisti o dichiarare conclusa una revisione leg
 
 | Parte | Risultato richiesto | Stato |
 |---|---|---|
-| Integrazione recuperi | Licenze, riferimenti, filtri e rimozione NLTK in develop | PR #10 merged, c231e8c; gate post-merge in corso |
-| Diagnostica completa | Artefatti separati, accesso a scadenza, redazione e retention; GUI/CLI | Design/piano in corso, branch codex/licensed-full-diagnostics |
+| Integrazione recuperi | Licenze, riferimenti, filtri e rimozione NLTK in develop | PR #10 merged, c231e8c; CI 38081319813 e Security 38081319805 PASS |
+| Diagnostica completa | Artefatti separati, accesso a scadenza, redazione e retention; GUI/CLI | Implementata e prove CLI/GUI/Chromium PASS; review e gate in corso, branch codex/licensed-full-diagnostics |
 | Pipeline server | Handler reali, parametri validati, risultati ammessi, budget, annullamento/ripresa e tentativi | Da eseguire |
 | Correttezza funzionale | Età, e-commerce/franchise/social, modalità token, CMS, normalizzazione e coordinate zero | Da eseguire |
 | Qualità audit | Evidenze citate, versione report, benchmark/gold set e calibrazione | Da eseguire |

@@ -199,18 +199,29 @@ class HybridCrawler:
                 cache_mode=CacheMode.BYPASS,
                 markdown_generator=markdown_generator,
                 wait_until="networkidle",
-                page_timeout=25000
+                page_timeout=25000,
+                verbose=self.diagnostics is None,
             )
 
             # Configura il browser
             browser_config = BrowserConfig(
                 headless=self.headless,
-                java_script_enabled=True
+                java_script_enabled=True,
+                verbose=self.diagnostics is None,
             )
 
             # Inizializza il crawler se non è già attivo
             if self._crawler is None:
-                self._crawler = AsyncWebCrawler(config=browser_config)
+                if self.diagnostics is not None:
+                    from crawl4ai.async_logger import AsyncLogger
+                    class PrivateCrawlerLogger(AsyncLogger):
+                        def _log(self, *args, **kwargs):
+                            # Third-party errors can force verbosity; never expose their raw payloads.
+                            return None
+                    self._crawler = AsyncWebCrawler(config=browser_config,
+                                                   logger=PrivateCrawlerLogger(verbose=False, log_file=None))
+                else:
+                    self._crawler = AsyncWebCrawler(config=browser_config)
                 self._crawler.crawler_strategy.set_hook(
                     "on_page_context_created", self._install_network_guard
                 )

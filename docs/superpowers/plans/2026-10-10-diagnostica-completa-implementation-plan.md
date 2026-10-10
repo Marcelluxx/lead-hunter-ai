@@ -9,7 +9,7 @@
 
 ## Global Constraints
 
-- Retention intera 1–168 ore, default 24; 1 MiB/record, 8 MiB/run, 256 record.
+- Retention intera 1–168 ore, default 24; 1 MiB/record, 8 MiB/run, 256 record; 1–20 pagine per diagnostica CLI/GUI.
 - EXECUTE START_JOB; VIEW VIEW_AUDIT_LOG; MFA server obbligatoria per entrambi.
 - Opt-in, niente provider payload/metriche, niente campi diagnostici pubblici.
 - Nessuna nuova dipendenza/migrazione; permessi locali invariati.

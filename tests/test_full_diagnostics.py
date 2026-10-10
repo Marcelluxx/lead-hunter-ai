@@ -8,7 +8,7 @@ from unittest.mock import patch
 from zipfile import ZipFile
 from uuid import uuid4
 
-from src.application.diagnostics import DiagnosticSession, DiagnosticError
+from src.application.diagnostics import DiagnosticSession, DiagnosticError, purge_diagnostic_archives
 from src.domain.feature_licenses import LicenseError, SubjectKind, FeatureContext
 from src.domain.identity import Permission
 from src.licensing.catalog import FeatureCatalog
@@ -118,6 +118,19 @@ class FullDiagnosticTests(unittest.TestCase):
         run.export_bytes()
         self.fx.clock.set(3610)
         with self.assertRaisesRegex(DiagnosticError, '^diagnostic_expired$'): run.export_bytes()
+        with self.assertRaisesRegex(DiagnosticError, '^diagnostic_expired$'): run.require_execute()
+
+    def test_purge_removes_only_owned_expired_uuid_archives(self):
+        root = self.fx.root / 'private'; root.mkdir()
+        expired, fresh, custom = root / f'{uuid4()}.zip', root / f'{uuid4()}.zip', root / 'customer.zip'
+        for path, expires in [(expired, 10), (fresh, 100), (custom, 10)]:
+            with ZipFile(path, 'w') as archive:
+                archive.writestr('manifest.json', json.dumps({'schema_version': 1,
+                    'run_id': path.stem, 'expires_at': expires, 'classification': 'PRIVATE_REDACTED_DIAGNOSTICS'}))
+        unrelated = root / 'keep.txt'; unrelated.write_text('keep')
+        self.assertEqual(purge_diagnostic_archives(root, now=20), 1)
+        self.assertFalse(expired.exists()); self.assertTrue(fresh.exists())
+        self.assertTrue(custom.exists()); self.assertTrue(unrelated.exists())
 
     def test_revocation_during_serialization_or_fsync_preserves_previous_file(self):
         destination = self.fx.root / 'existing.zip'; destination.write_bytes(b'previous')
