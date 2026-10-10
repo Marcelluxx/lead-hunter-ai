@@ -294,7 +294,7 @@ Testare modalità cambiata/rerun/prepare dopo scadenza o rimozione permesso, pre
 
 **Interfaces:** catalogo produttivo `discovery.rating_filters.module_status == 'available'`; ID, permissions e MFA restano come nella spec. `export.no_website` disponibile, `diagnostics.full` pianificato; nessun altro cambio dei contratti licensing/server.
 
-- [ ] **Step 1: Scrivere gate di disponibilità reale**:
+- [x] **Step 1: Scrivere gate di disponibilità reale**:
 
 ```python
 # test_catalog_exposes_completed_rating_filters_and_reference_export
@@ -312,12 +312,12 @@ self.assertTrue(server_worker_remains_pipeline_not_configured)
 
 Adattare il test esistente che considera entrambi i moduli ancora planned; conservare una prova esplicita che diagnostics pianificato non sia eseguibile.
 
-- [ ] **Step 2: RED**: `& $ratingUv run --frozen --group test python -m unittest tests.test_feature_license_contract tests.test_rating_filter_cli tests.test_rating_filter_ui -v`; disponibilità reale fallisce finché planned.
-- [ ] **Step 3: Attivare e documentare** il solo modulo completato. README con base/filtrato e flag, confronti/default, campi effimeri, doppio permesso export, limiti di scadenza/offline, costi Google secondo deployment e roadmap legale già aperta; nessuna dichiarazione di release commerciale. Report persistente con evidenze, decisioni/limiti, review e SHA; stato milestone/spec/piano aggiornato alle prove effettive.
-- [ ] **Step 4: Verifica locale finale**: eseguire e leggere `& $ratingUv lock --check`, `& $ratingUv run --frozen --group test python -m compileall -q src tests main.py`, `& $ratingUv run --frozen --group test python -m unittest discover -s tests -v`, `git diff --check`, secret scan Gitleaks. Tutto PASS; skip locali PostgreSQL/container esplicitati, non contati come prove passate. Conservare assenza NLTK e test browser crawler della base; niente nuove esclusioni o rigenerazione lock immotivata.
-- [ ] **Step 5: Review indipendente fresca** dell'intero diff dalla base `6491f66da0f7fd956b88626a02dfca609ca7437e`, secondo executing-plans/requesting-code-review; modello disponibile più capace `gpt-6-astra`, effort high, contesto fresco. Fornire spec/piano, evidenze e superfici guard/provider/artefatti/rerun. Valutare ogni rilievo; correzioni motivate con RED→GREEN e controlli interessati, poi suite completa se codice cambiato. Registrare rilievi minori/decisioni nel report, senza nascondere limiti.
-- [ ] **Step 6: Commit/push e PR draft**: commit selettivo `feat: enable verified licensed rating filters`, push branch autorizzato; creare PR draft base `codex/remove-unused-nltk`, corpo in file UTF-8 con problemi/risultato/test/limiti attuali, poi allegarla alla chat con `attach_artifact`. Nessun merge o rilascio.
-- [ ] **Step 7: Gate GitHub dell'HEAD finale**: controllare CI Python 3.10–3.13, PostgreSQL, container, browser crawler e Security (Gitleaks, audit vulnerabilità/SBOM/licenze). Se falliscono, diagnosticare/correggere/riverificare e attendere nuovi gate sul nuovo SHA; non attribuire al nuovo codice il verde di una base precedente. Completare il report e la consegna soltanto con evidenza precisa; se una prova esterna non è ottenibile, lasciare esplicito il lavoro residuo senza dichiarare completamento.
+- [x] **Step 2: RED**: `& $ratingUv run --frozen --group test python -m unittest tests.test_feature_license_contract tests.test_rating_filter_cli tests.test_rating_filter_ui -v`; disponibilità reale fallisce finché planned.
+- [x] **Step 3: Attivare e documentare** il solo modulo completato. README con base/filtrato e flag, confronti/default, campi effimeri, doppio permesso export, limiti di scadenza/offline, costi Google secondo deployment e roadmap legale già aperta; nessuna dichiarazione di release commerciale. Report persistente con evidenze, decisioni/limiti, review e SHA; stato milestone/spec/piano aggiornato alle prove effettive.
+- [x] **Step 4: Verifica locale finale**: eseguire e leggere `& $ratingUv lock --check`, `& $ratingUv run --frozen --group test python -m compileall -q src tests main.py`, `& $ratingUv run --frozen --group test python -m unittest discover -s tests -v`, `git diff --check`, secret scan Gitleaks. Tutto PASS; skip locali PostgreSQL/container esplicitati, non contati come prove passate. Conservare assenza NLTK e test browser crawler della base; niente nuove esclusioni o rigenerazione lock immotivata.
+- [x] **Step 5: Review indipendente fresca** dell'intero diff dalla base `6491f66da0f7fd956b88626a02dfca609ca7437e`, secondo executing-plans/requesting-code-review; modello disponibile più capace `gpt-6-astra`, effort high, contesto fresco. Fornire spec/piano, evidenze e superfici guard/provider/artefatti/rerun. Valutare ogni rilievo; correzioni motivate con RED→GREEN e controlli interessati, poi suite completa se codice cambiato. Registrare rilievi minori/decisioni nel report, senza nascondere limiti.
+- [x] **Step 6: Commit/push e PR draft**: commit selettivo `feat: enable verified licensed rating filters`, push branch autorizzato; creare PR draft base `codex/remove-unused-nltk`, corpo in file UTF-8 con problemi/risultato/test/limiti attuali, poi allegarla alla chat con `attach_artifact`. Nessun merge o rilascio.
+- [x] **Step 7: Gate GitHub dell'HEAD finale**: controllare CI Python 3.10–3.13, PostgreSQL, container, browser crawler e Security (Gitleaks, audit vulnerabilità/SBOM/licenze). Se falliscono, diagnosticare/correggere/riverificare e attendere nuovi gate sul nuovo SHA; non attribuire al nuovo codice il verde di una base precedente. Completare il report e la consegna soltanto con evidenza precisa; se una prova esterna non è ottenibile, lasciare esplicito il lavoro residuo senza dichiarare completamento.
 
 ## Autorevisione e approvazione
 
@@ -326,4 +326,4 @@ Autorevisione inline completata il 10 ottobre 2026: criteri/confine dati (Task 1
 - [x] Specifica scritta approvata dal proprietario.
 - [x] Piano scritto e autorevisionato.
 - [x] Piano revisionato e approvato dal proprietario (10 ottobre 2026); metodo native mantenuto.
-- [ ] Esecuzione dei sei task, review e gate finali.
+- [x] Esecuzione dei sei task, review e gate finali (PR draft #10).

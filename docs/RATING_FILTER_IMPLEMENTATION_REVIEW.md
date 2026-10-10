@@ -71,10 +71,32 @@ e impedisce la consegna. Test con due candidati e future reali distinguono crawl
 audit già completato e audit atteso alla fine; comportamento base conservato.
 Il test di sola redazione ora richiede anche il fallimento. GREEN 29 test mirati,
 poi suite completa 237 test: 225 passati, 12 skip espliciti come sopra. Compilazione
-e diff check dopo la correzione PASS; gate remoti ancora in corso. Nessuna seconda
+e diff check dopo la correzione PASS. Nessuna seconda
 review richiesta: il rilievo è verificato RED→GREEN in un unico passaggio.
 
 Il revisore ha lasciato fuori giudizio worker/diagnostica, coordinate zero CLI e
 contratto/billing live; le decisioni 4–6 sopra motivano ciascun limite. Nessun
 rilievo minore differito. L'integrazione delle PR licensing, reference export e
 rimozione NLTK rimane separata; questo documento non è una release.
+
+## Pubblicazione e gate verificati
+
+Commit funzionale finale `66b7591d865ecdd158bdf1852ad862284a1f225f`, pubblicato
+nel branch `codex/licensed-rating-filters`, [PR draft #10](https://github.com/Marcelluxx/lead-hunter-ai/pull/10),
+base `codex/remove-unused-nltk`. PR allegata alla chat. Worktree conservato per
+eventuali modifiche della PR; checkout principale lasciato invariato.
+
+- [CI 38077129929](https://github.com/Marcelluxx/lead-hunter-ai/actions/runs/38077129929)
+  PASS sullo SHA funzionale esatto: Python 3.10–3.13, PostgreSQL 17,
+  container/migrazioni/API smoke e immagine cliente senza issuer/stato privato.
+  Chromium crawler obbligatorio del job Python 3.11: PASS.
+- [Security 38077129930](https://github.com/Marcelluxx/lead-hunter-ai/actions/runs/38077129930)
+  PASS sullo stesso SHA: Gitleaks cronologia completa e SBOM/audit vulnerabilità/
+  policy licenze. Nessuna eccezione aggiunta e nessun cambio a `uv.lock`.
+- La chiusura documentale è un commit successivo senza modifiche di codice;
+  i gate del relativo HEAD sono consultabili nella PR e verificati prima della
+  consegna finale. Le prove locali PostgreSQL/container saltate non sono state
+  conteggiate come superate: quelle reali sono i job CI sopra.
+
+I sei task sono completati. Prossimo recupero funzionale: diagnostica completa
+riservata; integrazione ordinata delle PR e worker commerciale restano aperti.

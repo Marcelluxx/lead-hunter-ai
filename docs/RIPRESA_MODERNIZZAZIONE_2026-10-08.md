@@ -271,9 +271,13 @@ di NLTK inutilizzato. Le indicazioni di blocco precedenti restano storiche.
 - [x] Approvare la specifica scritta (10 ottobre 2026).
 - [x] Scrivere e autorevisionare il [piano operativo](superpowers/plans/2026-10-10-filtri-rating-recensioni-implementation-plan.md).
 - [x] Approvare il piano operativo (10 ottobre 2026); mantenere il metodo native già scelto.
-- [ ] Implementare, verificare e pubblicare il modulo.
+- [x] Implementare, verificare e pubblicare il modulo ([PR draft #10](https://github.com/Marcelluxx/lead-hunter-ai/pull/10)).
 
 I flussi GUI/CLI e i servizi comuni sono implementati, inclusi export protetti
-e test di scadenza/revoca. Il catalogo viene attivato dopo le prove dei flussi;
-review indipendente e gate GitHub finali rimangono in corso.
+e test di scadenza/revoca. Catalogo disponibile; review indipendente conclusa,
+rilievo di successo parziale corretto RED→GREEN. Suite locale finale 237 test,
+225 passati e 12 skip espliciti; gate GitHub sul codice `66b7591` tutti PASS,
+inclusi Security, PostgreSQL, container e Chromium crawler.
 [Evidenze e decisioni](RATING_FILTER_IMPLEMENTATION_REVIEW.md).
+Prossimo recupero: diagnostica completa riservata. PR ancora draft: nessun merge
+o rilascio, integrazione dei branch e collegamento worker rimangono aperti.

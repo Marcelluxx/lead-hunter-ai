@@ -220,7 +220,9 @@ revisione dei costi globali non sono parte di questo sottoprogetto.
 - [x] Revisione e approvazione del proprietario sulla specifica scritta (10 ottobre 2026).
 - [x] [Piano operativo](../plans/2026-10-10-filtri-rating-recensioni-implementation-plan.md) scritto e autorevisionato.
 - [x] Piano operativo revisionato e approvato dal proprietario (10 ottobre 2026); metodo native mantenuto.
-- [ ] Implementazione, test, review indipendente, commit/push e PR draft.
+- [x] Implementazione, test, review indipendente, commit/push e PR draft #10.
 
-La specifica approvata e il piano sono salvati nel branch dedicato; il codice
-prodotto è implementato; review indipendente e gate finali rimangono in corso.
+La specifica approvata e il piano sono salvati nel branch dedicato; implementazione
+e review sono concluse, con correzione verificata del successo parziale filtrato.
+Gate CI/Security PASS sul codice funzionale `66b7591`; nessun merge/release.
+[Esiti e decisioni](../../RATING_FILTER_IMPLEMENTATION_REVIEW.md).
