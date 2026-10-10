@@ -268,8 +268,9 @@ di NLTK inutilizzato. Le indicazioni di blocco precedenti restano storiche.
 - [x] Confermare entrambe le modalità.
 - [x] Approvare il design conversazionale.
 - [x] Scrivere e autorevisionare la specifica.
-- [ ] Approvare la specifica scritta.
-- [ ] Scrivere/revisionare e approvare il piano operativo.
+- [x] Approvare la specifica scritta (10 ottobre 2026).
+- [x] Scrivere e autorevisionare il [piano operativo](superpowers/plans/2026-10-10-filtri-rating-recensioni-implementation-plan.md).
+- [ ] Approvare il piano operativo; mantenere il metodo native già scelto.
 - [ ] Implementare, verificare e pubblicare il modulo.
 
 Il modulo rimane `planned`; non è stato modificato codice applicativo.

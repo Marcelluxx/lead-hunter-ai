@@ -2,10 +2,9 @@
 
 Data: 10 ottobre 2026, Europe/Rome.
 
-Stato: design conversazionale approvato dal proprietario; specifica scritta
-in attesa della sua revisione. Nessuna implementazione autorizzata da questa nota.
-Metodo native già scelto per i sottoprogetti precedenti; il piano di questo modulo
-sarà scritto dopo l'approvazione della presente specifica.
+Stato: design conversazionale e specifica scritta approvati dal proprietario
+il 10 ottobre 2026. Piano operativo preparato e autorevisionato, in attesa della
+sua revisione prima dell'implementazione. Metodo native già scelto e mantenuto.
 
 Base: `6491f66`, rimozione NLTK nella PR draft #9, a sua volta basata su export
 PR #8 e licensing PR #7. Branch dedicato: `codex/licensed-rating-filters`.
@@ -218,9 +217,10 @@ revisione dei costi globali non sono parte di questo sottoprogetto.
 - [x] Recuperare comportamento precedente e contratto corrente.
 - [x] Confermare entrambe le modalità e approvare il design conversazionale.
 - [x] Scrivere e autorevisionare questa specifica.
-- [ ] Revisione e approvazione del proprietario sulla specifica scritta.
-- [ ] Piano operativo scritto e revisionato, poi approvato dal proprietario.
+- [x] Revisione e approvazione del proprietario sulla specifica scritta (10 ottobre 2026).
+- [x] [Piano operativo](../plans/2026-10-10-filtri-rating-recensioni-implementation-plan.md) scritto e autorevisionato.
+- [ ] Piano operativo revisionato e approvato dal proprietario; metodo native mantenuto.
 - [ ] Implementazione, test, review indipendente, commit/push e PR draft.
 
-Questa specifica viene salvata e committata per la revisione; il piano e il
-codice prodotto verranno affrontati solo dopo i rispettivi passaggi approvati.
+La specifica approvata e il piano sono salvati nel branch dedicato; il codice
+prodotto verrà affrontato dopo la revisione del piano.
