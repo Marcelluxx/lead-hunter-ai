@@ -146,6 +146,7 @@ class JobModel(TimestampMixin, Base):
             name="ck_job_state",
         ),
         CheckConstraint("estimated_cost >= 0", name="ck_job_cost_nonnegative"),
+        CheckConstraint('attempt_count BETWEEN 0 AND 3', name='ck_job_attempt_count'),
         Index("ix_jobs_workspace_state", "workspace_id", "state"),
     )
 
@@ -167,6 +168,17 @@ class JobModel(TimestampMixin, Base):
     error_code: Mapped[Optional[str]] = mapped_column(String(100))
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    auth_session_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid, ForeignKey('sessions.id', ondelete='SET NULL', name='fk_jobs_auth_session'))
+    auth_session_version: Mapped[Optional[int]] = mapped_column()
+    active_attempt_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid)
+    lease_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    attempt_count: Mapped[int] = mapped_column(nullable=False, default=0)
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    checkpoint: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    call_counts: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    cost_policy: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class JobAttemptModel(Base):
@@ -256,6 +268,7 @@ class UsageReservationModel(Base):
 class UsageLedgerModel(Base):
     __tablename__ = "usage_ledger"
     __table_args__ = (
+        UniqueConstraint('operation_id', name='uq_usage_ledger_operation_id'),
         CheckConstraint(
             "entry_type IN ('reservation','charge','release','override')",
             name="ck_ledger_entry_type",
@@ -273,6 +286,7 @@ class UsageLedgerModel(Base):
     entry_type: Mapped[str] = mapped_column(String(20), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False)
     provider: Mapped[Optional[str]] = mapped_column(String(80))
+    operation_id: Mapped[Optional[str]] = mapped_column(String(128))
     units: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 6))
     reason: Mapped[Optional[str]] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(

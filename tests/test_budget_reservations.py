@@ -58,6 +58,37 @@ class BudgetReservationTests(unittest.TestCase):
             self.assertEqual(str(snapshot.reserved), "0.000000")
             self.assertEqual(str(snapshot.spent), "8.000000")
 
+    def test_incremental_consumption_is_durable_idempotent_and_releases_only_remaining(self):
+        with self.database.session() as session:
+            job = self._job(session, 'consume')
+            self.service.reserve(session, workspace_id=self.workspace.id, job_id=job.id, amount='5')
+        with self.database.session() as session:
+            self.assertTrue(self.service.consume(session, job_id=job.id, amount='2', provider='test', operation_id='call-1'))
+        with self.database.session() as session:
+            self.assertFalse(self.service.consume(session, job_id=job.id, amount='2', provider='test', operation_id='call-1'))
+            snapshot = self.service.release(session, job_id=job.id, reason='cancelled')
+            self.assertEqual(snapshot.spent, 2); self.assertEqual(snapshot.reserved, 0)
+
+    def test_incremental_settlement_never_double_charges_and_caps_calls(self):
+        with self.database.session() as session:
+            job = self._job(session, 'consume-settle')
+            self.service.reserve(session, workspace_id=self.workspace.id, job_id=job.id, amount='5')
+            self.service.consume(session, job_id=job.id, amount='2', provider='test', operation_id='call-2')
+            with self.assertRaises(BudgetExceeded):
+                self.service.consume(session, job_id=job.id, amount='4', provider='test', operation_id='call-3')
+            snapshot = self.service.settle(session, job_id=job.id, actual_amount='3')
+            self.assertEqual(snapshot.spent, 3); self.assertEqual(snapshot.reserved, 0)
+
+    def test_reactivation_reserves_only_unspent_amount(self):
+        with self.database.session() as session:
+            job = self._job(session, 'reactivate')
+            self.service.reserve(session, workspace_id=self.workspace.id, job_id=job.id, amount='5')
+            self.service.consume(session, job_id=job.id, amount='2', provider='test', operation_id='call-4')
+            self.service.release(session, job_id=job.id, reason='cancelled')
+        with self.database.session() as session:
+            snapshot = self.service.reactivate(session, job_id=job.id)
+            self.assertEqual(snapshot.spent, 2); self.assertEqual(snapshot.reserved, 3)
+
 
 if __name__ == "__main__":
     unittest.main()

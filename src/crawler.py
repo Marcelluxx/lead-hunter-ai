@@ -24,6 +24,7 @@ from .domain import (
 from .security import SafeUrlPolicy, UrlPolicyError
 from .application.diagnostics import DiagnosticError
 from .domain.feature_licenses import LicenseError
+from .application.job_execution import JobExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ class HybridCrawler:
     """Crawler basato su Crawl4AI per estrazione di Markdown semantico ottimizzato per LLM."""
 
     def _log_target(self, url):
-        return 'private diagnostic site' if self.diagnostics is not None else url
+        return 'private site' if self.diagnostics is not None or self.execution_guard is not None else url
 
     def __init__(
         self,
@@ -63,6 +64,7 @@ class HybridCrawler:
         headless: bool = True,
         url_policy: Optional[SafeUrlPolicy] = None,
         diagnostics=None,
+        execution_guard=None,
     ):
         self.max_pages = max_pages
         self.token_mode = token_mode
@@ -71,6 +73,7 @@ class HybridCrawler:
         self._crawler = None
         self._blocked_requests: List[str] = []
         self.diagnostics = diagnostics
+        self.execution_guard = execution_guard
         self._diagnostic_error = None
         if diagnostics is not None:
             diagnostics.require_execute()
@@ -79,10 +82,10 @@ class HybridCrawler:
         """Blocca redirect e richieste browser dirette a reti non pubbliche."""
 
         request = route.request
-        if self.diagnostics is not None:
+        if self.diagnostics is not None or self.execution_guard is not None:
             try:
                 self._check_diagnostic_failure()
-            except (LicenseError, DiagnosticError) as exc:
+            except (LicenseError, DiagnosticError, JobExecutionError) as exc:
                 self._diagnostic_error = exc
                 await route.abort('blockedbyclient')
                 return
@@ -100,6 +103,12 @@ class HybridCrawler:
             logger.warning("Richiesta browser bloccata dalla URL policy: %s", exc.code)
             await route.abort("blockedbyclient")
             return
+        try:
+            self._check_diagnostic_failure()
+        except (LicenseError, DiagnosticError, JobExecutionError) as exc:
+            self._diagnostic_error = exc
+            await route.abort('blockedbyclient')
+            return
         await route.continue_()
 
     async def _install_network_guard(self, page, context, **kwargs):
@@ -116,6 +125,8 @@ class HybridCrawler:
             raise self._diagnostic_error
         if self.diagnostics is not None:
             self.diagnostics.require_execute()
+        if self.execution_guard is not None:
+            self.execution_guard.require_execute()
 
     async def _capture_loaded_diagnostics(self, page, context, *, html, **kwargs):
         self._check_diagnostic_failure()
@@ -131,7 +142,7 @@ class HybridCrawler:
                 }), omitted_styles: Math.max(0,document.styleSheets.length-128)
             })''')
             self.diagnostics.capture('css', {'source': page.url, 'data': styles})
-        except (LicenseError, DiagnosticError) as exc:
+        except (LicenseError, DiagnosticError, JobExecutionError) as exc:
             self._diagnostic_error = exc
             raise
         except Exception:
@@ -200,19 +211,19 @@ class HybridCrawler:
                 markdown_generator=markdown_generator,
                 wait_until="networkidle",
                 page_timeout=25000,
-                verbose=self.diagnostics is None,
+                verbose=self.diagnostics is None and self.execution_guard is None,
             )
 
             # Configura il browser
             browser_config = BrowserConfig(
                 headless=self.headless,
                 java_script_enabled=True,
-                verbose=self.diagnostics is None,
+                verbose=self.diagnostics is None and self.execution_guard is None,
             )
 
             # Inizializza il crawler se non è già attivo
             if self._crawler is None:
-                if self.diagnostics is not None:
+                if self.diagnostics is not None or self.execution_guard is not None:
                     from crawl4ai.async_logger import AsyncLogger
                     class PrivateCrawlerLogger(AsyncLogger):
                         def _log(self, *args, **kwargs):
@@ -410,7 +421,7 @@ class HybridCrawler:
                                 failure_code="page_fetch_failed",
                             )
                         )
-                except (LicenseError, DiagnosticError):
+                except (LicenseError, DiagnosticError, JobExecutionError):
                     raise
                 except Exception as e:
                     result.evidence.append(
@@ -443,7 +454,7 @@ class HybridCrawler:
                 else CrawlStatus.SUCCESS
             )
 
-        except (LicenseError, DiagnosticError):
+        except (LicenseError, DiagnosticError, JobExecutionError):
             raise
         except UrlPolicyError as e:
             result.status = CrawlStatus.BLOCKED

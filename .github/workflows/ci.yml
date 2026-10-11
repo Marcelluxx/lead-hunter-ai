@@ -181,6 +181,9 @@ jobs:
       - name: Verify customer image excludes license issuer and private state
         run: docker compose run --rm --no-deps api python scripts/check_customer_image.py
 
+      - name: Verify shipped worker browser without external network
+        run: docker compose run --rm --no-deps worker python scripts/check_worker_browser.py
+
       - name: Verify PostgreSQL migration round trip
         shell: bash
         run: |

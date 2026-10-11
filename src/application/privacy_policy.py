@@ -88,11 +88,15 @@ class PrivacyExportService:
         *,
         workspace_id: uuid.UUID,
         now: datetime | None = None,
+        lead_ids: set[uuid.UUID] | None = None,
     ) -> list[ContactModel]:
         cutoff = now or datetime.now(timezone.utc)
+        scope = [ContactModel.workspace_id == workspace_id]
+        if lead_ids is not None:
+            scope.append(ContactModel.lead_id.in_(lead_ids))
         deletion = session.execute(
             delete(ContactModel).where(
-                ContactModel.workspace_id == workspace_id,
+                *scope,
                 ContactModel.expires_at <= cutoff,
             )
         )
@@ -108,7 +112,7 @@ class PrivacyExportService:
             )
         contacts = session.scalars(
             select(ContactModel)
-            .where(ContactModel.workspace_id == workspace_id)
+            .where(*scope)
             .order_by(ContactModel.normalized_value)
         ).all()
         policy = self.policies.get(session, workspace_id=workspace_id)

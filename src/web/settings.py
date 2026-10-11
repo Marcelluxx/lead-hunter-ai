@@ -26,6 +26,15 @@ class ServerSettings(BaseSettings):
     license_trust_file: Path | None = None
     license_state_dir: Path = Path(".leadhunter-state")
     installation_id: str | None = None
+    job_price_version: str = 'unconfigured'
+    job_google_call_ceiling: str | None = None
+    job_llm_call_ceiling: str | None = None
+    job_cost_currency: str = 'EUR'
+
+    def job_price_configuration(self):
+        from ..domain.job_pricing import JobPricePolicy
+        return JobPricePolicy(version=self.job_price_version, currency=self.job_cost_currency,
+            google_request_ceiling=self.job_google_call_ceiling, llm_request_ceiling=self.job_llm_call_ceiling)
 
     @field_validator("license_trust_file", mode="before")
     @classmethod

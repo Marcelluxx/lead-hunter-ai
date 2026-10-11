@@ -4,6 +4,7 @@ from dataclasses import asdict
 
 from src.domain.feature_licenses import LicenseError
 from .diagnostics import DiagnosticError
+from .job_execution import JobExecutionError
 
 
 def run_full_diagnostic(url, *, session, crawler, auditor) -> dict:
@@ -22,7 +23,7 @@ def run_full_diagnostic(url, *, session, crawler, auditor) -> dict:
         session.capture('summary', {'data': result})
         session.seal()
         return result
-    except (LicenseError, DiagnosticError):
+    except (LicenseError, DiagnosticError, JobExecutionError):
         raise
     except Exception:
         raise DiagnosticError('diagnostic_run_failed') from None

@@ -11,8 +11,8 @@ inventare credenziali, attivare acquisti o dichiarare conclusa una revisione leg
 | Parte | Risultato richiesto | Stato |
 |---|---|---|
 | Integrazione recuperi | Licenze, riferimenti, filtri e rimozione NLTK in develop | PR #10 merged, c231e8c; CI 38081319813 e Security 38081319805 PASS |
-| Diagnostica completa | Artefatti separati, accesso a scadenza, redazione e retention; GUI/CLI | Implementata e prove CLI/GUI/Chromium PASS; review e gate in corso, branch codex/licensed-full-diagnostics |
-| Pipeline server | Handler reali, parametri validati, risultati ammessi, budget, annullamento/ripresa e tentativi | Da eseguire |
+| Diagnostica completa | Artefatti separati, accesso a scadenza, redazione e retention; GUI/CLI | PR #11 merged, 1a8f0dc; review/fix, CI e Security anche dopo merge PASS |
+| Pipeline server | Handler reali, parametri validati, risultati ammessi, budget, annullamento/ripresa e tentativi | PR #12, implementazione e review/fix completate; suite325/325 senza skip, gate HEAD prima di merge |
 | Correttezza funzionale | Età, e-commerce/franchise/social, modalità token, CMS, normalizzazione e coordinate zero | Da eseguire |
 | Qualità audit | Evidenze citate, versione report, benchmark/gold set e calibrazione | Da eseguire |
 | Crawler operativo | Policy robots, budget per dominio, limiti browser, retry/circuit breaker | Da eseguire |
@@ -28,3 +28,14 @@ primaria di lavoro non viene azzerata né sovrascritta.
 Le dipendenze del deployment (account pagamento/SSO, dominio, hosting, mercato,
 chiavi di firma e revisione professionale) saranno registrate quando necessarie.
 Il lavoro che non dipende da esse continua senza attese artificiali.
+
+11 ottobre: PR #11 merged in develop `1a8f0dc`, HEAD diagnostic `711817d`:
+CI 38083326968 e Security 38083327018 PASS. Review/fix e suite finale 262 test
+(250 pass, 12 skip), Chromium 3/3. Pipeline server avviata su
+`codex/commercial-job-pipeline`, con specifica/piano e catalogo strict come primo task.
+
+Pipeline: infrastruttura durevole `2920ac2`, suite locale 288 test PASS (14 skip),
+PostgreSQL17 12/12 PASS; CI 38122242918 e Security 38122242965 PASS sull'esatto HEAD.
+Lease esclusiva, massimo tre tentativi, checkpoint, ripresa con sessione corrente,
+budget incrementale idempotente. Quote conservative configurate dall'operatore,
+senza usare il costo dichiarato dal client come disponibilità di spesa.

@@ -839,5 +839,15 @@ folder are purged on the next authorized default-output run. Custom files and
 symlinks are excluded. GUI downloads use an inline ZIP with a final authorization
 check and retain no diagnostic bytes in application session state. Files already
 saved/downloaded cannot be recalled: delete them according to the manifest deadline.
-The basic URL tester remains available separately. Commercial worker integration
-is the next roadmap item.
+The basic URL tester remains available separately.
+
+### Commercial server jobs
+
+The worker supports `discover.no_website`, `discover.with_website`, `audit.website`
+and `diagnostic.website`, with strict inputs, workspace credentials, durable leases,
+conservative server budgets, cancellation and authorized resume. API results,
+Excel exports and private diagnostic archives recheck current access at delivery.
+Run the recovery service and shared private volume from Compose alongside the worker.
+Required operator prices must be configured before paid work can be admitted.
+See [worker operations and API contract](docs/COMMERCIAL_WORKER_OPERATIONS.md).
+This subsystem is under final review; it does not enable a public release or billing.

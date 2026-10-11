@@ -291,3 +291,9 @@ Diagnostica completa implementata su `codex/licensed-full-diagnostics`: sessione
 comune, capture browser/AI, ZIP privato redatto, CLI/GUI e controllo scadenza/revoca.
 Flussi reali del catalogo e Chromium verificati; review e gate del branch in corso.
 Stato corrente e sottoprogetti successivi: [roadmap autonoma](MODERNIZZAZIONE_AUTONOMA.md).
+
+11 ottobre: diagnostica integrata con PR #11, develop `1a8f0dc`, gate dopo merge
+PASS. Pipeline commerciale su PR #12 draft: catalogo, esecuzione, handler e API
+realizzati; review/gate finali in corso. Riferimento operativo aggiornato:
+[manuale worker/API](COMMERCIAL_WORKER_OPERATIONS.md). Le indicazioni precedenti
+di PR aperte e integrazione assente descrivono la storia, non lo stato corrente.
