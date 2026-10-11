@@ -28,3 +28,8 @@ primaria di lavoro non viene azzerata né sovrascritta.
 Le dipendenze del deployment (account pagamento/SSO, dominio, hosting, mercato,
 chiavi di firma e revisione professionale) saranno registrate quando necessarie.
 Il lavoro che non dipende da esse continua senza attese artificiali.
+
+11 ottobre: PR #11 merged in develop `1a8f0dc`, HEAD diagnostic `711817d`:
+CI 38083326968 e Security 38083327018 PASS. Review/fix e suite finale 262 test
+(250 pass, 12 skip), Chromium 3/3. Pipeline server avviata su
+`codex/commercial-job-pipeline`, con specifica/piano e catalogo strict come primo task.
