@@ -66,15 +66,18 @@ class SecretStatusResponse(BaseModel):
 
 
 class JobCreateRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
     kind: str = Field(min_length=1, max_length=80)
     parameters: dict[str, Any] = Field(default_factory=dict)
-    estimated_cost: Decimal = Field(ge=0)
+    estimated_cost: Decimal | None = Field(default=None, ge=0)
 
 
 class JobResponse(BaseModel):
     id: uuid.UUID
     state: str
     created: bool | None = None
+    error_code: str | None = None
+    attempts: int = 0
 
 
 class BudgetResponse(BaseModel):

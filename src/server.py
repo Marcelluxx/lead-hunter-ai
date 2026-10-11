@@ -42,7 +42,7 @@ def create_server_app():
         WebRuntime(
             database=database,
             authentication=authentication,
-            jobs=JobService(budgets=budgets, publisher=DramatiqJobPublisher()),
+            jobs=JobService(budgets=budgets, publisher=DramatiqJobPublisher(), durable_dispatch=True),
             budgets=budgets,
             credentials=CredentialService(cipher),
             rate_limiter=RedisRateLimiter(redis_client),
@@ -50,5 +50,7 @@ def create_server_app():
             suppression=suppression,
             data_subject_requests=DataSubjectRequestService(suppression),
             license_settings=settings.license_configuration(),
+            job_prices=settings.job_price_configuration(),
+            diagnostic_root=settings.license_configuration().local_state_dir / 'server-diagnostics',
         )
     )

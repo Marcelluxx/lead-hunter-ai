@@ -9,6 +9,13 @@ from fastapi.exception_handlers import request_validation_exception_handler
 from ..infrastructure.redis import RateLimitExceeded
 from .dependencies import WebRuntime
 from .routes import auth, jobs, privacy, usage, workspaces, feature_licenses
+from ..application.job_execution import JobExecutionError
+from ..application.job_results import JobResultError
+from ..application.diagnostics import DiagnosticError
+from ..domain.feature_licenses import LicenseError
+from ..domain.job_parameters import JobParameterError
+from ..domain.job_pricing import JobPriceError
+from ..domain.place_references import ReferenceExportError
 
 
 def create_app(runtime: WebRuntime) -> FastAPI:
@@ -28,7 +35,29 @@ def create_app(runtime: WebRuntime) -> FastAPI:
     async def validation_handler(request: Request, exc: RequestValidationError):
         if "/feature-licenses/" in request.url.path:
             return JSONResponse(status_code=422, content={"detail": "license_invalid"})
+        if '/jobs' in request.url.path:
+            return JSONResponse(status_code=422, content={'detail': 'job_parameters_invalid'})
         return await request_validation_exception_handler(request, exc)
+
+    def commercial_error(_: Request, exc):
+        code = exc.code
+        if isinstance(exc, LicenseError):
+            status_code = 403
+        elif isinstance(exc, JobPriceError):
+            status_code = 503 if code == 'job_price_missing' else 422
+        elif isinstance(exc, JobParameterError):
+            status_code = 422
+        elif isinstance(exc, JobResultError):
+            status_code = 409 if code == 'job_result_changed' else 404
+        elif isinstance(exc, DiagnosticError):
+            status_code = 410
+        else:
+            status_code = 403 if code == 'job_authorization_denied' else 409
+        return JSONResponse(status_code=status_code, content={'detail': code})
+
+    for exception_type in (JobExecutionError, JobResultError, JobParameterError, JobPriceError,
+                           LicenseError, DiagnosticError, ReferenceExportError):
+        app.add_exception_handler(exception_type, commercial_error)
 
     @app.exception_handler(RateLimitExceeded)
     def rate_limit_handler(_: Request, exc: RateLimitExceeded):

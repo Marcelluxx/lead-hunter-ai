@@ -10,6 +10,15 @@ x-server-env: &server-env
   LEADHUNTER_LICENSE_ISSUER: ${LEADHUNTER_LICENSE_ISSUER:-lead-hunter-owner}
   LEADHUNTER_LICENSE_TRUST_FILE: ${LEADHUNTER_LICENSE_TRUST_FILE:-}
   LEADHUNTER_INSTALLATION_ID: ${LEADHUNTER_INSTALLATION_ID:-}
+  LEADHUNTER_LICENSE_STATE_DIR: /var/lib/leadhunter
+  LEADHUNTER_JOB_PRICE_VERSION: ${LEADHUNTER_JOB_PRICE_VERSION:-unconfigured}
+  LEADHUNTER_JOB_GOOGLE_CALL_CEILING: ${LEADHUNTER_JOB_GOOGLE_CALL_CEILING:-}
+  LEADHUNTER_JOB_LLM_CALL_CEILING: ${LEADHUNTER_JOB_LLM_CALL_CEILING:-}
+  LEADHUNTER_JOB_COST_CURRENCY: ${LEADHUNTER_JOB_COST_CURRENCY:-EUR}
+  LLM_MODEL: ${LLM_MODEL:-meta-llama/llama-3.1-8b-instruct}
+  LLM_MODEL_FREE: ${LLM_MODEL_FREE:-google/gemini-2.5-flash:free}
+  LEADHUNTER_PROMPT_MODULE: ${LEADHUNTER_PROMPT_MODULE:-private_audit_prompts}
+  PYTHONPATH: /run/private-prompts
 
 services:
   postgres:
@@ -57,6 +66,7 @@ services:
     environment: *server-env
     volumes:
       - ./secrets:/run/secrets:ro
+      - private-diagnostics:/var/lib/leadhunter
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
@@ -85,7 +95,25 @@ services:
       LEADHUNTER_DATABASE_URL: postgresql+psycopg://leadhunter_worker:${LEADHUNTER_WORKER_DB_PASSWORD:?worker database password required}@postgres:5432/leadhunter
     volumes:
       - ./secrets:/run/secrets:ro
+      - private-diagnostics:/var/lib/leadhunter
+      - ./secrets/private-prompts:/run/private-prompts:ro
     command: ["dramatiq", "src.workers.runtime", "--processes", "1", "--threads", "4"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  job-recovery:
+    image: leadhunter-app:${LEADHUNTER_IMAGE_TAG:-local}
+    build: .
+    environment:
+      <<: *server-env
+      LEADHUNTER_DATABASE_URL: postgresql+psycopg://leadhunter_worker:${LEADHUNTER_WORKER_DB_PASSWORD:?worker database password required}@postgres:5432/leadhunter
+    volumes:
+      - ./secrets:/run/secrets:ro
+      - private-diagnostics:/var/lib/leadhunter
+    command: ["python", "-m", "src.workers.recovery"]
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -111,3 +139,4 @@ services:
 volumes:
   postgres-data:
   redis-data:
+  private-diagnostics:

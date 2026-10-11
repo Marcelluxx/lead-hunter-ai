@@ -67,3 +67,35 @@ class JobExecutionPostgresTests(unittest.TestCase):
             budget = session.scalar(select(UsageBudgetModel).where(UsageBudgetModel.workspace_id == self.workspace_id))
             self.assertEqual(budget.spent, Decimal('0.1')); self.assertEqual(budget.reserved, Decimal('1.7'))
             self.assertEqual(len(session.scalars(select(UsageLedgerModel).where(UsageLedgerModel.operation_id == f'{self.job_id}:same-call')).all()), 1)
+
+    def test_concurrent_commercial_admission_reserves_once_for_same_request(self):
+        from src.application.authentication import AuthContext
+        from src.application.jobs import JobService
+        from tests.test_api_security import Publisher
+        publisher = Publisher()
+        service = JobService(budgets=BudgetService(), publisher=publisher)
+        execution = JobExecutionService(database=self.app, installation_id=uuid4())
+        auth = AuthContext(self.user_id, self.session_id, True)
+        prices = JobPricePolicy(version='test', google_request_ceiling='0.1')
+        barrier = threading.Barrier(2)
+        def admit(_):
+            barrier.wait(timeout=5)
+            with self.app.session(self.workspace_id) as session:
+                result = service.create_commercial(session, workspace_id=self.workspace_id, auth=auth,
+                    kind='discover.no_website', parameters={'lat': 0, 'lng': 0, 'keywords': ['dentista']},
+                    idempotency_key='concurrent-request', prices=prices, execution=execution)
+                return result.job.id, result.created
+        with ThreadPoolExecutor(max_workers=2) as pool: outcomes = list(pool.map(admit, [1, 2]))
+        self.assertEqual(outcomes[0][0], outcomes[1][0])
+        self.assertCountEqual([value[1] for value in outcomes], [True, False])
+        self.assertEqual(len(publisher.messages), 1)
+        with self.owner.session() as session:
+            budget = session.scalar(select(UsageBudgetModel).where(UsageBudgetModel.workspace_id == self.workspace_id))
+            self.assertEqual(budget.reserved, Decimal('3.6'))
+
+    def test_worker_recovery_observes_scoped_jobs_with_least_privilege_role(self):
+        from src.workers.recovery import recover_due_jobs
+        from tests.test_api_security import Publisher
+        publisher = Publisher()
+        recover_due_jobs(self.worker, publisher=publisher)
+        self.assertIn(self.job_id, publisher.messages)

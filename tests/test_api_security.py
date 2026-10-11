@@ -6,6 +6,7 @@ from src.application.budgets import BudgetService
 from src.application.jobs import JobService
 from src.application.secrets import CredentialService
 from src.application.workspaces import bootstrap_platform
+from src.domain.job_pricing import JobPricePolicy
 from src.web.app import create_app
 from src.web.dependencies import WebRuntime
 from tests.platform_helpers import platform_fixture
@@ -42,6 +43,7 @@ class ApiSecurityTests(unittest.TestCase):
             jobs=JobService(budgets=budgets, publisher=self.publisher),
             budgets=budgets,
             credentials=CredentialService(cipher),
+            job_prices=JobPricePolicy(version='test', llm_request_ceiling='0.02'),
         )
         self.client = TestClient(create_app(runtime), base_url="https://testserver")
 
@@ -76,7 +78,7 @@ class ApiSecurityTests(unittest.TestCase):
                 "Authorization": f"Bearer {token}",
                 "Idempotency-Key": "authorized",
             },
-            json={"kind": "audit", "parameters": {"query": "dentisti"}, "estimated_cost": "1"},
+            json={"kind": "audit.website", "parameters": {"urls": ["https://official.example.test/"], "max_pages": 1}, "estimated_cost": "1"},
         )
         self.assertEqual(response.status_code, 202, response.text)
         self.assertEqual(str(self.publisher.messages[0]), response.json()["id"])

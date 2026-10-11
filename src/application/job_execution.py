@@ -24,7 +24,7 @@ _CODES = frozenset({'job_cancelled', 'job_authorization_denied', 'job_lease_lost
     'job_checkpoint_invalid', 'job_budget_exhausted', 'job_execution_failed',
     'job_price_invalid', 'job_price_missing', 'job_kind_unsupported',
     'provider_payload_not_allowed', 'provider_timeout', 'provider_unavailable', 'provider_http_error',
-    'job_crawl_not_auditable', 'job_credentials_missing', 'job_price_changed'}) | ERROR_CODES
+    'job_crawl_not_auditable', 'job_credentials_missing', 'job_prompts_missing', 'job_price_changed', 'job_idempotency_conflict'}) | ERROR_CODES
 _RECOVERABLE = frozenset({'job_cancelled', 'job_authorization_denied', 'job_lease_lost',
     'provider_timeout', 'provider_unavailable', 'provider_http_error',
     'license_expired', 'license_revoked', 'license_missing', 'feature_role_denied'})
@@ -112,7 +112,9 @@ class JobExecutionService:
                 or _utc(record.expires_at) <= self.now() or not user.is_active
                 or (session_version is not None and user.session_version != session_version)):
             raise JobExecutionError('job_authorization_denied')
-        if session.bind.dialect.name == 'postgresql':
+        can_list_active = session.bind.dialect.name == 'postgresql' and session.scalar(text(
+            "SELECT has_function_privilege(current_user, 'public.app_active_workspace_ids()', 'EXECUTE')"))
+        if can_list_active:
             active = session.scalar(text('SELECT EXISTS (SELECT 1 FROM public.app_active_workspace_ids() WHERE workspace_id = :id)'),
                                     {'id': str(workspace_id)})
         else:

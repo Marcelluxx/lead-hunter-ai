@@ -159,3 +159,30 @@ class CommercialWorkerTests(unittest.TestCase):
                 self.assertNotIn('4.5', json.dumps(job.checkpoint))
         self.assertIn('places.rating', self.google_calls[-1]['headers']['X-Goog-FieldMask'])
         self.assertNotIn('userRatingCount', json.dumps(self.llm_calls))
+
+    def test_missing_private_prompt_bundle_fails_before_paid_ai_call(self):
+        self.runtime.prompt_provider = None
+        self.runtime.prompt_module = 'missing_private_fixture_bundle'
+        job_id = self.fx.job(kind='audit.website', payload={'urls': ['https://official.example.test/'], 'max_pages': 1})
+        self.runtime.execute(job_id)
+        self.assertEqual(len(self.llm_calls), 0)
+        with self.fx.database.session(self.fx.workspace.id) as session:
+            self.assertEqual(session.get(JobModel, job_id).error_code, 'job_prompts_missing')
+
+    def test_operator_configured_private_prompt_module_is_loaded_without_shipping_it(self):
+        from types import ModuleType
+        module = ModuleType('fixture_prompt_module')
+        module.SYSTEM_NO_WEBSITE = 'public fixture'
+        module.SYSTEM_WEBSITE_AUDIT = 'public fixture'
+        module.SYSTEM_PAGE_CLEAN = 'public fixture'
+        module.build_no_website_prompt = lambda *args: 'public fixture'
+        module.build_website_audit_prompt = lambda *args: 'public fixture audit'
+        module.build_page_clean_prompt = lambda *args: 'public fixture clean'
+        self.runtime.prompt_provider = None
+        self.runtime.prompt_module = module.__name__
+        job_id = self.fx.job(kind='audit.website', payload={'urls': ['https://official.example.test/'], 'max_pages': 1})
+        with patch.dict('sys.modules', {module.__name__: module}):
+            self.runtime.execute(job_id)
+        with self.fx.database.session(self.fx.workspace.id) as session:
+            self.assertEqual(session.get(JobModel, job_id).state, 'completed')
+        self.assertEqual(len(self.llm_calls), 2)

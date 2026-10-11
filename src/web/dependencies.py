@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
+from pathlib import Path
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -37,6 +38,9 @@ class WebRuntime:
     data_subject_requests: DataSubjectRequestService | None = None
     license_settings: LicenseSettings | None = None
     feature_catalog: FeatureCatalog | None = None
+    job_execution: object | None = None
+    job_prices: object | None = None
+    diagnostic_root: Path | None = None
 
 
 _bearer = HTTPBearer(auto_error=False)
@@ -91,3 +95,19 @@ def request_license_services(session: Session, app: WebRuntime):
         LicenseVerifier(settings.load_trusted_keys(), catalog),
         GuardedClock(SystemClock(), PostgresClockStore(app.database, settings.installation_id)))
     return licenses, FeatureAccessService(licenses, catalog), ManagedLicenseService(licenses)
+
+
+def commercial_execution(app: WebRuntime):
+    from ..application.job_execution import JobExecutionService
+    if app.job_execution is not None:
+        return app.job_execution
+    installation = app.license_settings.installation_id if app.license_settings else None
+    return JobExecutionService(database=app.database, installation_id=installation or uuid.UUID(int=0),
+        access_factory=lambda session: request_license_services(session, app)[1],
+        budgets=app.budgets, publisher=app.jobs)
+
+
+def commercial_results(app: WebRuntime):
+    from ..application.job_results import JobResultService
+    return JobResultService(execution=commercial_execution(app), suppression=app.suppression,
+                           diagnostic_root=app.diagnostic_root)

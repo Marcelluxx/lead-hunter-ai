@@ -6,7 +6,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    PATH="/app/.venv/bin:$PATH"
+    PATH="/app/.venv/bin:$PATH" \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
 
 RUN useradd --create-home --uid 10001 leadhunter \
     && install -d -o leadhunter -g leadhunter /app
@@ -16,6 +17,12 @@ COPY --from=uv /uv /uvx /bin/
 COPY --chown=leadhunter:leadhunter pyproject.toml uv.lock ./
 USER leadhunter
 RUN uv sync --frozen --no-default-groups --no-install-project
+
+USER root
+RUN /app/.venv/bin/python -m playwright install --with-deps chromium \
+    && install -d -m 0700 -o leadhunter -g leadhunter /var/lib/leadhunter \
+    && rm -rf /var/lib/apt/lists/*
+USER leadhunter
 
 COPY --chown=leadhunter:leadhunter . .
 

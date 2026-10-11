@@ -29,6 +29,7 @@ from src.domain.rating_filters import RatingFilterCriteria
 from src.infrastructure.models import ProviderReferenceModel
 from src.providers.discovery.google_places import GooglePlacesDiscoveryProvider, DiscoveryProviderError
 from src.settings import ApplicationSettings
+from src.prompting import load_prompt_provider, PromptProviderUnavailable
 from .handlers import HandlerRegistry
 
 
@@ -48,7 +49,7 @@ class WorkerRuntime:
     def __init__(self, *, execution, credentials, suppression, diagnostic_root,
                  price_policy, clock, google_http=None, auditor_client=None,
                  crawler_factory=HybridCrawler, prompt_provider=None, llm_model=None,
-                 llm_model_free=None, provider_settings=None, sleep=time.sleep):
+                 llm_model_free=None, provider_settings=None, sleep=time.sleep, prompt_module='src.prompts'):
         self.execution, self.credentials = execution, credentials
         self.contacts = ContactService(suppression)
         self.persistence = DiscoveryPersistenceService()
@@ -56,6 +57,7 @@ class WorkerRuntime:
         self.price_policy, self.clock = price_policy, clock
         self.google_http, self.auditor_client = google_http, auditor_client
         self.crawler_factory, self.prompt_provider = crawler_factory, prompt_provider
+        self.prompt_module = prompt_module
         self.settings = provider_settings or ApplicationSettings()
         self.llm_model = llm_model or self.settings.llm_model
         self.llm_model_free = llm_model_free or self.settings.llm_model_free
@@ -101,9 +103,13 @@ class WorkerRuntime:
 
     def auditor(self, guard, *, diagnostics=None):
         key = self._credential(guard, 'openrouter')
+        try:
+            prompt_provider = self.prompt_provider or load_prompt_provider(self.prompt_module)
+        except PromptProviderUnavailable:
+            raise JobExecutionError('job_prompts_missing') from None
         return LeadAuditor(api_key=key, base_url=self.settings.openrouter_base_url,
             model=self.llm_model, model_free=self.llm_model_free, client=self.auditor_client,
-            prompt_provider=self.prompt_provider, execution_guard=guard, diagnostics=diagnostics)
+            prompt_provider=prompt_provider, execution_guard=guard, diagnostics=diagnostics)
 
     def close_auditor(self, auditor):
         if self.auditor_client is None and hasattr(auditor.client, 'close'):
@@ -204,7 +210,8 @@ class WorkerRuntime:
             execution = JobExecutionService(database=database, installation_id=installation, access_factory=access)
             return cls(execution=execution, credentials=credentials, suppression=suppression,
                 diagnostic_root=settings.local_state_dir / 'server-diagnostics', clock=clock,
-                price_policy=JobPricePolicy.from_mapping(os.environ), provider_settings=ApplicationSettings.from_mapping(os.environ))
+                price_policy=JobPricePolicy.from_mapping(os.environ), provider_settings=ApplicationSettings.from_mapping(os.environ),
+                prompt_module=os.getenv('LEADHUNTER_PROMPT_MODULE') or 'src.prompts')
         except Exception:
             database.close_license_clock_pool(); database.engine.dispose()
             raise

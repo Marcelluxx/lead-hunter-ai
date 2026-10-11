@@ -12,7 +12,7 @@ inventare credenziali, attivare acquisti o dichiarare conclusa una revisione leg
 |---|---|---|
 | Integrazione recuperi | Licenze, riferimenti, filtri e rimozione NLTK in develop | PR #10 merged, c231e8c; CI 38081319813 e Security 38081319805 PASS |
 | Diagnostica completa | Artefatti separati, accesso a scadenza, redazione e retention; GUI/CLI | PR #11 merged, 1a8f0dc; review/fix, CI e Security anche dopo merge PASS |
-| Pipeline server | Handler reali, parametri validati, risultati ammessi, budget, annullamento/ripresa e tentativi | Branch codex/commercial-job-pipeline, PR #12 draft; catalogo/esecuzione verificati, handler in verifica, API successiva |
+| Pipeline server | Handler reali, parametri validati, risultati ammessi, budget, annullamento/ripresa e tentativi | Branch codex/commercial-job-pipeline, PR #12 draft; catalogo, worker e API implementati, verifiche finali/review in corso |
 | Correttezza funzionale | Età, e-commerce/franchise/social, modalità token, CMS, normalizzazione e coordinate zero | Da eseguire |
 | Qualità audit | Evidenze citate, versione report, benchmark/gold set e calibrazione | Da eseguire |
 | Crawler operativo | Policy robots, budget per dominio, limiti browser, retry/circuit breaker | Da eseguire |
