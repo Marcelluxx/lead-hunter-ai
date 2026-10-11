@@ -40,6 +40,30 @@ class JobRecoveryTests(unittest.TestCase):
         self.assertEqual(recover_due_jobs(self.fx.database, publisher=publisher, now=self.fx.now), 1)
         self.assertEqual(publisher.messages, [created.job.id])
 
+    def test_expired_cancelled_worker_recovery_releases_only_unused_budget(self):
+        from decimal import Decimal
+        from src.infrastructure.models import UsageBudgetModel, JobAttemptModel
+        from sqlalchemy import select
+        job_id = self.fx.job()
+        handle = self.fx.service.claim(job_id, worker_id='lost-worker')
+        self.fx.service.guard(handle).before_provider_call('google_places')
+        self.fx.service.cancel(job_id, workspace_id=self.fx.workspace.id, auth=self.fx.auth)
+        publisher = Publisher()
+        self.assertEqual(recover_due_jobs(self.fx.database, publisher=publisher, now=self.fx.now), 0)
+        self.fx.now += timedelta(seconds=61)
+        self.assertEqual(recover_due_jobs(self.fx.database, publisher=publisher, now=self.fx.now), 1)
+        self.assertEqual(publisher.messages, [job_id])
+        self.assertIsNone(self.fx.service.claim(job_id, worker_id='recovery'))
+        with self.fx.database.session(self.fx.workspace.id) as session:
+            job = session.get(JobModel, job_id)
+            budget = session.scalar(select(UsageBudgetModel))
+            self.assertEqual(job.state, 'cancelled')
+            self.assertEqual(job.error_code, 'job_cancelled')
+            self.assertEqual(job.attempt_count, 1)
+            self.assertEqual(budget.spent, Decimal('0.1'))
+            self.assertEqual(budget.reserved, Decimal('0'))
+            self.assertIsNotNone(session.get(JobAttemptModel, handle.attempt_id).finished_at)
+
     def test_periodic_cleanup_removes_owned_expired_archives_in_inactive_directories(self):
         import json
         import tempfile

@@ -133,6 +133,68 @@ class CommercialWorkerTests(unittest.TestCase):
         with self.fx.database.session(self.fx.workspace.id) as session:
             self.assertEqual(session.get(JobModel, job_id).state, 'completed')
 
+    def test_discovery_recovery_stops_before_provider_when_checkpoint_satisfies_limit(self):
+        from datetime import timedelta
+        from uuid import uuid4
+        from src.infrastructure.models import UsageBudgetModel
+        for with_site in [False, True]:
+            self.with_site = with_site
+            kind = 'discover.with_website' if with_site else 'discover.no_website'
+            job_id = self.fx.job(kind=kind, payload={'lat': 0, 'lng': 0, 'keywords': ['dentista'],
+                'max_leads': 1, 'max_pages': 1})
+            original_finish = self.fx.service.finish
+            def crash(handle, **kwargs):
+                if kwargs['state'] is JobState.COMPLETED:
+                    raise SystemExit('crash before terminal commit')
+                return original_finish(handle, **kwargs)
+            with patch.object(self.fx.service, 'finish', side_effect=crash):
+                with self.assertRaises(SystemExit):
+                    self.runtime.execute(job_id)
+            with self.fx.database.session(self.fx.workspace.id) as session:
+                checkpoint = dict(session.get(JobModel, job_id).checkpoint)
+                spent = session.scalar(select(UsageBudgetModel)).spent
+            paid_calls = (len(self.google_calls), len(self.llm_calls))
+            self.fx.now += timedelta(seconds=61)
+            def changed_provider(url, **kwargs):
+                self.google_calls.append(kwargs)
+                return httpx.Response(200, request=httpx.Request('POST', url), json={'places': [
+                    {'id': 'changed-' + str(uuid4()), 'displayName': {'text': 'new listing'},
+                     **({'websiteUri': 'https://official.example.test/'} if with_site else {})}]})
+            with patch.object(self.http, 'post', side_effect=changed_provider):
+                self.runtime.execute(job_id)
+            with self.subTest(kind=kind):
+                self.assertEqual((len(self.google_calls), len(self.llm_calls)), paid_calls)
+                with self.fx.database.session(self.fx.workspace.id) as session:
+                    job = session.get(JobModel, job_id)
+                    self.assertEqual(job.state, 'completed')
+                    self.assertEqual(job.checkpoint, checkpoint)
+                    self.assertEqual(len(job.checkpoint['lead_ids']), 1)
+                    self.assertEqual(session.scalar(select(UsageBudgetModel)).spent, spent)
+
+    def test_discovery_recovery_counts_committed_results_before_changed_provider_batch(self):
+        from datetime import timedelta
+        from uuid import uuid4
+        job_id = self.fx.job(payload={'lat': 0, 'lng': 0, 'keywords': ['dentista'], 'max_leads': 2})
+        original_persist = self.runtime.persist_reference
+        def crash_after_commit(*args):
+            original_persist(*args)
+            raise SystemExit('crash after first result')
+        with patch.object(self.runtime, 'persist_reference', side_effect=crash_after_commit):
+            with self.assertRaises(SystemExit):
+                self.runtime.execute(job_id)
+        self.fx.now += timedelta(seconds=61)
+        def changed_provider(url, **kwargs):
+            self.google_calls.append(kwargs)
+            return httpx.Response(200, request=httpx.Request('POST', url), json={'places': [
+                {'id': 'new-' + str(uuid4()), 'displayName': {'text': 'new listing'}}]})
+        with patch.object(self.http, 'post', side_effect=changed_provider):
+            self.runtime.execute(job_id)
+        with self.fx.database.session(self.fx.workspace.id) as session:
+            job = session.get(JobModel, job_id)
+            self.assertEqual(job.state, 'completed')
+            self.assertEqual(len(job.checkpoint['lead_ids']), 2)
+            self.assertEqual(len(session.scalars(select(ProviderReferenceModel)).all()), 2)
+
     def test_missing_workspace_key_never_uses_global_provider_key(self):
         from sqlalchemy import delete
         from src.infrastructure.models import ProviderCredentialModel

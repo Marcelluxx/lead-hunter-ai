@@ -51,6 +51,69 @@ class CommercialJobApiTests(unittest.TestCase):
         return self.client.post(self.url, headers={**self.headers, 'Idempotency-Key': key or str(uuid4())},
             json={'kind': kind, 'parameters': parameters or {'lat': 0, 'lng': 0, 'keywords': ['dentista'], 'max_leads': 1}, 'estimated_cost': '0'})
 
+    def _named_contact_job(self):
+        from datetime import datetime, timezone
+        from src.application.privacy_policy import WorkspacePrivacyPolicyService
+        from src.domain.privacy import WorkspacePrivacyPolicy
+        from src.domain.contacts import ContactPoint, ContactExtractionMethod
+        from src.infrastructure.models import LeadModel
+        response = self.create(kind='audit.website', parameters={'urls': ['https://official.example.test/'], 'max_pages': 1})
+        self.assertEqual(response.status_code, 202, response.text)
+        job_id = UUID(response.json()['id']); self.worker.runtime.execute(job_id)
+        with self.fx.database.session(self.fx.workspace.id) as session:
+            WorkspacePrivacyPolicyService().put(session, actor_user_id=self.fx.user.id,
+                policy=WorkspacePrivacyPolicy(workspace_id=self.fx.workspace.id, purpose='Business qualification',
+                    legal_basis='legitimate interest', privacy_contact='privacy@example.test'))
+            lead = session.scalar(select(LeadModel).where(LeadModel.job_id == job_id))
+            contact = ContactPoint.from_email('mario.rossi@official.example.test', source_url='https://official.example.test/',
+                collected_at=datetime.now(timezone.utc), extraction_method=ContactExtractionMethod.MAILTO,
+                evidence_sha256='a' * 64)
+            self.worker.runtime.contacts.persist(session, workspace_id=self.fx.workspace.id, lead_id=lead.id, contacts=[contact])
+        return job_id
+
+    def _disable_privacy_policy(self):
+        from src.infrastructure.models import WorkspacePrivacyPolicyModel
+        with self.fx.database.session(self.fx.workspace.id) as session:
+            session.get(WorkspacePrivacyPolicyModel, self.fx.workspace.id).enabled = False
+
+    def test_unrelated_named_contact_policy_failure_does_not_block_generic_job_delivery(self):
+        self._named_contact_job()
+        response = self.create(kind='audit.website', parameters={'urls': ['https://official.example.test/'], 'max_pages': 1})
+        job_id = UUID(response.json()['id']); self.worker.runtime.execute(job_id)
+        self._disable_privacy_policy()
+        url = self.url + '/' + str(job_id)
+        with TestClient(self.client.app, base_url='https://testserver', raise_server_exceptions=False) as client:
+            result = client.get(url + '/results', headers=self.headers)
+            self.assertEqual(result.status_code, 200, result.text)
+            self.assertEqual(result.json()['leads'][0]['contacts'][0]['value'], 'sales@official.example.test')
+            export = client.get(url + '/export', headers=self.headers)
+            self.assertEqual(export.status_code, 200, export.text)
+            rows = repr(list(load_workbook(BytesIO(export.content)).active.values))
+            self.assertIn('sales@official.example.test', rows)
+            self.assertNotIn('mario.rossi', rows)
+
+    def test_requested_named_contact_policy_failure_returns_safe_denial(self):
+        job_id = self._named_contact_job()
+        self._disable_privacy_policy()
+        url = self.url + '/' + str(job_id)
+        with TestClient(self.client.app, base_url='https://testserver', raise_server_exceptions=False) as client:
+            for endpoint in ['/results', '/export']:
+                with self.subTest(endpoint=endpoint):
+                    response = client.get(url + endpoint, headers=self.headers)
+                    self.assertEqual(response.status_code, 403, response.text)
+                    self.assertEqual(response.json(), {'detail': 'job_contact_policy_denied'})
+
+    def test_named_contact_policy_revocation_between_stream_chunks_stops_delivery(self):
+        from src.web.dependencies import commercial_results
+        job_id = self._named_contact_job()
+        service = commercial_results(self.app_runtime)
+        _, _, permission, snapshot = service.export(job_id=job_id, workspace_id=self.fx.workspace.id, auth=self.fx.auth)
+        stream = service.stream(b'x' * 150000, job_id=job_id, workspace_id=self.fx.workspace.id,
+            auth=self.fx.auth, permission=permission, snapshot=snapshot)
+        self.assertEqual(len(next(stream)), 65536)
+        self._disable_privacy_policy()
+        self.assertEqual(list(stream), [])
+
     def test_admission_ignores_client_cost_and_persists_real_session_and_quote(self):
         response = self.create(key='same'); self.assertEqual(response.status_code, 202, response.text)
         job_id = UUID(response.json()['id'])

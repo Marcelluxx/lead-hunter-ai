@@ -18,7 +18,7 @@ from src.domain.job_parameters import parse_job_parameters
 from src.domain.place_references import GooglePlaceReference
 from src.infrastructure.models import JobModel, ProviderReferenceModel, LeadModel, LeadAttributeModel, EvidenceModel
 from .job_execution import JobExecutionError
-from .privacy_policy import PrivacyExportService
+from .privacy_policy import PrivacyExportService, PrivacyPolicyError
 from .reference_exports import ReferenceExportService
 from .diagnostics import DiagnosticError, MAX_TOTAL_BYTES
 
@@ -98,8 +98,11 @@ class JobResultService:
                 leads = session.scalars(select(LeadModel).where(LeadModel.workspace_id == workspace_id,
                                                                LeadModel.job_id == job_id)).all()
                 ids = {lead.id for lead in leads}
-                contacts = [] if self.suppression is None else PrivacyExportService(self.suppression).exportable_contacts(
-                    session, workspace_id=workspace_id)
+                try:
+                    contacts = [] if self.suppression is None else PrivacyExportService(self.suppression).exportable_contacts(
+                        session, workspace_id=workspace_id, lead_ids=ids)
+                except PrivacyPolicyError:
+                    raise JobResultError('job_contact_policy_denied') from None
                 for lead in leads:
                     attributes = session.scalars(select(LeadAttributeModel).where(
                         LeadAttributeModel.workspace_id == workspace_id, LeadAttributeModel.lead_id == lead.id)).all()

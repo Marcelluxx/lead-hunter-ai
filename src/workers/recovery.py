@@ -33,7 +33,7 @@ def recover_due_jobs(database, *, publisher, now=None, limit=500):
             break
         with database.session(workspace) as session:
             ids.extend(session.scalars(select(JobModel.id).where(JobModel.workspace_id == workspace,
-                JobModel.cancel_requested.is_(False), or_(JobModel.state == 'queued', and_(JobModel.state == 'running',
+                or_(JobModel.state == 'queued', and_(JobModel.state == 'running',
                     JobModel.lease_expires_at <= cutoff))).order_by(JobModel.created_at).limit(limit - len(ids))).all())
     # Network/broker operations occur after all SQL transactions have closed.
     for job_id in ids:

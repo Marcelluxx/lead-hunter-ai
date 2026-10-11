@@ -48,7 +48,7 @@ def create_app(runtime: WebRuntime) -> FastAPI:
         elif isinstance(exc, JobParameterError):
             status_code = 422
         elif isinstance(exc, JobResultError):
-            status_code = 409 if code == 'job_result_changed' else 404
+            status_code = 403 if code == 'job_contact_policy_denied' else (409 if code == 'job_result_changed' else 404)
         elif isinstance(exc, DiagnosticError):
             status_code = 410
         else:

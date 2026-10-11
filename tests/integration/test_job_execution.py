@@ -99,3 +99,29 @@ class JobExecutionPostgresTests(unittest.TestCase):
         publisher = Publisher()
         recover_due_jobs(self.worker, publisher=publisher)
         self.assertIn(self.job_id, publisher.messages)
+
+    def test_worker_recovery_finalizes_expired_cancellation_after_origin_logout(self):
+        from src.application.authentication import AuthContext
+        from src.workers.recovery import recover_due_jobs
+        from tests.test_api_security import Publisher
+        clock = datetime.now(timezone.utc)
+        self.service.now = lambda: clock
+        handle = self.service.claim(self.job_id, worker_id='crashed')
+        self.service.guard(handle).before_provider_call('google_places')
+        api = JobExecutionService(database=self.app, installation_id=self.service.installation_id)
+        api.cancel(self.job_id, workspace_id=self.workspace_id,
+            auth=AuthContext(self.user_id, self.session_id, True))
+        clock += timedelta(seconds=61)
+        with self.owner.session() as session:
+            session.get(SessionModel, self.session_id).revoked_at = clock
+        publisher = Publisher()
+        recover_due_jobs(self.worker, publisher=publisher, now=clock)
+        self.assertIn(self.job_id, publisher.messages)
+        self.assertIsNone(self.service.claim(self.job_id, worker_id='recovery'))
+        with self.owner.session() as session:
+            job = session.get(JobModel, self.job_id)
+            budget = session.scalar(select(UsageBudgetModel).where(UsageBudgetModel.workspace_id == self.workspace_id))
+            self.assertEqual(job.state, 'cancelled')
+            self.assertEqual(job.attempt_count, 1)
+            self.assertEqual(budget.spent, Decimal('0.1'))
+            self.assertEqual(budget.reserved, Decimal('0'))

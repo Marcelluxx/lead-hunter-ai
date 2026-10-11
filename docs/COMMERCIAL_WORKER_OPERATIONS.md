@@ -10,6 +10,10 @@ Applicare le migrazioni con il ruolo owner, poi avviare API, worker, Redis,
 distinti senza bypass RLS. Il recupero pubblica al massimo500 UUID ogni30 secondi:
 jobs è la fonte durevole quando Redis non riceve un messaggio; lease esclusiva
 e checkpoint gestiscono invii ripetuti e processi interrotti.
+Una lease scaduta con annullamento richiesto viene consegnata al worker soltanto
+per chiudere il job e liberare il residuo; nessuna chiamata provider riparte.
+La ripresa conta i risultati già commessi nel limite richiesto e non interroga
+il provider quando il checkpoint contiene già tutti i risultati.
 
 Nel workspace salvare credenziali cifrate per `google_places` e `openrouter`
 tramite secrets (admin e MFA). Nessun fallback alle chiavi globali locali.
@@ -83,6 +87,9 @@ DB: riferimenti consentiti e dati indipendenti dal sito con provenienza/hash.
 Nomi, URL e metriche Google non diventano attributi lead o prompt AI. Contatti sotto
 classificazione, retention, policy e suppression anche alla consegna. Un export
 diventato superato durante rendering viene rifiutato con `job_result_changed`.
+La policy dei contatti viene verificata soltanto per i lead del job richiesto;
+una policy nominativa mancante o disabilitata blocca quel report con
+`403/job_contact_policy_denied`, senza bloccare i report generici di altri job.
 
 Archivi in `/var/lib/leadhunter/server-diagnostics`, cartelle workspace/UUID nel
 volume privato condiviso API/worker/recupero. Retention1–168h/default24, mai oltre

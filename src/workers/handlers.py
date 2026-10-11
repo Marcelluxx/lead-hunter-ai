@@ -38,10 +38,14 @@ def _audit_site(url, *, key, category, parsed, guard, runtime, candidate=None):
 
 def _discovery(parsed, guard, runtime):
     payload = parsed.payload
+    seen = set(guard.handle.checkpoint.get('completed_ids', []))
+    accepted = len(guard.handle.checkpoint.get('lead_ids', []))
+    if accepted >= payload['max_leads']:
+        return
     provider = runtime.discovery(parsed, guard)
-    seen = set()
-    accepted = 0
     for keyword in payload['keywords']:
+        if accepted >= payload['max_leads']:
+            return
         guard.require_execute()
         batch = provider.discover(DiscoveryQuery(keyword, payload['lat'], payload['lng']))
         guard.require_execute()
