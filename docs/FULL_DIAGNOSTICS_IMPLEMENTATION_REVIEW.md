@@ -60,4 +60,6 @@ Decisioni ulteriori:
    perché copie già consegnate non revocabili. Costo: possibile conservazione oltre scadenza.
 
 Verifica finale del codice corretto: 262 test, 250 passati e 12 skip espliciti;
-Chromium 3/3. Lock, compilazione e diff check PASS. Gate GitHub sul fix in attesa.
+Chromium 3/3. Lock, compilazione e diff check PASS. Gate GitHub sul fix `711817d`:
+CI 38083326968 e Security 38083327018 PASS. PR #11 merged in develop `1a8f0dc`;
+gate dopo merge CI 38120705074 e Security 38120705078 PASS.

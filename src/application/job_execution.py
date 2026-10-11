@@ -23,7 +23,8 @@ _CODES = frozenset({'job_cancelled', 'job_authorization_denied', 'job_lease_lost
     'job_retry_exhausted', 'job_not_resumable', 'job_parameters_invalid',
     'job_checkpoint_invalid', 'job_budget_exhausted', 'job_execution_failed',
     'job_price_invalid', 'job_price_missing', 'job_kind_unsupported',
-    'provider_payload_not_allowed', 'provider_timeout', 'provider_unavailable', 'provider_http_error'}) | ERROR_CODES
+    'provider_payload_not_allowed', 'provider_timeout', 'provider_unavailable', 'provider_http_error',
+    'job_crawl_not_auditable', 'job_credentials_missing', 'job_price_changed'}) | ERROR_CODES
 _RECOVERABLE = frozenset({'job_cancelled', 'job_authorization_denied', 'job_lease_lost',
     'provider_timeout', 'provider_unavailable', 'provider_http_error',
     'license_expired', 'license_revoked', 'license_missing', 'feature_role_denied'})

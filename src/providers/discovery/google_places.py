@@ -67,6 +67,7 @@ class GooglePlacesDiscoveryProvider:
         inter_request_delay_s: float = 1.0,
         max_attempts: int = 2,
         sleep: Callable[[float], None] = time.sleep,
+        execution_guard=None,
     ):
         if not api_key.strip():
             raise ValueError("GOOGLE_API_KEY mancante.")
@@ -83,6 +84,7 @@ class GooglePlacesDiscoveryProvider:
         self.inter_request_delay_s = inter_request_delay_s
         self.max_attempts = max(1, max_attempts)
         self.sleep = sleep
+        self.execution_guard = execution_guard
         self.headers = {
             "Content-Type": "application/json",
             "X-Goog-Api-Key": api_key.strip(),
@@ -151,6 +153,8 @@ class GooglePlacesDiscoveryProvider:
             if guard is not None:
                 headers['X-Goog-FieldMask'] += ',places.rating,places.userRatingCount'
                 guard.require_execute()
+            if self.execution_guard is not None:
+                self.execution_guard.before_provider_call('google_places')
             try:
                 response = self.http_client.post(
                     self.places_url,
@@ -174,6 +178,8 @@ class GooglePlacesDiscoveryProvider:
                 raise DiscoveryProviderError("provider_protocol_error") from exc
             if self.inter_request_delay_s > 0:
                 self.sleep(self.inter_request_delay_s)
+        if self.execution_guard is not None:
+            self.execution_guard.require_execute()
         if response is None:
             raise DiscoveryProviderError("provider_unavailable")
         try:

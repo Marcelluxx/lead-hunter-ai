@@ -33,6 +33,7 @@ from .security import (
 )
 from .application.diagnostics import DiagnosticError
 from .domain.feature_licenses import LicenseError
+from .application.job_execution import JobExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +53,12 @@ class LeadAuditor:
         client: Any = None,
         prompt_provider: AuditPromptProvider | None = None,
         diagnostics=None,
+        execution_guard=None,
     ):
         self.diagnostics = diagnostics
+        self.execution_guard = execution_guard
+        if execution_guard is not None:
+            execution_guard.require_execute()
         if diagnostics is not None:
             diagnostics.require_execute()
         if client is None and not api_key.strip():
@@ -61,11 +66,12 @@ class LeadAuditor:
         self.client = client or OpenAI(
             base_url=base_url,
             api_key=api_key.strip(),
-            **({'max_retries': 0} if diagnostics is not None else {}),
+            **({'max_retries': 0, 'timeout': 20.0} if execution_guard is not None else
+               {'max_retries': 0} if diagnostics is not None else {}),
         )
-        if diagnostics is not None and hasattr(self.client, 'with_options'):
+        if (diagnostics is not None or execution_guard is not None) and hasattr(self.client, 'with_options'):
             # Each retry must pass our fresh authorization boundary, including injected SDK clients.
-            self.client = self.client.with_options(max_retries=0)
+            self.client = self.client.with_options(max_retries=0, **({'timeout': 20.0} if execution_guard is not None else {}))
         self.model = model
         self.model_free = model_free
         self.prompt_provider = (
@@ -73,6 +79,18 @@ class LeadAuditor:
             if prompt_provider is not None
             else load_prompt_provider()
         )
+
+    def _create_completion(self, **kwargs):
+        if self.execution_guard is None:
+            return self.client.chat.completions.create(**kwargs)
+        if len(json.dumps(kwargs, ensure_ascii=False).encode('utf-8')) > 200_000:
+            raise JobExecutionError('job_parameters_invalid')
+        kwargs['max_tokens'] = 2000
+        self.execution_guard.before_provider_call('openrouter')
+        try:
+            return self.client.chat.completions.create(**kwargs)
+        finally:
+            self.execution_guard.require_execute()
 
     def _clean_json_output(self, raw_content: str) -> str:
         """Estrae e ripulisce il JSON dal testo generato dall'LLM."""
@@ -110,7 +128,7 @@ class LeadAuditor:
 
         for attempt in range(max_retries):
             try:
-                response = self.client.chat.completions.create(
+                response = self._create_completion(
                     model=self.model,
                     messages=[
                         {
@@ -133,6 +151,8 @@ class LeadAuditor:
                         data.get("key_weakness", ""), max_length=1000
                     ).text,
                 }
+            except (LicenseError, DiagnosticError, JobExecutionError):
+                raise
             except openai.RateLimitError:
                 wait = (3 ** attempt) + random.uniform(1, 3)
                 if attempt < max_retries - 1:
@@ -183,7 +203,7 @@ class LeadAuditor:
                 self.diagnostics.capture('llm_request', {'stage': 'page_clean', 'source': safe_url,
                     'model': self.model_free, 'content': self.prompt_provider.system_page_clean + '\n' + UNTRUSTED_DATA_SYSTEM_RULES + '\n' + user_prompt})
             try:
-                response = self.client.chat.completions.create(
+                response = self._create_completion(
                     model=self.model_free,
                     messages=[
                         {
@@ -203,7 +223,7 @@ class LeadAuditor:
                 sanitized_output = sanitize_untrusted_text(raw_response, max_length=8000)
                 lines = [line.rstrip() for line in sanitized_output.text.splitlines() if line.strip()]
                 return "\n".join(lines)
-            except (LicenseError, DiagnosticError):
+            except (LicenseError, DiagnosticError, JobExecutionError):
                 raise
             except openai.RateLimitError:
                 wait = (3 ** attempt) + random.uniform(1, 3)
@@ -215,6 +235,8 @@ class LeadAuditor:
                 logger.error("Errore pulizia pagina con LLM gratuito (%s)", type(e).__name__)
                 break
 
+        if self.execution_guard is not None:
+            raise JobExecutionError('provider_unavailable')
         # Fallback al testo originale se la chiamata fallisce
         logger.warning("Fallback al testo originale per la pagina")
         orig_lines = [line.rstrip() for line in sanitized_input.text.splitlines() if line.strip()]
@@ -238,11 +260,16 @@ class LeadAuditor:
         """
         if self.diagnostics is not None:
             self.diagnostics.require_execute()
+        if self.execution_guard is not None:
+            self.execution_guard.require_execute()
         ensure_auditable_pages(crawl_pages)
 
         # Pulisci le pagine in parallelo usando ThreadPoolExecutor
         cleaned_crawl_pages = {}
-        if crawl_pages:
+        if crawl_pages and self.execution_guard is not None:
+            for url, text in crawl_pages.items():
+                cleaned_crawl_pages[url] = self._clean_page_with_free_llm(url, text)
+        elif crawl_pages:
             logger.info(f"Avvio pulizia parallela di {len(crawl_pages)} pagine per '{business_name}'...")
             with ThreadPoolExecutor(max_workers=len(crawl_pages)) as executor:
                 # Conserva l'ordine originale mappando direttamente URL -> Future
@@ -255,7 +282,7 @@ class LeadAuditor:
                     future = future_to_url[url]
                     try:
                         cleaned_crawl_pages[url] = future.result()
-                    except (LicenseError, DiagnosticError):
+                    except (LicenseError, DiagnosticError, JobExecutionError):
                         raise
                     except Exception as exc:
                         self._diagnostic_error('page_clean', exc)
@@ -296,7 +323,7 @@ class LeadAuditor:
                 self.diagnostics.capture('llm_request', {'stage': 'website_audit', 'model': self.model,
                     'content': self.prompt_provider.system_website_audit + '\n' + UNTRUSTED_DATA_SYSTEM_RULES + '\n' + prompt})
             try:
-                response = self.client.chat.completions.create(
+                response = self._create_completion(
                     model=self.model,
                     messages=[
                         {
@@ -322,7 +349,7 @@ class LeadAuditor:
                 validated = WebsiteAuditResult.from_llm(data)
                 return validated.to_public_dict()
 
-            except (LicenseError, DiagnosticError):
+            except (LicenseError, DiagnosticError, JobExecutionError):
                 raise
             except openai.RateLimitError:
                 wait = (3 ** attempt) + random.uniform(1, 3)
@@ -339,6 +366,8 @@ class LeadAuditor:
                 logger.error("Errore audit sito (%s)", type(e).__name__)
                 break
 
+        if self.execution_guard is not None:
+            raise JobExecutionError('provider_unavailable')
         return {
             "website_score": 0,
             "diagnosis": "Errore durante l'analisi AI del sito web.",

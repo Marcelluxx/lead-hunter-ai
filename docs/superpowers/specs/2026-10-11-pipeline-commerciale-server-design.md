@@ -30,7 +30,8 @@ modulo esistente; grant discovery.rating_filters richiesto a esecuzione/consegna
 Audit.website: 1–20 URL pubblici sintatticamente validi e senza credenziali,
 max_pages 1–20, numero URL * max_pages <= 200. Diagnostic.website: un solo URL,
 max_pages 1–20, retention intera 1–168 ore (default 24), grant diagnostics.full
-con MFA corrente. Sintassi verificata prima di prompt/cleanup; URL policy e rete
+con MFA corrente e permessi EXECUTE/VIEW (il servizio comune sigilla sotto VIEW).
+Sintassi verificata prima di prompt/cleanup; URL policy e rete
 restano verifiche distinte su ogni richiesta/redirect.
 
 Solo campi permessi entrano nei parametri; nessun payload Google, raw HTML,
@@ -66,6 +67,12 @@ chiamate autorizzate con tetti configurati, distinta da fatturazione cliente e d
 una dichiarazione di tariffa Google/OpenRouter corrente; documentare incertezza
 quando il provider non restituisce un costo verificabile. Nessuna credenziale
 reale o acquisto richiesti per test e implementazione.
+
+Nel worker, pulizia delle pagine sequenziale per fermare anche richieste sorelle
+dopo revoca/cancel; timeout SDK 20 secondi, massimo 2000 token output e richiesta
+JSON fino a 200KB. Nessun fallback presentato come audit riuscito dopo errore AI.
+Archivi diagnostici sotto cartella server/workspace, UUID nel checkpoint; expiry
+e classificazione dal manifest bounded, nessun path client o payload privato nel DB.
 
 ## Verifica e stato
 
