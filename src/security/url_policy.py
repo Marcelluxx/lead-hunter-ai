@@ -27,6 +27,14 @@ class UrlPolicyError(ValueError):
 
 
 @dataclass(frozen=True)
+class UrlSyntax:
+    """Syntax normalization only; never evidence of a network authorization."""
+    normalized_url: str
+    hostname: str
+    port: int
+
+
+@dataclass(frozen=True)
 class UrlDecision:
     """Risultato immutabile di una validazione URL."""
 
@@ -73,6 +81,27 @@ class SafeUrlPolicy:
     ) -> UrlDecision:
         """Valida schema, credenziali, porta, hostname e tutte le risposte DNS."""
 
+        syntax = self.validate_syntax(url)
+        hostname, port = syntax.hostname, syntax.port
+        if allowed_hosts is not None:
+            normalized_allowed = {
+                host.rstrip(".").encode("idna").decode("ascii").lower()
+                for host in allowed_hosts
+            }
+            if hostname not in normalized_allowed:
+                raise UrlPolicyError("host_forbidden", "Il link non appartiene al sito autorizzato.")
+        addresses = self._resolve_public_addresses(hostname, port)
+        current = frozenset(addresses)
+        with self._dns_pin_lock:
+            previous = self._dns_pins.get(hostname)
+            if previous is not None and previous != current:
+                raise UrlPolicyError("dns_rebinding", "La risoluzione DNS è cambiata durante il crawl.")
+            self._dns_pins[hostname] = current
+        return UrlDecision(syntax.normalized_url, hostname, port, tuple(sorted(addresses)))
+
+    def validate_syntax(self, url: str) -> UrlSyntax:
+        """Normalize syntax only; network callers must still use validate()."""
+
         if not isinstance(url, str) or not url.strip():
             raise UrlPolicyError("empty_url", "URL assente.")
         if len(url) > self.max_url_length:
@@ -80,7 +109,10 @@ class SafeUrlPolicy:
         if url != url.strip() or any(ord(char) < 32 for char in url):
             raise UrlPolicyError("invalid_characters", "URL con caratteri di controllo o spazi esterni.")
 
-        parsed = urlsplit(url)
+        try:
+            parsed = urlsplit(url)
+        except ValueError:
+            raise UrlPolicyError('invalid_url', 'URL non valido.') from None
         scheme = parsed.scheme.lower()
         if scheme not in {"http", "https"}:
             raise UrlPolicyError("invalid_scheme", "Sono consentiti esclusivamente URL HTTP e HTTPS.")
@@ -104,22 +136,6 @@ class SafeUrlPolicy:
         if port not in self.allowed_ports:
             raise UrlPolicyError("port_forbidden", f"Porta {port} non consentita.")
 
-        if allowed_hosts is not None:
-            normalized_allowed = {
-                host.rstrip(".").encode("idna").decode("ascii").lower()
-                for host in allowed_hosts
-            }
-            if hostname not in normalized_allowed:
-                raise UrlPolicyError("host_forbidden", "Il link non appartiene al sito autorizzato.")
-
-        addresses = self._resolve_public_addresses(hostname, port)
-        current = frozenset(addresses)
-        with self._dns_pin_lock:
-            previous = self._dns_pins.get(hostname)
-            if previous is not None and previous != current:
-                raise UrlPolicyError("dns_rebinding", "La risoluzione DNS è cambiata durante il crawl.")
-            self._dns_pins[hostname] = current
-
         netloc = hostname
         if ":" in hostname:
             netloc = f"[{hostname}]"
@@ -128,7 +144,7 @@ class SafeUrlPolicy:
             netloc = f"{netloc}:{port}"
 
         normalized = urlunsplit((scheme, netloc, parsed.path or "/", parsed.query, ""))
-        return UrlDecision(normalized, hostname, port, tuple(sorted(addresses)))
+        return UrlSyntax(normalized, hostname, port)
 
     async def validate_async(
         self,
