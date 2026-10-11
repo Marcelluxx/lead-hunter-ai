@@ -3,6 +3,11 @@
 import importlib.metadata
 import importlib.util
 import os
+import json
+from io import BytesIO, StringIO
+from contextlib import redirect_stdout, redirect_stderr
+from pathlib import Path
+from zipfile import ZipFile
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -11,7 +16,7 @@ from src.crawler import HybridCrawler
 from src.domain import CrawlStatus
 
 
-WEBSITE_HTML = """<html><body><main><h1>Studio Aurora</h1><p>
+WEBSITE_HTML = """<html><head><style>main { color: blue; }</style></head><body><main><h1>Studio Aurora</h1><p>
 Studio Aurora offre consulenza professionale alle imprese italiane.
 Il nostro team segue ogni progetto con attenzione, trasparenza e cura,
 dalla prima analisi alla consegna finale. Contattaci per una consulenza
@@ -57,6 +62,11 @@ class CrawlerRuntimeTests(unittest.TestCase):
 )
 class CrawlerBrowserRuntimeTests(unittest.IsolatedAsyncioTestCase):
     async def test_real_crawler_preserves_evidence_and_contacts_without_nltk(self):
+        from tests.test_full_diagnostics import diagnostic_fixture
+        from src.application.diagnostics import DiagnosticSession
+        fx = diagnostic_fixture(self, available=False)
+        diagnostic = DiagnosticSession(fx.access, lambda: fx.context)
+        logs = StringIO()
         # Only network transport is replaced. Chromium, Crawl4AI, Markdown,
         # the app's route guard, evidence, and contact extraction remain real.
         class FixtureRoute:
@@ -81,16 +91,20 @@ class CrawlerBrowserRuntimeTests(unittest.IsolatedAsyncioTestCase):
                 return page
 
         with tempfile.TemporaryDirectory() as directory:
-            with patch.dict(os.environ, {"CRAWL4_AI_BASE_DIRECTORY": directory}):
-                crawler = FixtureCrawler(max_pages=2)
+            with patch.dict(os.environ, {"CRAWL4_AI_BASE_DIRECTORY": directory}), redirect_stdout(logs), redirect_stderr(logs):
+                crawler = FixtureCrawler(max_pages=2, diagnostics=diagnostic)
                 try:
-                    result = await crawler.crawl("https://93.184.216.34/")
+                    result = await crawler.crawl("https://93.184.216.34/?token=browser-secret-sentinel")
+                    crawler._crawler.logger.error('browser-secret-sentinel', force_verbose=True)
                 finally:
                     await crawler.close()
+                for path in Path(directory).rglob('*.log'):
+                    self.assertNotIn('browser-secret-sentinel', path.read_text(errors='replace'))
+        self.assertNotIn('browser-secret-sentinel', logs.getvalue())
         self.assertEqual(result.status, CrawlStatus.SUCCESS)
         self.assertEqual(
             set(result.pages),
-            {"https://93.184.216.34/", "https://93.184.216.34/contatti"},
+            {"https://93.184.216.34/?token=browser-secret-sentinel", "https://93.184.216.34/contatti"},
         )
         self.assertTrue(result.is_auditable)
         self.assertEqual(len(result.evidence), 2)
@@ -98,6 +112,11 @@ class CrawlerBrowserRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("consulenza professionale", result.pages[result.url])
         self.assertIn("studio@aurora.it", [c.normalized_value for c in result.contacts])
         self.assertIsNone(importlib.util.find_spec("nltk"))
+        with ZipFile(BytesIO(diagnostic.export_bytes())) as archive:
+            records = [json.loads(archive.read(name)) for name in archive.namelist() if name.startswith('event-')]
+        self.assertTrue(any(record['kind'] == 'page' and 'Studio Aurora' in record['payload']['content'] for record in records))
+        self.assertTrue(any(record['kind'] == 'css' and 'color: blue' in json.dumps(record) for record in records))
+        self.assertNotIn('studio@aurora.it', json.dumps(records))
 
 
 if __name__ == "__main__":

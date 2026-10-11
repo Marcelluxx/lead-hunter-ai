@@ -22,6 +22,8 @@ from .domain import (
     ensure_auditable_pages,
 )
 from .security import SafeUrlPolicy, UrlPolicyError
+from .application.diagnostics import DiagnosticError
+from .domain.feature_licenses import LicenseError
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +53,16 @@ EMAIL_BLACKLIST_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', 
 class HybridCrawler:
     """Crawler basato su Crawl4AI per estrazione di Markdown semantico ottimizzato per LLM."""
 
+    def _log_target(self, url):
+        return 'private diagnostic site' if self.diagnostics is not None else url
+
     def __init__(
         self,
         max_pages: int = 5,
         token_mode: str = "high_fidelity",
         headless: bool = True,
         url_policy: Optional[SafeUrlPolicy] = None,
+        diagnostics=None,
     ):
         self.max_pages = max_pages
         self.token_mode = token_mode
@@ -64,11 +70,22 @@ class HybridCrawler:
         self.url_policy = url_policy or SafeUrlPolicy()
         self._crawler = None
         self._blocked_requests: List[str] = []
+        self.diagnostics = diagnostics
+        self._diagnostic_error = None
+        if diagnostics is not None:
+            diagnostics.require_execute()
 
     async def _secure_route(self, route) -> None:
         """Blocca redirect e richieste browser dirette a reti non pubbliche."""
 
         request = route.request
+        if self.diagnostics is not None:
+            try:
+                self._check_diagnostic_failure()
+            except (LicenseError, DiagnosticError) as exc:
+                self._diagnostic_error = exc
+                await route.abort('blockedbyclient')
+                return
         try:
             await self.url_policy.validate_async(request.url)
             redirect_depth = 0
@@ -90,7 +107,36 @@ class HybridCrawler:
         return page
 
     async def _validate_navigation(self, page, context, url, **kwargs):
+        self._check_diagnostic_failure()
         await self.url_policy.validate_async(url)
+        return page
+
+    def _check_diagnostic_failure(self):
+        if self._diagnostic_error is not None:
+            raise self._diagnostic_error
+        if self.diagnostics is not None:
+            self.diagnostics.require_execute()
+
+    async def _capture_loaded_diagnostics(self, page, context, *, html, **kwargs):
+        self._check_diagnostic_failure()
+        try:
+            self.diagnostics.capture('page', {'source': page.url, 'content': html})
+            styles = await page.evaluate('''() => ({
+                styles: Array.from(document.styleSheets).slice(0,128).map(sheet => {
+                    try { const rules = Array.from(sheet.cssRules);
+                        return {source: sheet.href || 'inline', accessible: true,
+                            rules: rules.slice(0,1024).map(rule => rule.cssText).join('\\n'),
+                            omitted_rules: Math.max(0,rules.length-1024)};
+                    } catch (_) {return {source: sheet.href || 'inline', accessible: false, rules: ''};}
+                }), omitted_styles: Math.max(0,document.styleSheets.length-128)
+            })''')
+            self.diagnostics.capture('css', {'source': page.url, 'data': styles})
+        except (LicenseError, DiagnosticError) as exc:
+            self._diagnostic_error = exc
+            raise
+        except Exception:
+            self._diagnostic_error = DiagnosticError('diagnostic_capture_failed')
+            raise self._diagnostic_error from None
         return page
 
     @staticmethod
@@ -124,6 +170,7 @@ class HybridCrawler:
         """
         result = CrawlResult(url=url, requested_url=url)
         all_contacts: Dict[str, ContactPoint] = {}
+        self._check_diagnostic_failure()
 
         try:
             self.url_policy.reset_dns_pins()
@@ -152,28 +199,42 @@ class HybridCrawler:
                 cache_mode=CacheMode.BYPASS,
                 markdown_generator=markdown_generator,
                 wait_until="networkidle",
-                page_timeout=25000
+                page_timeout=25000,
+                verbose=self.diagnostics is None,
             )
 
             # Configura il browser
             browser_config = BrowserConfig(
                 headless=self.headless,
-                java_script_enabled=True
+                java_script_enabled=True,
+                verbose=self.diagnostics is None,
             )
 
             # Inizializza il crawler se non è già attivo
             if self._crawler is None:
-                self._crawler = AsyncWebCrawler(config=browser_config)
+                if self.diagnostics is not None:
+                    from crawl4ai.async_logger import AsyncLogger
+                    class PrivateCrawlerLogger(AsyncLogger):
+                        def _log(self, *args, **kwargs):
+                            # Third-party errors can force verbosity; never expose their raw payloads.
+                            return None
+                    self._crawler = AsyncWebCrawler(config=browser_config,
+                                                   logger=PrivateCrawlerLogger(verbose=False, log_file=None))
+                else:
+                    self._crawler = AsyncWebCrawler(config=browser_config)
                 self._crawler.crawler_strategy.set_hook(
                     "on_page_context_created", self._install_network_guard
                 )
                 self._crawler.crawler_strategy.set_hook(
                     "before_goto", self._validate_navigation
                 )
+                if self.diagnostics is not None:
+                    self._crawler.crawler_strategy.set_hook('before_return_html', self._capture_loaded_diagnostics)
                 await self._crawler.start()
 
-            logger.info(f"Crawl4AI: avvio crawling homepage per '{safe_url}'")
+            logger.info("Crawl4AI: avvio crawling homepage per '%s'", self._log_target(safe_url))
             home_result = await self._crawler.arun(safe_url, config=run_config)
+            self._check_diagnostic_failure()
 
             if not home_result or not home_result.success:
                 result.blocked_request_codes = list(self._blocked_requests)
@@ -184,7 +245,7 @@ class HybridCrawler:
                     result.status = CrawlStatus.FAILED
                     result.error_code = "homepage_fetch_failed"
                 result.error = home_result.error_message if home_result else "Errore sconosciuto durante il crawl."
-                logger.error(f"Crawl4AI: crawl homepage fallito per '{url}': {result.error}")
+                logger.error("Crawl4AI: crawl homepage fallito per '%s' (%s)", self._log_target(url), result.error_code)
                 return result
 
             final_url = getattr(home_result, "url", None) or safe_url
@@ -291,9 +352,11 @@ class HybridCrawler:
             for p_url in priority_links:
                 if pages_crawled >= self.max_pages:
                     break
-                logger.info(f"Crawl4AI: avvio crawling pagina interna '{p_url}'")
+                logger.info("Crawl4AI: avvio crawling pagina interna '%s'", self._log_target(p_url))
                 try:
+                    self._check_diagnostic_failure()
                     page_result = await self._crawler.arun(p_url, config=run_config)
+                    self._check_diagnostic_failure()
                     if page_result and page_result.success:
                         page_final_url = getattr(page_result, "url", None) or p_url
                         page_decision = await self.url_policy.validate_async(
@@ -347,6 +410,8 @@ class HybridCrawler:
                                 failure_code="page_fetch_failed",
                             )
                         )
+                except (LicenseError, DiagnosticError):
+                    raise
                 except Exception as e:
                     result.evidence.append(
                         PageEvidence.from_content(
@@ -358,7 +423,7 @@ class HybridCrawler:
                             failure_code="page_exception",
                         )
                     )
-                    logger.debug(f"Errore durante il crawling di '{p_url}': {e}")
+                    logger.debug("Errore durante il crawling di '%s' (%s)", self._log_target(p_url), type(e).__name__)
 
             result.contacts = sorted(
                 all_contacts.values(), key=lambda item: item.normalized_value
@@ -378,16 +443,18 @@ class HybridCrawler:
                 else CrawlStatus.SUCCESS
             )
 
+        except (LicenseError, DiagnosticError):
+            raise
         except UrlPolicyError as e:
             result.status = CrawlStatus.BLOCKED
             result.error_code = e.code
             result.error = str(e)
-            logger.warning(f"Crawl bloccato dalla URL policy per '{url}': {e.code}")
+            logger.warning("Crawl bloccato dalla URL policy per '%s': %s", self._log_target(url), e.code)
         except Exception as e:
             result.status = CrawlStatus.FAILED
             result.error_code = "crawler_exception"
             result.error = str(e)
-            logger.error(f"Errore critico durante il crawling di '{url}': {e}")
+            logger.error("Errore critico durante il crawling di '%s' (%s)", self._log_target(url), type(e).__name__)
 
         return result
 

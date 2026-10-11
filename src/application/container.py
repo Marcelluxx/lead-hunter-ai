@@ -42,7 +42,9 @@ class ApplicationContainer:
             scraper.provider = RatingFilteredDiscoveryService(scraper.provider, rating_criteria, rating_guard)
         return scraper
 
-    def build_auditor(self) -> LeadAuditor:
+    def build_auditor(self, *, diagnostics=None) -> LeadAuditor:
+        if diagnostics is not None:
+            diagnostics.require_execute()
         self.settings.require_openrouter()
         return LeadAuditor(
             api_key=self.settings.openrouter_api_key,
@@ -50,6 +52,7 @@ class ApplicationContainer:
             model=self.settings.llm_model,
             model_free=self.settings.llm_model_free,
             prompt_provider=self.prompt_provider,
+            diagnostics=diagnostics,
         )
     def build_local_license_service(self):
         from .feature_licenses import LicenseService
@@ -82,3 +85,12 @@ class ApplicationContainer:
         from ..domain.identity import Permission
         scope, _, access = self.build_local_license_service()
         return RatingFilterGuard(access, lambda: FeatureContext(scope, frozenset(Permission), False, True))
+
+    def build_local_diagnostic_session(self, *, retention_hours=24):
+        from .diagnostics import DiagnosticSession
+        from ..domain.feature_licenses import FeatureContext
+        from ..domain.identity import Permission
+        scope, _, access = self.build_local_license_service()
+        return DiagnosticSession(access, lambda: FeatureContext(scope, frozenset(Permission), False, True),
+                                 retention_hours=retention_hours,
+                                 secrets=(self.settings.google_api_key, self.settings.openrouter_api_key))

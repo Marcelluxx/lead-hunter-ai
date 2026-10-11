@@ -16,7 +16,7 @@ class FeatureLicenseContractTests(unittest.TestCase):
         self.assertEqual(catalog.get('export.no_website').module_status, 'available')
         self.assertEqual(catalog.get('export.no_website').label, 'Export riferimenti senza sito')
         self.assertEqual(catalog.get('discovery.rating_filters').module_status, 'available')
-        self.assertEqual(catalog.get('diagnostics.full').module_status, 'planned')
+        self.assertEqual(catalog.get('diagnostics.full').module_status, 'available')
         diag = catalog.get('diagnostics.full')
         self.assertEqual(diag.execute_permissions, (Permission.START_JOB,))
         self.assertEqual(diag.view_permissions, (Permission.VIEW_AUDIT_LOG,))

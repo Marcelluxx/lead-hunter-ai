@@ -35,6 +35,7 @@ from src.ui.feature_license_panel import render_feature_license_panel
 from src.ui.reference_export_panel import render_reference_export_panel
 from src.ui.rating_filter_controls import render_rating_filter_controls
 from src.ui.inline_download import render_inline_xlsx_download
+from src.ui.diagnostic_panel import render_diagnostic_panel
 from src.exporter import DataExporter
 from src.security.presentation import (
     build_keyword_card_html,
@@ -547,3 +548,5 @@ if mode_key == "no_website":
         service_factory=ApplicationContainer(runtime_settings).build_local_reference_export_service,
         origin=st.session_state.no_website_result_origin,
     )
+
+render_diagnostic_panel(container=ApplicationContainer(runtime_settings))

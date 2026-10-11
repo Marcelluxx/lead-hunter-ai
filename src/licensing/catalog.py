@@ -10,7 +10,7 @@ class FeatureCatalog:
                               (Permission.EXPORT_RESULTS,), (Permission.EXPORT_RESULTS,)),
             FeatureDefinition("discovery.rating_filters", "Filtri rating e recensioni", "available",
                               (Permission.START_JOB,), (Permission.VIEW_RESULTS,)),
-            FeatureDefinition("diagnostics.full", "Diagnostica completa", "planned",
+            FeatureDefinition("diagnostics.full", "Diagnostica completa", "available",
                               (Permission.START_JOB,), (Permission.VIEW_AUDIT_LOG,), True, True),
         )
 

@@ -281,3 +281,13 @@ inclusi Security, PostgreSQL, container e Chromium crawler.
 [Evidenze e decisioni](RATING_FILTER_IMPLEMENTATION_REVIEW.md).
 Prossimo recupero: diagnostica completa riservata. PR ancora draft: nessun merge
 o rilascio, integrazione dei branch e collegamento worker rimangono aperti.
+
+## Aggiornamento autonomo del 10 ottobre 2026
+
+La delega del proprietario ha autorizzato l'intera roadmap senza ulteriori conferme
+ordinarie. Recuperi precedenti integrati tramite PR #10 in develop (`c231e8c`),
+con CI/Security post-merge PASS; #7 incorporata, #8/#9 chiuse perché incluse.
+Diagnostica completa implementata su `codex/licensed-full-diagnostics`: sessione
+comune, capture browser/AI, ZIP privato redatto, CLI/GUI e controllo scadenza/revoca.
+Flussi reali del catalogo e Chromium verificati; review e gate del branch in corso.
+Stato corrente e sottoprogetti successivi: [roadmap autonoma](MODERNIZZAZIONE_AUTONOMA.md).
