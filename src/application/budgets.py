@@ -32,6 +32,53 @@ class BudgetSnapshot:
 
 
 class BudgetService:
+    def consume(self, session: Session, *, job_id, amount, provider, operation_id, currency=None) -> bool:
+        cost = normalized_cost(amount)
+        if cost <= 0 or not operation_id or len(operation_id) > 128:
+            raise ValueError('budget_operation_invalid')
+        reservation = session.scalar(select(UsageReservationModel).where(
+            UsageReservationModel.job_id == job_id).with_for_update())
+        previous = session.scalar(select(UsageLedgerModel).where(UsageLedgerModel.operation_id == operation_id))
+        if previous is not None:
+            if previous.job_id != job_id or normalized_cost(previous.amount) != cost or previous.provider != provider:
+                raise ValueError('budget_operation_invalid')
+            return False
+        if reservation is None or reservation.state != 'active':
+            raise ValueError('budget_reservation_inactive')
+        consumed = normalized_cost(reservation.settled_amount or 0)
+        if consumed + cost > normalized_cost(reservation.amount):
+            raise BudgetExceeded('Limite prenotazione raggiunto.')
+        budget = session.scalar(select(UsageBudgetModel).where(
+            UsageBudgetModel.id == reservation.budget_id).with_for_update())
+        if budget is None:
+            raise BudgetExceeded('Budget non configurato.')
+        if currency is not None and budget.currency != currency:
+            raise ValueError('budget_currency_mismatch')
+        budget.reserved = normalized_cost(budget.reserved) - cost
+        budget.spent = normalized_cost(budget.spent) + cost
+        reservation.settled_amount = consumed + cost
+        session.add(UsageLedgerModel(workspace_id=reservation.workspace_id, job_id=job_id,
+            entry_type='charge', amount=cost, provider=provider, units=1,
+            operation_id=operation_id, reason='provider_call_ceiling'))
+        session.flush()
+        return True
+
+    def reactivate(self, session: Session, *, job_id) -> BudgetSnapshot:
+        reservation = session.scalar(select(UsageReservationModel).where(
+            UsageReservationModel.job_id == job_id).with_for_update())
+        if reservation is None or reservation.state != 'released':
+            raise ValueError('budget_reservation_not_resumable')
+        remaining = normalized_cost(reservation.amount) - normalized_cost(reservation.settled_amount or 0)
+        budget = session.scalar(select(UsageBudgetModel).where(
+            UsageBudgetModel.id == reservation.budget_id).with_for_update())
+        if budget is None or normalized_cost(budget.spent) + normalized_cost(budget.reserved) + remaining > normalized_cost(budget.hard_limit):
+            raise BudgetExceeded('Limite di spesa raggiunto.')
+        budget.reserved = normalized_cost(budget.reserved) + remaining
+        reservation.state, reservation.settled_at = 'active', None
+        session.add(UsageLedgerModel(workspace_id=reservation.workspace_id, job_id=job_id,
+            entry_type='reservation', amount=remaining, reason='job_resume'))
+        return self._snapshot(budget)
+
     def reserve(
         self,
         session: Session,
@@ -90,27 +137,31 @@ class BudgetService:
             raise ValueError("Prenotazione non attiva.")
         if actual > normalized_cost(reservation.amount):
             raise BudgetExceeded("Il costo reale supera la prenotazione.")
+        consumed = normalized_cost(reservation.settled_amount or 0)
+        if actual < consumed:
+            raise ValueError('budget_settlement_below_consumed')
         budget = session.scalar(
             select(UsageBudgetModel)
             .where(UsageBudgetModel.id == reservation.budget_id)
             .with_for_update()
         )
         assert budget is not None
-        budget.reserved = normalized_cost(budget.reserved) - normalized_cost(reservation.amount)
-        budget.spent = normalized_cost(budget.spent) + actual
+        budget.reserved = normalized_cost(budget.reserved) - (normalized_cost(reservation.amount) - consumed)
+        budget.spent = normalized_cost(budget.spent) + actual - consumed
         reservation.state = "settled"
         reservation.settled_amount = actual
         reservation.settled_at = datetime.now(timezone.utc)
-        session.add(
-            UsageLedgerModel(
-                workspace_id=reservation.workspace_id,
-                job_id=job_id,
-                entry_type="charge",
-                amount=actual,
-                provider=provider,
-                units=normalized_cost(units) if units is not None else None,
+        if actual > consumed:
+            session.add(
+                UsageLedgerModel(
+                    workspace_id=reservation.workspace_id,
+                    job_id=job_id,
+                    entry_type="charge",
+                    amount=actual - consumed,
+                    provider=provider,
+                    units=normalized_cost(units) if units is not None else None,
+                )
             )
-        )
         released = normalized_cost(reservation.amount) - actual
         if released:
             session.add(
@@ -137,7 +188,7 @@ class BudgetService:
             .with_for_update()
         )
         assert budget is not None
-        amount = normalized_cost(reservation.amount)
+        amount = normalized_cost(reservation.amount) - normalized_cost(reservation.settled_amount or 0)
         budget.reserved = normalized_cost(budget.reserved) - amount
         reservation.state = "released"
         reservation.settled_at = datetime.now(timezone.utc)
