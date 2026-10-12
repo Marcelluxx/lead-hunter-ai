@@ -178,7 +178,7 @@ class DataExporter:
         return [
             "Business Name", "Category", "Website",
             "Extracted Email", "Website Score", "Framework",
-            "Diagnosis", "Site Brief", "Cold Message"
+            "Diagnosis", "Site Brief", "Cold Message", "Technology Signals", "Technology Rules"
         ]
 
     @staticmethod
@@ -210,6 +210,8 @@ class DataExporter:
                 lead.get("diagnosis", "N/A"),
                 lead.get("site_brief", "N/A"),
                 lead.get("cold_message", "N/A"),
+                ', '.join(lead.get('technology_signals', ())),
+                lead.get('technology_rules_version', ''),
             ])
         return rows
 

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from hashlib import sha256
 from typing import Any, Mapping
 
 from bs4 import BeautifulSoup
 
 from ..domain.crawl import CrawlResult
 from ..domain.provenance import DataSource, FieldProvenance, VerifiedLead
+from ..domain.technology import detect_technologies, TECHNOLOGY_RULES_VERSION
 
 
 def build_verified_lead(
@@ -35,21 +37,32 @@ def build_verified_lead(
         collected_at=datetime.now(timezone.utc),
     )
     audit_data = dict(audit or {})
+    dom_hash = sha256(crawl.raw_html_home.encode('utf-8', errors='replace')).hexdigest()
+    if crawl.raw_html_home_sha256 and crawl.raw_html_home_sha256 != dom_hash:
+        raise ValueError('crawl_dom_evidence_changed')
+    technologies = detect_technologies(crawl.raw_html_home)
+    technology_provenance = FieldProvenance(source=DataSource.OFFICIAL_WEBSITE, source_url=official_url,
+        collected_at=collected_at, evidence_sha256=dom_hash,
+        confidence=min((x.confidence for x in technologies), default=0.0), data_classification='website_technology')
     provenance = {
         "business_name": site_provenance,
         "website": site_provenance,
         "category": user_provenance,
     }
-    for field_name in ("website_score", "framework", "diagnosis", "site_brief", "cold_message"):
+    for field_name in ("website_score", "diagnosis", "site_brief", "cold_message"):
         if audit_data.get(field_name) not in (None, ""):
             provenance[field_name] = site_provenance
+    for field_name in ('framework', 'technology_signals', 'technology_rules_version'):
+        provenance[field_name] = technology_provenance
     return VerifiedLead(
         business_name=business_name,
         category=search_keyword.strip(),
         website=official_url,
         contacts=tuple(crawl.contacts),
         website_score=audit_data.get("website_score"),
-        framework=str(audit_data.get("framework") or ""),
+        framework=', '.join(x.name for x in technologies) or 'Non rilevato',
+        technology_signals=tuple(f'{x.name}:{signal}' for x in technologies for signal in x.signals),
+        technology_rules_version=TECHNOLOGY_RULES_VERSION,
         diagnosis=str(audit_data.get("diagnosis") or ""),
         site_brief=str(audit_data.get("site_brief") or ""),
         cold_message=str(audit_data.get("cold_message") or ""),

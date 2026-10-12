@@ -7,6 +7,7 @@ for LLM ingestion, advanced WAF/stealth bypass, and structured link extraction.
 import re
 import asyncio
 import logging
+from hashlib import sha256
 from datetime import datetime
 from typing import Dict, List, Optional, Set
 from urllib.parse import urljoin, urlparse
@@ -280,6 +281,7 @@ class HybridCrawler:
 
             # Estrai l'HTML grezzo della homepage (necessario per alcuni filtri di età/e-commerce)
             result.raw_html_home = home_result.html or ""
+            result.raw_html_home_sha256 = sha256(result.raw_html_home.encode('utf-8', errors='replace')).hexdigest()
 
             fit_md = self._select_markdown(home_result.markdown)
 
