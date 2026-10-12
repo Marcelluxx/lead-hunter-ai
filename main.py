@@ -262,8 +262,8 @@ class LeadHunterOrchestrator:
 
                     if crawl_res.emails:
                         log(f"      📧 {len(crawl_res.emails)} email professionali rilevate")
-                    if crawl_res.is_dynamic:
-                        log(f"      ⚡ JS (Playwright)")
+                    if crawl_res.browser_used:
+                        log('      ⚡ Browser usato per la scansione (Playwright)')
                         
                     # Fase 4: Filtro Età
                     verified = build_verified_lead(crawl_res, search_keyword=keyword)

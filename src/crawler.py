@@ -66,6 +66,8 @@ class HybridCrawler:
         diagnostics=None,
         execution_guard=None,
     ):
+        if token_mode not in ('high_fidelity', 'optimized'):
+            raise ValueError('crawler_token_mode_invalid')
         self.max_pages = max_pages
         self.token_mode = token_mode
         self.headless = headless
@@ -77,6 +79,17 @@ class HybridCrawler:
         self._diagnostic_error = None
         if diagnostics is not None:
             diagnostics.require_execute()
+
+    def _select_markdown(self, provider_markdown) -> str:
+        if isinstance(provider_markdown, str) and not hasattr(provider_markdown, 'raw_markdown'):
+            return provider_markdown
+        raw = getattr(provider_markdown, 'raw_markdown', '')
+        fit = getattr(provider_markdown, 'fit_markdown', '')
+        raw = raw if isinstance(raw, str) else ''
+        fit = fit if isinstance(fit, str) else ''
+        if self.token_mode == 'optimized' and len(fit.strip()) >= 100:
+            return fit
+        return raw or fit
 
     async def _secure_route(self, route) -> None:
         """Blocca redirect e richieste browser dirette a reti non pubbliche."""
@@ -199,7 +212,7 @@ class HybridCrawler:
             content_filter = PruningContentFilter(
                 threshold=0.45,
                 min_word_threshold=15
-            )
+            ) if self.token_mode == 'optimized' else None
             markdown_generator = DefaultMarkdownGenerator(
                 content_filter=content_filter,
                 options={"ignore_links": True, "ignore_images": True}
@@ -244,6 +257,8 @@ class HybridCrawler:
                 await self._crawler.start()
 
             logger.info("Crawl4AI: avvio crawling homepage per '%s'", self._log_target(safe_url))
+            result.browser_used = True
+            result.render_strategy = 'browser'
             home_result = await self._crawler.arun(safe_url, config=run_config)
             self._check_diagnostic_failure()
 
@@ -266,18 +281,7 @@ class HybridCrawler:
             # Estrai l'HTML grezzo della homepage (necessario per alcuni filtri di età/e-commerce)
             result.raw_html_home = home_result.html or ""
 
-            # Ottieni il markdown fit (semantico pulito) o quello predefinito in caso di assenza
-            fit_md = ""
-            if home_result.markdown:
-                if hasattr(home_result.markdown, "fit_markdown") and home_result.markdown.fit_markdown:
-                    fit_md = home_result.markdown.fit_markdown
-                
-                # Se il fit_markdown è assente o eccessivamente corto, ripiega su raw_markdown
-                if len(fit_md.strip()) < 100:
-                    if hasattr(home_result.markdown, "raw_markdown") and home_result.markdown.raw_markdown:
-                        fit_md = home_result.markdown.raw_markdown
-                    else:
-                        fit_md = str(home_result.markdown)
+            fit_md = self._select_markdown(home_result.markdown)
 
             result.url = final_decision.normalized_url
             home_content = self._clean_whitespace(fit_md)
@@ -373,17 +377,7 @@ class HybridCrawler:
                         page_decision = await self.url_policy.validate_async(
                             page_final_url, allowed_hosts=allowed_internal_hosts
                         )
-                        page_fit_md = ""
-                        if page_result.markdown:
-                            if hasattr(page_result.markdown, "fit_markdown") and page_result.markdown.fit_markdown:
-                                page_fit_md = page_result.markdown.fit_markdown
-                            
-                            # Se il fit_markdown è assente o eccessivamente corto, ripiega su raw_markdown
-                            if len(page_fit_md.strip()) < 100:
-                                if hasattr(page_result.markdown, "raw_markdown") and page_result.markdown.raw_markdown:
-                                    page_fit_md = page_result.markdown.raw_markdown
-                                else:
-                                    page_fit_md = str(page_result.markdown)
+                        page_fit_md = self._select_markdown(page_result.markdown)
 
                         page_content = self._clean_whitespace(page_fit_md)
                         page_status, page_content_type = self._page_metadata(page_result)
