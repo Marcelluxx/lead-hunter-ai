@@ -12,8 +12,9 @@ SQLAlchemy/PostgreSQL, OpenPyXL. Nessuna dipendenza nuova.
 Metodo native conservato dal mandato autonomo. Baseline develop9941a22, PR #12
 merged dopo review/fix e CI38125603382/Security38125603395 PASS su c7f86da.
 Comandi test: uv0.11.15 run --frozen --group test python -m unittest MODULE -v;
-runtime già installato e isolato. Ogni Task completa il comando globale finale
-con suite intera e flags PostgreSQL/Chromium/Docker nella workspace propria.
+runtime già installato e isolato. Ogni Task verifica la suite intera sul codice
+modificato; task-done ripete il comando mirato del brief sullo stesso codice.
+La suite finale usa flags PostgreSQL/Chromium/Docker nella workspace propria.
 
 ## Global Constraints
 

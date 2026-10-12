@@ -9,10 +9,12 @@ Contiene tutti i filtri per la modalità "Con Sito Web + Audit":
 
 import re
 import logging
-from datetime import datetime
+import json
+from datetime import datetime, date, timezone
 from typing import List, Optional
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 import whois
+from bs4 import BeautifulSoup, Comment
 
 logger = logging.getLogger(__name__)
 
@@ -50,29 +52,39 @@ def filter_by_business_age(domain: str, html_text: str = "", min_years: int = 5)
     if regex_result is True:
         return True
 
-    # Benefit of the doubt: nessun dato = passa
-    logger.info(f"Filtro età: nessun dato definitivo per {domain}, lead passa per benefit of the doubt.")
+    if whois_result is False or regex_result is False:
+        return False
+    logger.info('Filtro età: stato unknown, consentito dalla policy locale.')
     return True
 
 
 def _check_whois_age(domain: str, cutoff_year: int) -> Optional[bool]:
     """WHOIS lookup. Returns True/False/None."""
     try:
-        w = whois.whois(domain)
-        creation_date = w.creation_date
-        if creation_date is None:
+        hostname = extract_domain(domain)
+        if not hostname:
             return None
-        if isinstance(creation_date, list):
-            creation_date = creation_date[0]
-        if hasattr(creation_date, 'year'):
-            if creation_date.year <= cutoff_year:
-                logger.info(f"WHOIS: {domain} registrato {creation_date.year} — PASSA")
-                return True
-            else:
-                logger.info(f"WHOIS: {domain} registrato {creation_date.year} — recente")
-                return False
+        creation = whois.whois(hostname, timeout=10).creation_date
+        candidates = creation if isinstance(creation, (list, tuple)) else [creation]
+        dates = []
+        now = datetime.now(timezone.utc)
+        for value in candidates:
+            if isinstance(value, str):
+                try:
+                    value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                except ValueError:
+                    continue
+            if isinstance(value, date) and not isinstance(value, datetime):
+                value = datetime.combine(value, datetime.min.time())
+            if not isinstance(value, datetime):
+                continue
+            value = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+            if 1900 <= value.year and value <= now:
+                dates.append(value)
+        if dates:
+            return min(dates).year <= cutoff_year
     except Exception as e:
-        logger.debug(f"WHOIS fallito per {domain}: {e}")
+        logger.debug('WHOIS non disponibile (%s)', type(e).__name__)
     return None
 
 
@@ -81,8 +93,12 @@ def _check_copywriting_age(html_text: str, cutoff_year: int, min_years: int) -> 
     if not html_text:
         return None
 
-    text_lower = html_text.lower()
+    soup = _visible_dom(html_text)
+    for element in soup(['script', 'head']):
+        element.decompose()
+    text_lower = soup.get_text(' ', strip=True).casefold()
     current_year = datetime.now().year
+    decisions = []
 
     # Pattern anno esplicito
     year_patterns = [
@@ -97,7 +113,7 @@ def _check_copywriting_age(html_text: str, cutoff_year: int, min_years: int) -> 
             try:
                 year = int(match)
                 if 1900 <= year <= current_year:
-                    return year <= cutoff_year
+                    decisions.append(year <= cutoff_year)
             except ValueError:
                 continue
 
@@ -111,26 +127,78 @@ def _check_copywriting_age(html_text: str, cutoff_year: int, min_years: int) -> 
         for match in re.findall(pattern, text_lower):
             try:
                 years = int(match)
-                return years >= min_years
+                decisions.append(years >= min_years)
             except ValueError:
                 continue
 
-    return None
+    return True if True in decisions else (False if False in decisions else None)
+
+
+def _visible_dom(html_text):
+    soup = BeautifulSoup(html_text or '', 'html.parser')
+    for comment in soup.find_all(string=lambda item: isinstance(item, Comment)):
+        comment.extract()
+    for tag in soup.find_all(['style', 'template', 'noscript']):
+        tag.decompose()
+    for tag in soup.find_all(lambda item: item.has_attr('hidden') or
+            str(item.get('aria-hidden', '')).lower() == 'true' or
+            re.search(r'(?:display\s*:\s*none|visibility\s*:\s*hidden)', str(item.get('style', '')), re.I)):
+        tag.decompose()
+    return soup
 
 
 def filter_ecommerce(html_text: str, ecommerce_indicators: List[str]) -> bool:
     """
-    Rileva se il sito è un e-commerce. Richiede almeno 2 indicatori per evitare falsi positivi.
+    Richiede un'azione DOM di acquisto e struttura commerciale indipendente.
+    La lista indicatori legacy resta compatibile; il testo libero non è un segnale.
     Returns True se È un e-commerce (= deve essere ESCLUSO).
     """
     if not html_text:
         return False
-    text_lower = html_text.lower()
-    match_count = sum(1 for ind in ecommerce_indicators if ind.lower() in text_lower)
-    if match_count >= 2:
-        logger.info(f"Filtro e-commerce: RILEVATO ({match_count} indicatori)")
-        return True
-    return False
+    soup = _visible_dom(html_text)
+    action = False
+    for tag in soup.find_all(['a', 'button', 'input', 'form']):
+        target = str(tag.get('href') or tag.get('action') or '')
+        parsed = urlparse(target)
+        path = parsed.path.casefold()
+        labels = ' '.join([str(tag.get('id', '')), ' '.join(tag.get('class', [])),
+            str(tag.get('name', '')), str(tag.get('aria-label', '')), tag.get_text(' ', strip=True)])
+        if (re.match(r'^/(?:[a-z]{2}/)?(?:cart|checkout|carrello)(?:/|$)', path) or
+                'add-to-cart' in parse_qs(parsed.query) or
+                re.search(r'\badd[-_]to[-_]cart\b|\baggiungi\s+al\s+carrello\b', labels, re.I)):
+            action = True
+            break
+    if not action:
+        return False
+    structured = False
+    def product_schema(value):
+        if isinstance(value, dict):
+            kinds = value.get('@type', [])
+            kinds = [kinds] if isinstance(kinds, str) else kinds
+            if isinstance(kinds, list) and any(str(x).rsplit('/', 1)[-1] in ('Product', 'Offer') for x in kinds):
+                return True
+            return any(product_schema(item) for item in value.values())
+        return isinstance(value, list) and any(product_schema(item) for item in value)
+    for tag in soup.find_all('script', attrs={'type': 'application/ld+json'}):
+        try:
+            if product_schema(json.loads(tag.string or tag.get_text())):
+                structured = True
+                break
+        except (ValueError, TypeError, RecursionError):
+            continue
+    if not structured:
+        structured = any(re.search(r'(?:schema\.org/)(?:Product|Offer)\b', str(tag.get('itemtype', '')))
+            for tag in soup.find_all(attrs={'itemtype': True}))
+    if not structured:
+        for tag in soup.find_all(['script', 'link', 'span']):
+            asset = urlparse(str(tag.get('src') or tag.get('href') or ''))
+            classes = ' '.join(tag.get('class', []))
+            if (asset.hostname == 'cdn.shopify.com' or
+                    re.search(r'/plugins/woocommerce/|/prestashop/|/magento/', asset.path, re.I) or
+                    'woocommerce-Price-amount' in classes.split()):
+                structured = True
+                break
+    return structured
 
 
 def filter_franchise(
@@ -139,25 +207,17 @@ def filter_franchise(
     known_franchises: List[str]
 ) -> bool:
     """
-    Rileva catene nazionali / franchise via lista hardcoded + analisi ripetizioni nel dataset.
+    Match di marchi noti per token completi. Nomi ripetuti da soli non provano una catena.
     Returns True se è franchise (= deve essere ESCLUSO).
     """
     if not business_name:
         return False
-    name_lower = business_name.lower().strip()
-
-    # Check 1: Lista hardcoded
+    name_tokens = re.findall(r'\w+', business_name.casefold())
     for franchise in known_franchises:
-        if franchise.lower() in name_lower:
-            logger.info(f"Filtro franchise: '{business_name}' match con '{franchise}'")
-            return True
-
-    # Check 2: Brand ripetuto 3+ volte nel dataset
-    normalized = _normalize_brand_name(name_lower)
-    if normalized and len(normalized) >= 3:
-        count = sum(1 for n in all_names_in_dataset if normalized in _normalize_brand_name(n.lower().strip()))
-        if count >= 3:
-            logger.info(f"Filtro franchise: '{business_name}' appare {count}x nel dataset")
+        tokens = re.findall(r'\w+', franchise.casefold())
+        if tokens and any(name_tokens[index:index + len(tokens)] == tokens
+                for index in range(len(name_tokens) - len(tokens) + 1)):
+            logger.info('Filtro franchise: marchio noto completo rilevato.')
             return True
 
     return False
@@ -170,10 +230,11 @@ def filter_social_media(domain: str, social_domains: List[str]) -> bool:
     """
     if not domain:
         return False
-    domain_lower = domain.lower()
+    hostname = extract_domain(domain)
     for social in social_domains:
-        if social in domain_lower:
-            logger.info(f"Filtro social: '{domain}' scartato (match con '{social}')")
+        social = extract_domain(social)
+        if social and (hostname == social or hostname.endswith('.' + social)):
+            logger.info('Filtro social: hostname social rilevato.')
             return True
     return False
 
@@ -190,13 +251,15 @@ def _normalize_brand_name(name: str) -> str:
 def extract_domain(url: str) -> str:
     """Estrae il dominio puro da un URL (es. 'www.example.com' -> 'example.com')."""
     try:
-        parsed = urlparse(url)
-        domain = parsed.netloc or parsed.path
+        if not isinstance(url, str) or not url or any(char.isspace() for char in url):
+            return ''
+        parsed = urlparse(url if '://' in url or url.startswith('//') else '//' + url)
+        domain = (parsed.hostname or '').rstrip('.').encode('idna').decode('ascii').lower()
         if domain.startswith("www."):
             domain = domain[4:]
         return domain
     except Exception:
-        return url
+        return ''
 
 
 # --- TRADUZIONE E UNIFICAZIONE CATEGORIE ---

@@ -273,9 +273,9 @@ class LeadHunterOrchestrator:
                         continue
                         
                     # Fase 5: Filtro Scala
-                    # if filter_ecommerce(crawl_res.raw_html_home, ECOMMERCE_INDICATORS):
-                    #     log(f"   ❌ Escluso (e-commerce): {name}")
-                    #     continue
+                    if filter_ecommerce(crawl_res.raw_html_home, ECOMMERCE_INDICATORS):
+                        log('   ❌ Escluso: e-commerce con azione di acquisto e segnali commerciali')
+                        continue
                     if filter_franchise(verified.business_name, [], KNOWN_FRANCHISES):
                         log("   ❌ Escluso: franchise noto")
                         continue

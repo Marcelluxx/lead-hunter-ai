@@ -85,6 +85,20 @@ class _Auditor:
 
 
 class CompliantPipelineTests(unittest.TestCase):
+    def test_real_ecommerce_filter_stops_local_audit_before_llm(self):
+        from tests.test_functional_filters import SHOP_DOM
+        class ShopCrawler(_Crawler):
+            async def crawl(self, url):
+                result = await super().crawl(url)
+                result.raw_html_home = SHOP_DOM
+                return result
+        auditor = _Auditor()
+        orchestrator = LeadHunterOrchestrator('with_website', scraper=LeadScraper(provider=_Provider()), auditor=auditor)
+        with patch('main.HybridCrawler', return_value=ShopCrawler()), patch('main.filter_by_business_age', return_value=True):
+            results = orchestrator.run_with_website(45, 9, ['dentista'], max_pages=1)
+        self.assertEqual(results, [])
+        self.assertIsNone(auditor.payload)
+
     def test_provider_content_never_reaches_llm_or_verified_report(self):
         auditor = _Auditor()
         orchestrator = LeadHunterOrchestrator(
