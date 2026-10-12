@@ -2,6 +2,20 @@ import unittest
 
 
 class TechnologyDetectionTests(unittest.TestCase):
+    def test_non_resource_links_and_cdn_roots_do_not_claim_a_cms(self):
+        from src.domain.technology import detect_technologies
+        for rel in ['canonical', 'alternate', 'dns-prefetch', 'preconnect']:
+            for href in ['https://blog.test/_next/static/', '//cdn.shopify.com/s/assets/theme.js',
+                    '//static1.squarespace.com/static/site.js']:
+                with self.subTest(rel=rel, href=href):
+                    self.assertEqual(detect_technologies(f'<link rel="{rel}" href="{href}">'), ())
+        for host in ['cdn.shopify.com', 'static1.squarespace.com', 'static.squarespace.com']:
+            self.assertEqual(detect_technologies(f'<script src="https://{host}/"></script>'), ())
+            self.assertEqual(detect_technologies(f'<script src="https://{host}/unrelated.js"></script>'), ())
+        for rel in ['stylesheet', 'preload', 'modulepreload']:
+            matches = detect_technologies(f'<link rel="{rel}" href="/_next/static/app.css">')
+            self.assertEqual([x.name for x in matches], ['Next.js'])
+
     def test_generator_and_asset_fingerprints_have_public_signals_without_version_claims(self):
         from src.domain.technology import detect_technologies
         cases = [('WordPress', '<meta name="generator" content="WordPress 6.8">'),

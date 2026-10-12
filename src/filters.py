@@ -159,7 +159,10 @@ def filter_ecommerce(html_text: str, ecommerce_indicators: List[str]) -> bool:
     action = False
     for tag in soup.find_all(['a', 'button', 'input', 'form']):
         target = str(tag.get('href') or tag.get('action') or '')
-        parsed = urlparse(target)
+        try:
+            parsed = urlparse(target)
+        except ValueError:
+            continue
         path = parsed.path.casefold()
         labels = ' '.join([str(tag.get('id', '')), ' '.join(tag.get('class', [])),
             str(tag.get('name', '')), str(tag.get('aria-label', '')), tag.get_text(' ', strip=True)])
@@ -191,7 +194,10 @@ def filter_ecommerce(html_text: str, ecommerce_indicators: List[str]) -> bool:
             for tag in soup.find_all(attrs={'itemtype': True}))
     if not structured:
         for tag in soup.find_all(['script', 'link', 'span']):
-            asset = urlparse(str(tag.get('src') or tag.get('href') or ''))
+            try:
+                asset = urlparse(str(tag.get('src') or tag.get('href') or ''))
+            except ValueError:
+                continue
             classes = ' '.join(tag.get('class', []))
             if (asset.hostname == 'cdn.shopify.com' or
                     re.search(r'/plugins/woocommerce/|/prestashop/|/magento/', asset.path, re.I) or

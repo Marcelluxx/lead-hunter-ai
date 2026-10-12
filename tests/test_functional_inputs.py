@@ -35,7 +35,8 @@ class FunctionalInputTests(unittest.TestCase):
 
     def test_invalid_test_url_precedes_environment_prompt_and_archive_cleanup(self):
         for full in [False, True]:
-            for url in ['not-a-url', 'https://user:SECRET_SENTINEL@site.test/', 'http://localhost/', 'https://[broken']:
+            for url in ['not-a-url', 'https://user:SECRET_SENTINEL@site.test/', 'http://localhost/', 'https://[broken',
+                    'https://exa mple.com/', 'https://example.com:0/']:
                 args = ['--test-url', url] + (['--full-diagnostics'] if full else [])
                 with self.subTest(full=full, url=url), patch('main.ApplicationSettings.from_environment') as settings, \
                         patch('main.ApplicationContainer') as container, patch('main.HybridCrawler') as crawler, \

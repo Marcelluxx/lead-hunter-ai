@@ -32,6 +32,9 @@ def detect_technologies(html: str) -> tuple[TechnologyMatch, ...]:
             if re.match(re.escape(name) + r'\b', generator, re.I):
                 add(name, 'generator_meta')
     for tag in soup.find_all(['script', 'link']):
+        if tag.name == 'link' and not {'stylesheet', 'preload', 'modulepreload'}.intersection(
+                str(rel).casefold() for rel in tag.get('rel', [])):
+            continue
         target = tag.get('src') if tag.name == 'script' else tag.get('href')
         if not isinstance(target, str):
             continue
@@ -48,11 +51,12 @@ def detect_technologies(html: str) -> tuple[TechnologyMatch, ...]:
             ('Nuxt', r'/_nuxt/', 'asset_nuxt')]:
             if re.search(expression, path):
                 add(name, signal)
-        if host == 'cdn.shopify.com':
+        if host == 'cdn.shopify.com' and re.search(r'^/s/(?:assets|files)/.+', path):
             add('Shopify', 'asset_shopify_cdn')
         if host in ('static.parastorage.com', 'static.wixstatic.com') and '/wix-thunderbolt/' in path:
             add('Wix', 'asset_wix_thunderbolt')
-        if host in ('static1.squarespace.com', 'static.squarespace.com'):
+        if host in ('static1.squarespace.com', 'static.squarespace.com') and re.search(
+                r'^/(?:static|universal|universal-scripts)/.+', path):
             add('Squarespace', 'asset_squarespace')
     # Fixed rules emit at most nine distinct public rule IDs; never source text/URLs.
     return tuple(TechnologyMatch(name, tuple(sorted(signals)), 0.95 if 'generator_meta' in signals else 0.8)

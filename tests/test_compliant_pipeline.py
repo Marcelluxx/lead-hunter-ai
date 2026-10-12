@@ -85,6 +85,19 @@ class _Auditor:
 
 
 class CompliantPipelineTests(unittest.TestCase):
+    def test_unrelated_malformed_link_does_not_lose_a_valid_lead(self):
+        class BrokenLinkCrawler(_Crawler):
+            async def crawl(self, url):
+                result = await super().crawl(url)
+                result.raw_html_home += '<a href="https://[broken">Contatti</a>'
+                return result
+        auditor = _Auditor()
+        orchestrator = LeadHunterOrchestrator('with_website', scraper=LeadScraper(provider=_Provider()), auditor=auditor)
+        with patch('main.HybridCrawler', return_value=BrokenLinkCrawler()), patch('main.filter_by_business_age', return_value=True):
+            results = orchestrator.run_with_website(45, 9, ['dentista'], max_pages=1)
+        self.assertEqual(len(results), 1)
+        self.assertIsNotNone(auditor.payload)
+
     def test_real_ecommerce_filter_stops_local_audit_before_llm(self):
         from tests.test_functional_filters import SHOP_DOM
         class ShopCrawler(_Crawler):

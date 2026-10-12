@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import re
 import socket
 import threading
 from dataclasses import dataclass
@@ -126,11 +127,24 @@ class SafeUrlPolicy:
         except UnicodeError as exc:
             raise UrlPolicyError("invalid_hostname", "Hostname non valido.") from exc
 
+        if ':' in hostname:
+            try:
+                ipaddress.IPv6Address(hostname)
+            except ValueError:
+                raise UrlPolicyError("invalid_hostname", "Hostname non valido.") from None
+            if '%' in hostname:
+                raise UrlPolicyError("invalid_hostname", "Hostname non valido.")
+        elif len(hostname) > 253 or any(
+                not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', label)
+                for label in hostname.split('.')):
+            raise UrlPolicyError("invalid_hostname", "Hostname non valido.")
+
         if not hostname or hostname == "localhost" or hostname.endswith(".localhost"):
             raise UrlPolicyError("local_hostname", "Hostname locale non consentito.")
 
         try:
-            port = parsed.port or (443 if scheme == "https" else 80)
+            explicit_port = parsed.port
+            port = explicit_port if explicit_port is not None else (443 if scheme == "https" else 80)
         except ValueError as exc:
             raise UrlPolicyError("invalid_port", "Porta URL non valida.") from exc
         if port not in self.allowed_ports:

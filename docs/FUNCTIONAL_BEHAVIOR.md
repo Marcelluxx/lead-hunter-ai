@@ -22,7 +22,8 @@ I job server schema1 mantengono i filtri dichiarati, senza nuove esclusioni impl
 ## Scansione e tecnologie
 
 high_fidelity conserva Markdown completo semantico; optimized usa contenuto pruning
-threshold0.45/min15 parole, con fallback completo se il fit è più corto di100 caratteri.
+threshold0.45/min15 parole, con fallback completo se il fit non raggiunge i120 caratteri
+per pagina o i200 della homepage, preservando le soglie minime di evidenza dell'audit.
 Homepage e pagine interne usano la stessa scelta. Non è promesso risparmio fisso.
 Browser usato è un fatto osservato; necessità di JavaScript resta unknown senza
 confronto statico/render. Input bloccato prima della navigazione non dichiara browser usato.

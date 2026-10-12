@@ -13,6 +13,13 @@ SHOP_DOM = '''<form action="/cart/add"><button>Aggiungi al carrello</button></fo
 
 
 class FunctionalFilterTests(unittest.TestCase):
+    def test_malformed_dom_urls_do_not_abort_qualification_or_hide_valid_signals(self):
+        broken = '<a href="https://[broken">Contatti</a><script src="https://[broken"></script>'
+        self.assertFalse(filter_ecommerce(broken, []))
+        self.assertTrue(filter_ecommerce(broken + SHOP_DOM, []))
+        self.assertTrue(filter_ecommerce(broken + '<a href="/cart">Carrello</a>'
+            '<script src="/plugins/woocommerce/cart.js"></script>', []))
+
     def test_known_recent_domain_is_excluded_unknown_still_allowed_and_old_copy_overrides(self):
         with patch('src.filters.whois.whois', return_value=SimpleNamespace(creation_date=datetime(datetime.now().year, 1, 1))) as lookup:
             self.assertFalse(filter_by_business_age('studio.test', '', 5))

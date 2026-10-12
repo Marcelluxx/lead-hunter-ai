@@ -12,6 +12,26 @@ personalizzata scrivendo a studio@aurora.it oppure visita la nostra sede.</p>
 
 
 class CrawlerModeTests(unittest.TestCase):
+    def test_optimized_selection_preserves_page_and_total_evidence_minima(self):
+        from crawl4ai.models import MarkdownGenerationResult, StringCompatibleMarkdown
+        from src.domain.crawl import PageEvidence, ensure_auditable_pages
+        crawler = HybridCrawler(token_mode='optimized')
+        for length in [100, 119]:
+            md = StringCompatibleMarkdown(MarkdownGenerationResult(raw_markdown='R' * 500,
+                markdown_with_citations='', references_markdown='', fit_markdown='F' * length))
+            selected = crawler._select_markdown(md)
+            self.assertEqual(selected, 'R' * 500)
+            self.assertTrue(PageEvidence.from_content(requested_url='https://site.test/',
+                final_url='https://site.test/', status_code=200, content_type='text/html', content=selected).valid)
+        for length in [120, 199]:
+            md = SimpleNamespace(raw_markdown='R' * 500, fit_markdown='F' * length)
+            selected = crawler._select_markdown(md, minimum_chars=200)
+            self.assertEqual(selected, 'R' * 500)
+            ensure_auditable_pages({'https://site.test/': selected})
+            self.assertEqual(crawler._select_markdown(md), 'F' * length)
+        self.assertEqual(crawler._select_markdown(SimpleNamespace(raw_markdown='short', fit_markdown='F' * 190),
+            minimum_chars=200), 'F' * 190)
+
     def test_modes_select_distinct_content_and_short_fit_falls_back_to_raw(self):
         md = SimpleNamespace(raw_markdown='R' * 500, fit_markdown='F' * 120)
         self.assertEqual(HybridCrawler(token_mode='high_fidelity')._select_markdown(md), 'R' * 500)
@@ -45,10 +65,10 @@ class CrawlerModeTests(unittest.TestCase):
 class CrawlerModeBrowserTests(unittest.IsolatedAsyncioTestCase):
     async def test_real_home_and_internal_pages_follow_mode_without_inventing_js_requirement(self):
         class FixtureCrawler(HybridCrawler):
-            def _select_markdown(self, md):
+            def _select_markdown(self, md, **kwargs):
                 self.selection_metadata.append((self.token_mode, len(md.raw_markdown), len(md.fit_markdown),
                     'NAV_SENTINEL' in md.fit_markdown))
-                return super()._select_markdown(md)
+                return super()._select_markdown(md, **kwargs)
             async def _install_network_guard(self, page, context, **kwargs):
                 async def fixture(route):
                     class Transport:

@@ -49,7 +49,8 @@ cliente configurabili appartengono alla successiva superficie clienti.
 ## Crawl e tecnologia
 
 high_fidelity usa raw Markdown semantico; optimized usa fit con filtro pruning
-threshold0.45/min_word_threshold15, fallback raw quando fit<100 caratteri.
+threshold0.45/min_word_threshold15, fallback raw quando fit<120 caratteri per
+pagina o fit<200 per la homepage, per preservare le soglie dell'evidenza.
 Un helper seleziona contenuto per homepage e interne; entrambi mantengono
 controlli min120/pagina e min200 totali, contatti ed evidenza. Opzione invalida
 rifiutata prima del browser. Non si promette un risparmio token fisso senza misura.

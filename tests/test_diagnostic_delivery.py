@@ -60,23 +60,34 @@ class DiagnosticDeliveryTests(unittest.TestCase):
 
     def test_invalid_url_with_real_license_precedes_auditor_crawler_and_cleanup(self):
         self.fx.activate()
-        args = self.args.copy(); args[1] = 'not-a-url'
-        with patch('main.HybridCrawler') as crawler, patch.object(ApplicationContainer, 'build_auditor') as auditor, \
-                patch('src.application.diagnostics.purge_diagnostic_archives') as cleanup:
-            self.assertEqual(main(args), 2)
-            crawler.assert_not_called(); auditor.assert_not_called(); cleanup.assert_not_called()
+        for url in ['not-a-url', 'https://exa mple.com/', 'https://example.com:0/']:
+            args = self.args.copy(); args[1] = url
+            with self.subTest(url=url), patch('main.HybridCrawler') as crawler, \
+                    patch.object(ApplicationContainer, 'build_auditor') as auditor, \
+                    patch.object(ApplicationContainer, 'build_local_diagnostic_session') as session, \
+                    patch('src.application.diagnostics.purge_diagnostic_archives') as cleanup:
+                self.assertEqual(main(args), 2)
+                crawler.assert_not_called(); auditor.assert_not_called(); cleanup.assert_not_called(); session.assert_not_called()
         self.assertFalse(self.destination.exists())
 
     def test_gui_invalid_url_with_real_license_creates_no_auditor_or_download(self):
         self.fx.activate()
         app = AppTest.from_string(APP, default_timeout=20).run()
-        app.text_input(key='diagnostic_url').set_value('not-a-url').run()
-        with patch('src.ui.diagnostic_panel.HybridCrawler') as crawler, patch.object(ApplicationContainer, 'build_auditor') as auditor:
-            app.button(key='diagnostic_run').click().run()
-            crawler.assert_not_called(); auditor.assert_not_called()
-        self.assertEqual(len(app.exception), 0)
-        self.assertEqual(len(app.get('iframe')), 0)
-        self.assertTrue(any('URL' in x.value for x in app.error))
+        original_session = ApplicationContainer.build_local_diagnostic_session
+        for url in ['not-a-url', 'https://exa mple.com/', 'https://example.com:0/']:
+            app.text_input(key='diagnostic_url').set_value(url).run()
+            with self.subTest(url=url), patch('src.ui.diagnostic_panel.HybridCrawler') as crawler, \
+                    patch.object(ApplicationContainer, 'build_auditor') as auditor, \
+                    patch.object(ApplicationContainer, 'build_local_diagnostic_session', autospec=True,
+                        side_effect=original_session) as session, \
+                    patch('src.application.diagnostics.purge_diagnostic_archives') as cleanup:
+                app.button(key='diagnostic_run').click().run()
+                crawler.assert_not_called(); auditor.assert_not_called(); cleanup.assert_not_called()
+                self.assertEqual(session.call_count, 1)  # Availability probe only.
+                self.assertNotIn('retention_hours', session.call_args.kwargs)
+            self.assertEqual(len(app.exception), 0)
+            self.assertEqual(len(app.get('iframe')), 0)
+            self.assertTrue(any('URL' in x.value for x in app.error))
 
     def test_cli_real_catalog_signed_license_produces_valid_zip(self):
         self.fx.activate()

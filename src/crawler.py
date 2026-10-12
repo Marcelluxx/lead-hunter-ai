@@ -23,6 +23,7 @@ from .domain import (
     ensure_auditable_pages,
 )
 from .security import SafeUrlPolicy, UrlPolicyError
+from .domain.crawl import MIN_AUDIT_PAGE_CHARS, MIN_AUDIT_TOTAL_CHARS
 from .application.diagnostics import DiagnosticError
 from .domain.feature_licenses import LicenseError
 from .application.job_execution import JobExecutionError
@@ -81,15 +82,19 @@ class HybridCrawler:
         if diagnostics is not None:
             diagnostics.require_execute()
 
-    def _select_markdown(self, provider_markdown) -> str:
+    def _select_markdown(self, provider_markdown, *, minimum_chars=MIN_AUDIT_PAGE_CHARS) -> str:
         if isinstance(provider_markdown, str) and not hasattr(provider_markdown, 'raw_markdown'):
             return provider_markdown
         raw = getattr(provider_markdown, 'raw_markdown', '')
         fit = getattr(provider_markdown, 'fit_markdown', '')
         raw = raw if isinstance(raw, str) else ''
         fit = fit if isinstance(fit, str) else ''
-        if self.token_mode == 'optimized' and len(fit.strip()) >= 100:
-            return fit
+        if self.token_mode == 'optimized':
+            if len(fit.strip()) >= minimum_chars:
+                return fit
+            if len(raw.strip()) >= MIN_AUDIT_PAGE_CHARS:
+                return raw
+            return fit or raw
         return raw or fit
 
     async def _secure_route(self, route) -> None:
@@ -283,7 +288,7 @@ class HybridCrawler:
             result.raw_html_home = home_result.html or ""
             result.raw_html_home_sha256 = sha256(result.raw_html_home.encode('utf-8', errors='replace')).hexdigest()
 
-            fit_md = self._select_markdown(home_result.markdown)
+            fit_md = self._select_markdown(home_result.markdown, minimum_chars=MIN_AUDIT_TOTAL_CHARS)
 
             result.url = final_decision.normalized_url
             home_content = self._clean_whitespace(fit_md)
