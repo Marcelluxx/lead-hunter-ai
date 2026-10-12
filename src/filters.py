@@ -370,8 +370,12 @@ def clean_and_translate_categories(raw_types: list, search_kw: str = "") -> str:
     seen = set()
     
     # Processa i tipi di Google Maps
-    for t in raw_types:
-        t_lower = t.lower()
+    for t in raw_types if isinstance(raw_types, (list, tuple)) else []:
+        if not isinstance(t, str):
+            continue
+        t_lower = t.strip().casefold()
+        if not t_lower:
+            continue
         if t_lower in IGNORED_TYPES:
             continue
             
@@ -386,7 +390,7 @@ def clean_and_translate_categories(raw_types: list, search_kw: str = "") -> str:
             seen.add(tag)
             clean_tags.append(tag)
             
-    search_kw_clean = search_kw.strip().title() if search_kw else ""
+    search_kw_clean = search_kw.strip().title() if isinstance(search_kw, str) else ""
     
     # Se non abbiamo nessun tag, usiamo la keyword di ricerca
     if not clean_tags and search_kw_clean:
@@ -397,82 +401,37 @@ def clean_and_translate_categories(raw_types: list, search_kw: str = "") -> str:
 
 
 def extract_address_details(lead: dict) -> tuple:
-    """
-    Estrae 'via_e_civico' e 'paese' (località) da un lead.
-    Ritorna una tupla (via_e_civico, paese).
-    """
-    address_components = lead.get("addressComponents", [])
-    
-    route = ""
-    street_number = ""
-    locality = ""
-    
-    for comp in address_components:
-        types = comp.get("types", [])
-        if "route" in types:
-            route = comp.get("longText", "")
-        elif "street_number" in types:
-            street_number = comp.get("longText", "")
-        elif "locality" in types:
-            locality = comp.get("longText", "")
-            
-    # Se abbiamo trovato la route tramite i componenti strutturati
-    if route:
-        if street_number:
-            via_e_civico = f"{route}, {street_number}"
-        else:
-            via_e_civico = route
-    else:
-        # Fallback se non ci sono addressComponents strutturati
-        formatted_address = lead.get("formattedAddress", "")
-        if formatted_address and formatted_address != "N/A":
-            parts = [p.strip() for p in formatted_address.split(",")]
-            if len(parts) >= 2:
-                p1 = parts[1]
-                is_civico = (len(p1) <= 8 and (any(c.isdigit() for c in p1) or p1.lower() in ["snc", "s.n.c."]))
-                if is_civico:
-                    via_e_civico = f"{parts[0]}, {p1}"
-                else:
-                    via_e_civico = parts[0]
-            else:
-                via_e_civico = formatted_address
-        else:
-            via_e_civico = "N/A"
-            
-    # Per la località (Paese/Città)
+    """Presentation helper: missing locality remains unknown, never the search term."""
+    if not isinstance(lead, dict):
+        return 'N/A', 'N/A'
+    def text(value):
+        return value.strip() if isinstance(value, str) and value.strip().casefold() != 'n/a' else ''
+    components = lead.get('addressComponents')
+    components = components if isinstance(components, (list, tuple)) else []
+    values = {}
+    for comp in components:
+        if not isinstance(comp, dict) or not isinstance(comp.get('types'), (list, tuple)):
+            continue
+        for kind in ('route', 'street_number', 'locality', 'postal_town'):
+            if kind in comp['types'] and text(comp.get('longText')):
+                values.setdefault(kind, text(comp['longText']))
+    street = ', '.join(filter(None, (values.get('route', ''), values.get('street_number', ''))))
+    locality = values.get('locality') or values.get('postal_town') or ''
+    parts = [part.strip() for part in text(lead.get('formattedAddress')).split(',') if part.strip()]
+    if not street and parts:
+        street = parts[0]
+        if len(parts) > 1 and re.fullmatch(r'(?:\d+[a-z]?(?:\s*[/\-]\s*[\da-z]+)?|snc|s\.n\.c\.)', parts[1], re.I):
+            street += ', ' + parts[1]
     if not locality:
-        formatted_address = lead.get("formattedAddress", "")
-        if formatted_address and formatted_address != "N/A":
-            parts = [p.strip() for p in formatted_address.split(",")]
-            candidate = ""
-            for p in parts:
-                p_clean = p.lower()
-                if "italia" in p_clean or "italy" in p_clean:
-                    continue
-                if re.search(r'\b\d{5}\b', p):
-                    candidate = p
-                    break
-            
-            if candidate:
-                city_clean = re.sub(r'\b\d{5}\b', '', candidate).strip()
-                city_clean = re.sub(r'\b[A-Z]{2}\b', '', city_clean).strip()
-                city_clean = re.sub(r'\([A-Z]{2}\)', '', city_clean).strip()
-                locality = city_clean
-            elif len(parts) >= 2:
-                last_part = parts[-1].lower()
-                if last_part in ["italia", "italy"] and len(parts) >= 3:
-                    locality = parts[-2]
-                else:
-                    locality = parts[-1]
-                    
-    # Pulizia finale della località
-    if locality:
-        locality = re.sub(r'\b\d{5}\b', '', locality).strip()
-        locality = re.sub(r'\b[A-Z]{2}\b', '', locality).strip()
-        locality = re.sub(r'\([A-Z]{2}\)', '', locality).strip()
-        locality = locality.strip(", ")
-        
-    if not locality or locality.lower() == "n/a":
-        locality = lead.get("search_keyword", "N/A").title()
-        
-    return via_e_civico, locality
+        for part in parts[1:]:
+            postal = re.match(r'^\d{4,6}\s+(.+)$', part)
+            if postal:
+                locality = re.sub(r'\s*\([A-Z]{2}\)\s*$', '', postal.group(1)).strip()
+                break
+        if not locality and len(parts) >= 3 and parts[-1].casefold() in (
+                'italia', 'italy', 'usa', 'united states', 'uk', 'united kingdom',
+                'canada', 'france', 'germany', 'deutschland', 'spain', 'brasil', 'brazil'):
+            candidate = parts[-2]
+            if any(char.isalpha() for char in candidate):
+                locality = candidate
+    return street or 'N/A', locality or 'N/A'

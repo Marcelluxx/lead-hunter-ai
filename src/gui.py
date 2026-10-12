@@ -219,8 +219,8 @@ with col1:
             "Il report e la qualificazione del sito si basano su fonti verificate indipendenti."
         )
 
-        min_age = st.number_input("📅 Età minima attività (anni)", min_value=1, max_value=30, value=MIN_BUSINESS_AGE_YEARS, step=1)
-        st.markdown('<p class="param-hint">Verifica WHOIS e copywriting del sito (se nessun dato: passa)</p>', unsafe_allow_html=True)
+        min_age = st.number_input("📅 Anzianità minima stimata (anni)", min_value=1, max_value=30, value=MIN_BUSINESS_AGE_YEARS, step=1)
+        st.caption('Stima da dominio e testi del sito; se non rilevabile, l’attività resta inclusa.')
 
         st.markdown("#### 🕷️ Configurazione Crawler")
 

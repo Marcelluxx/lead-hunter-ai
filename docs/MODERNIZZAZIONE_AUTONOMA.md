@@ -13,7 +13,7 @@ inventare credenziali, attivare acquisti o dichiarare conclusa una revisione leg
 | Integrazione recuperi | Licenze, riferimenti, filtri e rimozione NLTK in develop | PR #10 merged, c231e8c; CI 38081319813 e Security 38081319805 PASS |
 | Diagnostica completa | Artefatti separati, accesso a scadenza, redazione e retention; GUI/CLI | PR #11 merged, 1a8f0dc; review/fix, CI e Security anche dopo merge PASS |
 | Pipeline server | Handler reali, parametri validati, risultati ammessi, budget, annullamento/ripresa e tentativi | PR #12 merged, develop9941a22; suite325/325 senza skip, CI/Security esatto HEAD e postmerge PASS |
-| Correttezza funzionale | Età, e-commerce/franchise/social, modalità token, CMS, normalizzazione e coordinate zero | Branch codex/functional-correctness; filtri corretti e ecommerce locale attivo, suite333/333 PASS senza skip; altre parti in corso |
+| Correttezza funzionale | Età, e-commerce/franchise/social, modalità token, CMS, normalizzazione e coordinate zero | PR #13 draft, codex/functional-correctness; quattro task implementati, suite355/355 PASS senza skip; review finale e gate HEAD in corso |
 | Qualità audit | Evidenze citate, versione report, benchmark/gold set e calibrazione | Da eseguire |
 | Crawler operativo | Policy robots, budget per dominio, limiti browser, retry/circuit breaker | Da eseguire |
 | Superficie clienti | Interfaccia web, revisione report, amministrazione, SSO e billing configurabile | Da eseguire |
