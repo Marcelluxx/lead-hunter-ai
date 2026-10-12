@@ -23,7 +23,7 @@ from .reference_exports import ReferenceExportService
 from .diagnostics import DiagnosticError, MAX_TOTAL_BYTES
 
 _FIELDS = frozenset({'business_name', 'website', 'category', 'website_score', 'framework',
-                     'diagnosis', 'site_brief', 'cold_message'})
+                     'diagnosis', 'site_brief', 'cold_message', 'technology_signals', 'technology_rules_version'})
 
 
 class JobResultError(ValueError):
@@ -213,7 +213,8 @@ def _utc(value):
 
 def _verified_workbook(leads):
     book = Workbook(); sheet = book.active; sheet.title = 'Lead verificati'
-    fields = ('business_name', 'category', 'website', 'website_score', 'framework', 'diagnosis', 'site_brief', 'cold_message')
+    fields = ('business_name', 'category', 'website', 'website_score', 'framework', 'diagnosis', 'site_brief', 'cold_message',
+              'technology_signals', 'technology_rules_version')
     sheet.append([*fields, 'contacts', 'provenance'])
     for lead in leads:
         sheet.append([*(lead['attributes'].get(field, '') for field in fields),

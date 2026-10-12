@@ -12,8 +12,8 @@ inventare credenziali, attivare acquisti o dichiarare conclusa una revisione leg
 |---|---|---|
 | Integrazione recuperi | Licenze, riferimenti, filtri e rimozione NLTK in develop | PR #10 merged, c231e8c; CI 38081319813 e Security 38081319805 PASS |
 | Diagnostica completa | Artefatti separati, accesso a scadenza, redazione e retention; GUI/CLI | PR #11 merged, 1a8f0dc; review/fix, CI e Security anche dopo merge PASS |
-| Pipeline server | Handler reali, parametri validati, risultati ammessi, budget, annullamento/ripresa e tentativi | PR #12, implementazione e review/fix completate; suite325/325 senza skip, gate HEAD prima di merge |
-| Correttezza funzionale | Età, e-commerce/franchise/social, modalità token, CMS, normalizzazione e coordinate zero | Da eseguire |
+| Pipeline server | Handler reali, parametri validati, risultati ammessi, budget, annullamento/ripresa e tentativi | PR #12 merged, develop9941a22; suite325/325 senza skip, CI/Security esatto HEAD e postmerge PASS |
+| Correttezza funzionale | Età, e-commerce/franchise/social, modalità token, CMS, normalizzazione e coordinate zero | PR #13, codex/functional-correctness; review indipendente e quattro correzioni RED→GREEN, suite360/360 PASS senza skip; gate GitHub sul commit finale prima del merge |
 | Qualità audit | Evidenze citate, versione report, benchmark/gold set e calibrazione | Da eseguire |
 | Crawler operativo | Policy robots, budget per dominio, limiti browser, retry/circuit breaker | Da eseguire |
 | Superficie clienti | Interfaccia web, revisione report, amministrazione, SSO e billing configurabile | Da eseguire |
@@ -28,6 +28,10 @@ primaria di lavoro non viene azzerata né sovrascritta.
 Le dipendenze del deployment (account pagamento/SSO, dominio, hosting, mercato,
 chiavi di firma e revisione professionale) saranno registrate quando necessarie.
 Il lavoro che non dipende da esse continua senza attese artificiali.
+
+12 ottobre: richiesta di concludere rapidamente; chiusura della milestone
+correttezza funzionale prima di iniziare qualità audit. Decisioni e limite
+indirizzi legacy nel [rapporto di review](FUNCTIONAL_CORRECTNESS_IMPLEMENTATION_REVIEW.md).
 
 11 ottobre: PR #11 merged in develop `1a8f0dc`, HEAD diagnostic `711817d`:
 CI 38083326968 e Security 38083327018 PASS. Review/fix e suite finale 262 test

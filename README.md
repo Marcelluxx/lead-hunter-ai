@@ -409,6 +409,12 @@ uv run python main.py \
 ```
 
 Only auditable, evidence-backed leads reach the XLSX exporter.
+The local qualification filters use domain/site age, exact social hosts, complete
+known brand names and structured shopping signals. Unknown age remains allowed.
+`high_fidelity` keeps complete semantic Markdown; `optimized` uses pruned content
+with a complete-content fallback when it is too short. Detected technologies come
+from observed DOM fingerprints, with public signal IDs and rules version in reports.
+See [verified functional behavior](docs/FUNCTIONAL_BEHAVIOR.md).
 
 ### Start the internal Streamlit console
 
@@ -701,11 +707,11 @@ lead-hunter-ai/
 The P0 structural security and governance work is substantially complete. The next work is
 ordered by commercial risk and architectural leverage:
 
-1. **Connect the commercial pipeline to the server worker.** Add supported job handlers,
-   phase checkpoints, cooperative cancellation, resume, and an explicit dead-letter queue.
-2. **Fix remaining functional correctness issues.** Complete domain-age behavior,
-   e-commerce and franchise filtering, token-mode behavior, framework/CMS detection,
-   category/location normalization, and edge-case CLI validation.
+1. **Commercial server pipeline implemented.** Supported handlers, durable checkpoints,
+   cancellation, guarded resume, bounded attempts and recovery are integrated in develop.
+2. **Functional correctness implemented, final review pending.** Age/social/franchise/
+   shopping filters, content modes, observed CMS, normalization and input preflight are
+   covered by regressions; the current branch still requires its final independent review.
 3. **Make audit quality measurable.** Add cited findings, report/evidence versioning, a
    real-site gold set, score calibration, browser end-to-end tests, coverage reporting, and
    regression benchmarks.
@@ -850,4 +856,4 @@ Excel exports and private diagnostic archives recheck current access at delivery
 Run the recovery service and shared private volume from Compose alongside the worker.
 Required operator prices must be configured before paid work can be admitted.
 See [worker operations and API contract](docs/COMMERCIAL_WORKER_OPERATIONS.md).
-This subsystem is under final review; it does not enable a public release or billing.
+This subsystem is integrated in develop; it does not enable a public release or billing.

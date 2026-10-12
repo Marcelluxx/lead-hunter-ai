@@ -45,6 +45,8 @@ class VerifiedLead:
     site_brief: str = ""
     cold_message: str = ""
     provenance: Mapping[str, FieldProvenance] = field(default_factory=dict)
+    technology_signals: tuple[str, ...] = ()
+    technology_rules_version: str = ''
 
     @property
     def export_classification(self) -> str:
@@ -64,6 +66,8 @@ class VerifiedLead:
             "contacts": list(self.contacts),
             "website_score": self.website_score,
             "framework": self.framework,
+            "technology_signals": self.technology_signals,
+            "technology_rules_version": self.technology_rules_version,
             "diagnosis": self.diagnosis,
             "site_brief": self.site_brief,
             "cold_message": self.cold_message,

@@ -6,6 +6,7 @@ Supporta due modalità operative:
 """
 
 import os
+import math
 import sys
 import asyncio
 import argparse
@@ -27,6 +28,7 @@ from src.exporter import DataExporter
 from src.crawler import HybridCrawler
 from src.security.presentation import normalize_console_text
 from src.security.privacy import redact_sensitive_text
+from src.security import SafeUrlPolicy, UrlPolicyError
 from src.filters import (
     filter_by_business_age,
     filter_ecommerce,
@@ -262,8 +264,8 @@ class LeadHunterOrchestrator:
 
                     if crawl_res.emails:
                         log(f"      📧 {len(crawl_res.emails)} email professionali rilevate")
-                    if crawl_res.is_dynamic:
-                        log(f"      ⚡ JS (Playwright)")
+                    if crawl_res.browser_used:
+                        log('      ⚡ Browser usato per la scansione (Playwright)')
                         
                     # Fase 4: Filtro Età
                     verified = build_verified_lead(crawl_res, search_keyword=keyword)
@@ -273,9 +275,9 @@ class LeadHunterOrchestrator:
                         continue
                         
                     # Fase 5: Filtro Scala
-                    # if filter_ecommerce(crawl_res.raw_html_home, ECOMMERCE_INDICATORS):
-                    #     log(f"   ❌ Escluso (e-commerce): {name}")
-                    #     continue
+                    if filter_ecommerce(crawl_res.raw_html_home, ECOMMERCE_INDICATORS):
+                        log('   ❌ Escluso: e-commerce con azione di acquisto e segnali commerciali')
+                        continue
                     if filter_franchise(verified.business_name, [], KNOWN_FRANCHISES):
                         log("   ❌ Escluso: franchise noto")
                         continue
@@ -426,7 +428,6 @@ def show_examples():
     Suggerimento: Le coordinate (lat/lng) in formato decimale (es. Google Maps).
     """
     print(textwrap.dedent(examples))
-    sys.exit(0)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -461,7 +462,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--max-reviews", type=int, default=None,
                         help=f"Recensioni da 1 al massimo, con --rating-filters (default: {MAX_REVIEWS})")
     parser.add_argument("--min-age", type=int, default=MIN_BUSINESS_AGE_YEARS,
-                        help=f"Età minima attività in anni (default: {MIN_BUSINESS_AGE_YEARS})")
+                        help=f"Anzianità minima stimata da dominio e sito (1-100 anni; default: {MIN_BUSINESS_AGE_YEARS})")
     parser.add_argument("--token-mode", type=str, choices=["high_fidelity", "optimized"],
                         default=None,
                         help=f"Modalità token LLM (default: TOKEN_MODE configurato oppure {DEFAULT_TOKEN_MODE})")
@@ -511,6 +512,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
     if args.export_references and args.mode != "no_website":
         parser.error("--export-references richiede --mode no_website")
+    if args.examples:
+        show_examples()
+        return 0
+    if args.test_url:
+        try:
+            args.test_url = SafeUrlPolicy().validate_syntax(args.test_url).normalized_url
+        except UrlPolicyError as exc:
+            print(f'URL non valido: {exc.code}')
+            return 2
+    if not args.gui:
+        if not 1 <= args.max_pages <= 20 or not 1 <= args.min_age <= 100:
+            print('Parametri di ricerca non validi: search_parameters_invalid')
+            return 2
+        if not args.test_url:
+            if (args.lat is None or args.lng is None or not math.isfinite(args.lat) or not math.isfinite(args.lng)
+                    or not -90 <= args.lat <= 90 or not -180 <= args.lng <= 180
+                    or not args.keywords or any(not keyword.strip() for keyword in args.keywords)):
+                print('Coordinate e keyword non valide: search_parameters_invalid')
+                return 2
+            args.keywords = [keyword.strip() for keyword in args.keywords]
     try:
         runtime_settings = ApplicationSettings.from_environment()
     except SettingsError as exc:
@@ -518,9 +539,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     if args.token_mode is None:
         args.token_mode = runtime_settings.token_mode
-
-    if args.examples:
-        show_examples()
 
     if args.test_url:
         if args.full_diagnostics:
@@ -574,11 +592,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         except KeyboardInterrupt:
             print("\n👋 GUI chiusa correttamente.")
         return 0
-
-    if not args.lat or not args.lng or not args.keywords:
-        print("❌ Errore: --lat, --lng e --keywords sono obbligatori.")
-        print("Usa 'python main.py --help' per assistenza.")
-        return 1
 
     reference_export = None
     try:

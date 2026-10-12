@@ -13,6 +13,19 @@ def resolver_for(*addresses):
 
 
 class SafeUrlPolicyTests(unittest.TestCase):
+    def test_syntax_rejects_invalid_dns_labels_and_explicit_zero_port_without_dns(self):
+        def forbidden_dns(*args, **kwargs):
+            self.fail('Syntax validation must not resolve DNS')
+        policy = SafeUrlPolicy(resolver=forbidden_dns)
+        for url in ['https://exa mple.com/', 'https://example.com:0/', 'http://example.com:0/',
+                'https://exa%20mple.com/', 'https://exa\\mple.com/', 'https://-example.com/',
+                'https://example-.com/', 'https://example..com/', 'https://example_com/']:
+            with self.subTest(url=url), self.assertRaises(UrlPolicyError):
+                policy.validate_syntax(url)
+        for url, hostname in [('https://bücher.example/', 'xn--bcher-kva.example'),
+                ('https://[2606:4700:4700::1111]/', '2606:4700:4700::1111')]:
+            self.assertEqual(policy.validate_syntax(url).hostname, hostname)
+
     def test_accepts_and_normalizes_public_https_url(self):
         policy = SafeUrlPolicy(resolver=resolver_for("93.184.216.34"))
 

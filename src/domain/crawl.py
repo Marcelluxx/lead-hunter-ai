@@ -83,11 +83,15 @@ class CrawlResult:
     evidence: List[PageEvidence] = field(default_factory=list)
     contacts: List[ContactPoint] = field(default_factory=list)
     raw_html_home: str = ""
-    is_dynamic: bool = True
+    is_dynamic: Optional[bool] = None
     status: CrawlStatus = CrawlStatus.PENDING
     error_code: Optional[str] = None
     error: Optional[str] = None
     blocked_request_codes: List[str] = field(default_factory=list)
+    browser_used: bool = False
+    render_strategy: str = 'not_started'
+    js_required: Optional[bool] = None
+    raw_html_home_sha256: str = ''
 
     def __post_init__(self) -> None:
         if not self.requested_url:

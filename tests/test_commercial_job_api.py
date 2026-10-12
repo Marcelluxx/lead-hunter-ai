@@ -205,6 +205,24 @@ class CommercialJobApiTests(unittest.TestCase):
         self.worker.runtime.execute(job_id)
         self.assertEqual(self.client.get(url, headers=self.headers).json()['state'], 'completed')
 
+    def test_resume_budget_denial_is_controlled_and_preserves_cancelled_state(self):
+        response = self.create(); job_id = UUID(response.json()['id']); url = self.url + '/' + str(job_id)
+        self.assertEqual(self.client.post(url + '/cancel', headers=self.headers).status_code, 200)
+        messages = list(self.publisher.messages)
+        with self.fx.database.session(self.fx.workspace.id) as session:
+            session.scalar(select(UsageBudgetModel)).hard_limit = Decimal('0.1')
+        with TestClient(self.client.app, base_url='https://testserver', raise_server_exceptions=False) as client:
+            response = client.post(url + '/resume', headers=self.headers)
+            self.assertEqual(response.status_code, 409, response.text)
+            self.assertEqual(response.json(), {'detail': 'budget_exceeded'})
+            admission = self.create()
+            self.assertEqual(admission.status_code, 409)
+            self.assertEqual(admission.json(), {'detail': 'budget_exceeded'})
+        with self.fx.database.session(self.fx.workspace.id) as session:
+            self.assertEqual(session.get(JobModel, job_id).state, 'cancelled')
+            self.assertEqual(session.scalar(select(UsageBudgetModel)).reserved, Decimal('0'))
+        self.assertEqual(self.publisher.messages, messages)
+
     def test_reference_stream_rechecks_export_grant_between_chunks(self):
         from src.web.dependencies import commercial_results
         from src.domain.identity import Permission

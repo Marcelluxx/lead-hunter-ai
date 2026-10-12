@@ -56,7 +56,7 @@ def create_job(
     except AuthorizationDenied as exc:
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
     except BudgetExceeded as exc:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+        raise HTTPException(status.HTTP_409_CONFLICT, 'budget_exceeded') from exc
     return JobResponse(id=result.job.id, state=result.job.state, created=result.created)
 
 
@@ -119,5 +119,8 @@ def cancel_job(workspace_id: str, job_id: str, context: AuthContext = Depends(cu
 def resume_job(workspace_id: str, job_id: str, context: AuthContext = Depends(current_auth),
                app: WebRuntime = Depends(runtime)):
     identifiers = {'job_id': workspace_uuid(job_id), 'workspace_id': workspace_uuid(workspace_id), 'auth': context}
-    commercial_execution(app).resume(**identifiers)
+    try:
+        commercial_execution(app).resume(**identifiers)
+    except BudgetExceeded as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, 'budget_exceeded') from exc
     return JobResponse(**commercial_results(app).status(**identifiers))
