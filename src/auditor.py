@@ -26,6 +26,7 @@ from .domain import (
     ensure_auditable_pages,
 )
 from .prompting import AuditPromptProvider, load_prompt_provider
+from .domain.audit_evidence import AuditEvidenceSet, AUDIT_CITATION_CONTRACT
 from .security import (
     UNTRUSTED_DATA_SYSTEM_RULES,
     build_untrusted_pages_payload,
@@ -263,6 +264,7 @@ class LeadAuditor:
         if self.execution_guard is not None:
             self.execution_guard.require_execute()
         ensure_auditable_pages(crawl_pages)
+        original_evidence = AuditEvidenceSet.from_pages(crawl_pages)
 
         # Pulisci le pagine in parallelo usando ThreadPoolExecutor
         cleaned_crawl_pages = {}
@@ -317,18 +319,20 @@ class LeadAuditor:
             safe_review_count,
             pages_content,
         )
+        prompt += '\n\nORIGINAL_AUDIT_EVIDENCE:\n' + original_evidence.to_prompt_payload()
+        system_prompt = f'{self.prompt_provider.system_website_audit}\n\n{UNTRUSTED_DATA_SYSTEM_RULES}\n\n{AUDIT_CITATION_CONTRACT}'
 
         for attempt in range(max_retries):
             if self.diagnostics is not None:
                 self.diagnostics.capture('llm_request', {'stage': 'website_audit', 'model': self.model,
-                    'content': self.prompt_provider.system_website_audit + '\n' + UNTRUSTED_DATA_SYSTEM_RULES + '\n' + prompt})
+                    'content': system_prompt + '\n' + prompt})
             try:
                 response = self._create_completion(
                     model=self.model,
                     messages=[
                         {
                             "role": "system",
-                            "content": f"{self.prompt_provider.system_website_audit}\n\n{UNTRUSTED_DATA_SYSTEM_RULES}",
+                            "content": system_prompt,
                         },
                         {"role": "user", "content": prompt}
                     ],
@@ -347,7 +351,8 @@ class LeadAuditor:
                         for key, value in data.items()
                     }
                 validated = WebsiteAuditResult.from_llm(data)
-                return validated.to_public_dict()
+                report = original_evidence.validate_findings(data)
+                return {**validated.to_public_dict(), 'audit_report': report}
 
             except (LicenseError, DiagnosticError, JobExecutionError):
                 raise
@@ -369,11 +374,12 @@ class LeadAuditor:
         if self.execution_guard is not None:
             raise JobExecutionError('provider_unavailable')
         return {
-            "website_score": 0,
+            "website_score": None,
             "diagnosis": "Errore durante l'analisi AI del sito web.",
             "site_brief": "",
             "framework": "N/A",
             "cold_message": "",
+            "audit_report": original_evidence.empty_report('failed'),
         }
 
     def _label_page(self, url: str) -> str:
