@@ -44,7 +44,8 @@ timestamp. Metadata evidence di tutte le pagine ammesse, nessun testo completo.
 Status report inconclusive anche con citazioni: prova del testo, non verità semantica.
 
 La proiezione pubblica oscura email, numeri telefonici e segreti riconoscibili,
-elimina query/fragment/userinfo dagli URL di citazione. Anche description viene
+elimina query/fragment/userinfo dagli URL di citazione; path con identificatori
+riconoscibili, anche percent-encoded, diventa /[REDACTED_PATH]. Anche description viene
 sanitizzata/redatta. L'estratto pubblico è dichiarato redacted; hash/offset sono
 del testo originale. Non è anonimizzazione universale né certificazione privacy.
 Nessun bypass dei gate contatti, licenze, retention o workspace già presenti.

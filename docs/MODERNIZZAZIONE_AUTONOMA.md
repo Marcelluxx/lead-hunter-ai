@@ -13,8 +13,8 @@ inventare credenziali, attivare acquisti o dichiarare conclusa una revisione leg
 | Integrazione recuperi | Licenze, riferimenti, filtri e rimozione NLTK in develop | PR #10 merged, c231e8c; CI 38081319813 e Security 38081319805 PASS |
 | Diagnostica completa | Artefatti separati, accesso a scadenza, redazione e retention; GUI/CLI | PR #11 merged, 1a8f0dc; review/fix, CI e Security anche dopo merge PASS |
 | Pipeline server | Handler reali, parametri validati, risultati ammessi, budget, annullamento/ripresa e tentativi | PR #12 merged, develop9941a22; suite325/325 senza skip, CI/Security esatto HEAD e postmerge PASS |
-| Correttezza funzionale | Età, e-commerce/franchise/social, modalità token, CMS, normalizzazione e coordinate zero | PR #13, codex/functional-correctness; review indipendente e quattro correzioni RED→GREEN, suite360/360 PASS senza skip; gate GitHub sul commit finale prima del merge |
-| Qualità audit | Evidenze citate, versione report, benchmark/gold set e calibrazione | Da eseguire |
+| Correttezza funzionale | Età, e-commerce/franchise/social, modalità token, CMS, normalizzazione e coordinate zero | PR #13 merged, develop4f40a6c; suite360/360 PASS senza skip; otto gate GitHub PASS prima del merge |
+| Qualità audit | Evidenze citate, versione report, benchmark/gold set e calibrazione | Primo blocco in codex/audit-evidence: citazioni/binding/SQL/API/XLSX, suite382/382 PASS senza skip; review e gate finali in corso. Benchmark e scoring successivi |
 | Crawler operativo | Policy robots, budget per dominio, limiti browser, retry/circuit breaker | Da eseguire |
 | Superficie clienti | Interfaccia web, revisione report, amministrazione, SSO e billing configurabile | Da eseguire |
 | Operatività | Osservabilità, health, backup/restore verificato, incidenti e capacità | Da eseguire |

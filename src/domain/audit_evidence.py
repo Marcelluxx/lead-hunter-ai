@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import sha256
 from typing import Mapping
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlsplit, urlunsplit, unquote
 
 from .audit import AuditValidationError
 from .crawl import ensure_auditable_pages, MIN_AUDIT_PAGE_CHARS
@@ -63,7 +63,9 @@ def _public_url(url):
     except UrlPolicyError:
         raise AuditValidationError('audit_evidence_invalid') from None
     parsed = urlsplit(syntax.normalized_url)
-    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, '', ''))
+    decoded_path = unquote(parsed.path)
+    path = parsed.path if public_text(decoded_path, max_length=2048) == decoded_path else '/[REDACTED_PATH]'
+    return urlunsplit((parsed.scheme, parsed.netloc, path, '', ''))
 
 
 def _timestamp(value):
