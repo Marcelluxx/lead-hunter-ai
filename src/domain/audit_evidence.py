@@ -68,6 +68,11 @@ def _public_url(url):
     return urlunsplit((parsed.scheme, parsed.netloc, path, '', ''))
 
 
+def public_evidence_url(url):
+    """Shared redacted source URL for supplemental, publicly delivered evidence."""
+    return _public_url(url)
+
+
 def _timestamp(value):
     try:
         parsed = datetime.fromisoformat(value)
