@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from ..domain.discovery import TransientCandidate
 from ..domain.provenance import DataSource, VerifiedLead
 from ..domain.audit_evidence import validate_public_report
+from ..domain.dom_checks import validate_dom_report
 from ..infrastructure.models import (
     EvidenceModel,
     LeadAttributeModel,
@@ -73,6 +74,18 @@ class DiscoveryPersistenceService:
                         source_url=item['source_url'], content_sha256=item['content_sha256'],
                         collected_at=datetime.fromisoformat(item['retrieved_at']))
                     session.add(evidence); session.flush(); evidence_by_key[key] = evidence
+        if lead.dom_report is not None:
+            report = validate_dom_report(dict(lead.dom_report))
+            values['dom_report'] = report
+            for item in report['pages']:
+                if item['dom_sha256'] is None:
+                    continue
+                key = (item['source_url'], item['dom_sha256'])
+                if key not in evidence_by_key:
+                    evidence = EvidenceModel(workspace_id=workspace_id, lead_id=record.id,
+                        source_url=item['source_url'], content_sha256=item['dom_sha256'],
+                        collected_at=datetime.fromisoformat(item['retrieved_at']))
+                    session.add(evidence); session.flush(); evidence_by_key[key] = evidence
         for field_name, provenance in lead.provenance.items():
             if provenance.source not in {DataSource.OFFICIAL_WEBSITE, DataSource.USER_INPUT}:
                 raise DiscoveryPersistenceError("provider_content_cannot_be_persisted_as_attribute")
@@ -95,7 +108,7 @@ class DiscoveryPersistenceService:
                     session.flush()
                     evidence_by_key[key] = evidence
                 evidence_id = evidence.id
-            serialized = json.dumps(value, ensure_ascii=False, allow_nan=False) if field_name == 'audit_report' else (
+            serialized = json.dumps(value, ensure_ascii=False, allow_nan=False) if field_name in ('audit_report', 'dom_report') else (
                 ", ".join(value) if isinstance(value, (list, tuple)) else str(value))
             session.add(
                 LeadAttributeModel(

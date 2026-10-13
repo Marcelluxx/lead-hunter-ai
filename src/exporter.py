@@ -11,6 +11,7 @@ import tempfile
 from io import BytesIO
 from pathlib import Path
 from src.domain.audit_evidence import validate_public_report
+from src.domain.dom_checks import validate_dom_report, empty_dom_report
 from src.application.rating_filters import RatingFilterGuard
 from typing import Callable, Union, List, Dict, Any
 from openpyxl import Workbook
@@ -34,6 +35,11 @@ def _audit_report_json(report):
     if report is None:
         report = {'schema_version': 1, 'status': 'legacy_uncited', 'findings': [], 'evidence': []}
     return json.dumps(validate_public_report(report), ensure_ascii=False, allow_nan=False)
+
+
+def _dom_report_json(report):
+    return json.dumps(validate_dom_report(report if report is not None else empty_dom_report()),
+        ensure_ascii=False, allow_nan=False)
 
 
 class DataExporter:
@@ -186,7 +192,7 @@ class DataExporter:
         return [
             "Business Name", "Category", "Website",
             "Extracted Email", "Website Score", "Framework",
-            "Diagnosis", "Site Brief", "Cold Message", "Technology Signals", "Technology Rules", "Audit Report"
+            "Diagnosis", "Site Brief", "Cold Message", "Technology Signals", "Technology Rules", "Audit Report", "DOM Report"
         ]
 
     @staticmethod
@@ -221,6 +227,7 @@ class DataExporter:
                 ', '.join(lead.get('technology_signals', ())),
                 lead.get('technology_rules_version', ''),
                 _audit_report_json(lead.get('audit_report')),
+                _dom_report_json(lead.get('dom_report')),
             ])
         return rows
 

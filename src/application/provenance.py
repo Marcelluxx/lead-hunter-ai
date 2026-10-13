@@ -40,10 +40,10 @@ def build_verified_lead(
     )
     audit_data = dict(audit or {})
     audit_report = bind_audit_report(crawl, audit_data.get('audit_report'))
-    dom_report = build_dom_report(crawl)
     dom_hash = sha256(crawl.raw_html_home.encode('utf-8', errors='replace')).hexdigest()
     if crawl.raw_html_home_sha256 and crawl.raw_html_home_sha256 != dom_hash:
         raise ValueError('crawl_dom_evidence_changed')
+    dom_report = build_dom_report(crawl)
     technologies = detect_technologies(crawl.raw_html_home)
     technology_provenance = FieldProvenance(source=DataSource.OFFICIAL_WEBSITE, source_url=official_url,
         collected_at=collected_at, evidence_sha256=dom_hash,

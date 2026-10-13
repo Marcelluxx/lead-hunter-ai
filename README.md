@@ -415,9 +415,12 @@ known brand names and structured shopping signals. Unknown age remains allowed.
 with a complete-content fallback when it is too short. Detected technologies come
 from observed DOM fingerprints, with public signal IDs and rules version in reports.
 See [verified functional behavior](docs/FUNCTIONAL_BEHAVIOR.md).
-Audit reports also carry [checked original-text citations](docs/AUDIT_EVIDENCE.md)
-in API results and the final XLSX column. A matched quote does not prove an AI
-diagnosis: observations remain inconclusive; legacy results are explicitly uncited.
+Audit reports carry [checked original-text citations](docs/AUDIT_EVIDENCE.md)
+and [versioned DOM markup measurements](docs/DOM_CHECKS.md), delivered as separate
+`audit_report` and `dom_report` objects and appended XLSX columns. A matched quote
+does not prove an AI diagnosis: observations remain inconclusive and legacy results
+are explicitly uncited. DOM coverage and inconclusive pages are explicit; these
+measurements do not change the AI score or certify site quality.
 
 ### Start the internal Streamlit console
 
