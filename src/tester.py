@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 from src.crawler import HybridCrawler
 from src.auditor import LeadAuditor
+from src.application.dom_checks import build_dom_report, audit_with_dom_report
 from src.filters import extract_domain
 from src.security.privacy import (
     purge_expired_diagnostic_files,
@@ -146,13 +147,15 @@ def run_url_test(
     log_both(f"   Chiamata LLM per: '{business_name}' ({category})")
     
     try:
-        audit_res = auditor.audit_website(
+        dom_report = build_dom_report(crawl_res)
+        audit_res = audit_with_dom_report(auditor, dom_report=dom_report,
             crawl_pages=crawl_res.pages,
             business_name=business_name,
             category=category,
             rating=4.5,
             review_count=10,
         )
+        audit_res = {**audit_res, 'dom_report': dom_report}
 
         log_both("\n🤖 RISPOSTA AI AUDIT:")
         log_both("=" * 60)

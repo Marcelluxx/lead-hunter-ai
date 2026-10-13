@@ -48,6 +48,7 @@ class VerifiedLead:
     technology_signals: tuple[str, ...] = ()
     technology_rules_version: str = ''
     audit_report: Mapping[str, Any] | None = None
+    dom_report: Mapping[str, Any] | None = None
 
     @property
     def export_classification(self) -> str:
@@ -70,6 +71,7 @@ class VerifiedLead:
             "technology_signals": self.technology_signals,
             "technology_rules_version": self.technology_rules_version,
             "audit_report": self.audit_report,
+            "dom_report": self.dom_report,
             "diagnosis": self.diagnosis,
             "site_brief": self.site_brief,
             "cold_message": self.cold_message,

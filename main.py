@@ -20,6 +20,7 @@ from src.scraper import LeadScraper
 from src.auditor import LeadAuditor
 from src.application.container import ApplicationContainer
 from src.application.provenance import build_verified_lead
+from src.application.dom_checks import audit_with_dom_report
 from src.domain.discovery import TransientCandidate
 from src.domain.feature_licenses import LicenseError
 from src.domain.place_references import ReferenceExportError, project_google_place_references
@@ -239,7 +240,7 @@ class LeadHunterOrchestrator:
         def authorized_audit(**payload):
             if self.result_origin is not None:
                 self.result_origin.require_execute()
-            return self.auditor.audit_website(**payload)
+            return audit_with_dom_report(self.auditor, **payload)
         
         try:
             for idx, (place, keyword) in enumerate(filtered_places, 1):
@@ -287,6 +288,7 @@ class LeadHunterOrchestrator:
                     total_to_audit += 1
 
                     audit_payload = {
+                        "dom_report": verified.dom_report,
                         "crawl_pages": crawl_res.pages,
                         "business_name": verified.business_name,
                         "category": verified.category,

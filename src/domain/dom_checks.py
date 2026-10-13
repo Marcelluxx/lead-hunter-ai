@@ -4,6 +4,7 @@ import re
 import unicodedata
 from datetime import datetime, timezone
 from hashlib import sha256
+from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
 from bs4 import BeautifulSoup, Comment, NavigableString, Tag
@@ -42,6 +43,41 @@ def metric(matched, total):
         'matched': matched, 'total': total}
 
 
+class _DocumentEnvelope(HTMLParser):
+    """Ignore fake closing tags inside inert/raw text and legal trailing comments."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.blocked = []
+        self.started = False
+        self.closed = False
+        self.extra = False
+
+    def handle_starttag(self, tag, attrs):
+        if self.closed:
+            self.extra = True
+        if not self.blocked and tag == 'html':
+            if self.started: self.extra = True
+            self.started = True
+        if tag in ('script', 'style', 'template', 'noscript', 'textarea', 'title'):
+            self.blocked.append(tag)
+
+    def handle_endtag(self, tag):
+        if self.blocked:
+            if tag == self.blocked[-1]: self.blocked.pop()
+        elif tag == 'html' and self.started:
+            self.closed = True
+
+    def handle_data(self, data):
+        if self.closed and data.strip(): self.extra = True
+
+
+def _complete_document(html):
+    parser = _DocumentEnvelope()
+    parser.feed(html)
+    parser.close()
+    return parser.started and parser.closed and not parser.extra
+
+
 def inspect_dom(snapshot):
     if snapshot.failure_code is not None:
         _need(snapshot.failure_code in DOM_REASONS and snapshot.html is None, 'dom_evidence_invalid')
@@ -51,7 +87,7 @@ def inspect_dom(snapshot):
     _need(len(encoded) <= MAX_DOM_BYTES and sha256(encoded).hexdigest() == snapshot.dom_sha256, 'dom_evidence_invalid')
     soup = BeautifulSoup(snapshot.html, 'html.parser')
     root = soup.find('html', recursive=False)
-    if root is None or root.find('head', recursive=False) is None or root.find('body', recursive=False) is None or not re.search(r'</html\s*>\s*$', snapshot.html, re.I):
+    if root is None or root.find('head', recursive=False) is None or root.find('body', recursive=False) is None or not _complete_document(snapshot.html):
         return {}, 'incomplete_document'
     if len(soup.find_all(True)) > MAX_DOM_NODES:
         return {}, 'dom_node_limit'

@@ -6,6 +6,7 @@ import asyncio
 from src.application.diagnostic_runner import run_full_diagnostic
 from src.application.job_execution import JobExecutionError
 from src.application.provenance import build_verified_lead
+from src.application.dom_checks import audit_with_dom_report
 from src.domain.discovery import DiscoveryQuery
 
 
@@ -23,7 +24,8 @@ def _audit_site(url, *, key, category, parsed, guard, runtime, candidate=None):
         independent = build_verified_lead(crawl, search_keyword=category)
         auditor = runtime.auditor(guard)
         try:
-            audit = auditor.audit_website(crawl_pages=crawl.pages, business_name=independent.business_name,
+            audit = audit_with_dom_report(auditor, dom_report=independent.dom_report,
+                crawl_pages=crawl.pages, business_name=independent.business_name,
                 category=category, rating=0, review_count=0)
         finally:
             runtime.close_auditor(auditor)

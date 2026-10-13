@@ -24,6 +24,7 @@ from .domain import (
 )
 from .security import SafeUrlPolicy, UrlPolicyError
 from .domain.crawl import MIN_AUDIT_PAGE_CHARS, MIN_AUDIT_TOTAL_CHARS
+from .domain.dom_evidence import DomPageEvidence
 from .application.diagnostics import DiagnosticError
 from .domain.feature_licenses import LicenseError
 from .application.job_execution import JobExecutionError
@@ -311,6 +312,7 @@ class HybridCrawler:
                 result.error = "Homepage priva di evidenza valida per l'audit."
                 return result
             result.pages[result.url] = home_content
+            result.dom_evidence.append(DomPageEvidence.capture(home_result.html, home_evidence))
             self._merge_contacts(
                 all_contacts,
                 self._extract_contacts_from_text_and_html(
@@ -399,6 +401,7 @@ class HybridCrawler:
                         if not page_evidence.valid:
                             continue
                         result.pages[page_decision.normalized_url] = page_content
+                        result.dom_evidence.append(DomPageEvidence.capture(page_result.html, page_evidence))
                         self._merge_contacts(
                             all_contacts,
                             self._extract_contacts_from_text_and_html(

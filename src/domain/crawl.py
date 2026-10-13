@@ -9,6 +9,7 @@ from enum import Enum
 from typing import Dict, List, Optional
 
 from .contacts import ContactPoint
+from .dom_evidence import DomPageEvidence
 
 
 MIN_AUDIT_PAGE_CHARS = 120
@@ -92,6 +93,7 @@ class CrawlResult:
     render_strategy: str = 'not_started'
     js_required: Optional[bool] = None
     raw_html_home_sha256: str = ''
+    dom_evidence: List[DomPageEvidence] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.requested_url:

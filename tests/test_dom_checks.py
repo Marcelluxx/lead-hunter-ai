@@ -96,6 +96,16 @@ class DomCheckTests(unittest.TestCase):
         self.assertEqual(checks['image_alt_attribute']['outcome'], 'not_applicable')
         self.assertEqual(checks['text_control_label_markup']['total'], 0)
 
+    def test_document_end_ignores_comments_and_requires_a_real_html_close(self):
+        checks, reason = self.inspect(HTML + '<!-- trailing comment -->')
+        self.assertIsNone(reason)
+        self.assertEqual(checks['title_text']['outcome'], 'pass')
+        for raw_tag in ('script', 'textarea', 'title', 'template', 'noscript'):
+            with self.subTest(raw_tag=raw_tag):
+                checks, reason = self.inspect('<html><head></head><body><' + raw_tag + '>fake </html>')
+                self.assertEqual(checks, {})
+                self.assertEqual(reason, 'incomplete_document')
+
     def test_zero_width_text_and_placeholder_are_not_explicit_labels(self):
         html = '''<html lang="&#8203;"><head><title>&#8203;</title></head><body><h1> &#8203; </h1>
         <a href="/x">&#8203;</a><input placeholder="Email"><input aria-label="&#8203;"></body></html>'''
