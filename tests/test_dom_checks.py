@@ -3,6 +3,9 @@ import json
 import unittest
 from dataclasses import replace
 from hashlib import sha256
+from unittest.mock import patch
+
+from bs4 import BeautifulSoup
 
 from src.domain.audit import AuditValidationError
 from src.domain.crawl import PageEvidence
@@ -119,6 +122,40 @@ class DomCheckTests(unittest.TestCase):
         <input aria-labelledby="unique"><input aria-labelledby="missing"></body></html>'''
         checks, _ = self.inspect(html)
         self.assertEqual(checks['text_control_label_markup'], {'outcome': 'fail', 'matched': 1, 'total': 4})
+
+    def test_inert_element_ids_still_prevent_false_unique_label_associations(self):
+        for tag in ('script', 'style', 'template', 'noscript'):
+            html = ('<html><head></head><body><' + tag + ' id="x"></' + tag + '>'
+                '<span id="x">Label</span><input aria-labelledby="x"><a href="/" aria-labelledby="x"></a>'
+                '<' + tag + ' id="y"></' + tag + '><label for="y">Label</label><input id="y"></body></html>')
+            with self.subTest(tag=tag):
+                checks, reason = self.inspect(html)
+                self.assertIsNone(reason)
+                self.assertEqual(checks['text_control_label_markup'], {'outcome': 'fail', 'matched': 0, 'total': 2})
+                self.assertEqual(checks['link_label_markup'], {'outcome': 'fail', 'matched': 0, 'total': 1})
+
+    def test_admitted_inert_and_comment_siblings_have_linear_traversal_work(self):
+        # Instrument dependency tree traversal, rather than imposing a CPU speed threshold.
+        # Repeated sibling searches on admitted external markup must stay within a linear budget.
+        work = [0]
+        class CountedContents(list):
+            def __iter__(self):
+                for node in super().__iter__():
+                    work[0] += 1
+                    yield node
+        def counted_soup(*args, **kwargs):
+            soup = BeautifulSoup(*args, **kwargs)
+            for tag in [soup, *soup.find_all(True)]:
+                tag.contents = CountedContents(tag.contents)
+            return soup
+        count = 750
+        html = ('<html><head></head><body>' + '<b></b>' * count
+            + '<script>inert</script><!-- <h1>fake</h1> -->' * count + '</body></html>')
+        with patch('src.domain.dom_checks.BeautifulSoup', side_effect=counted_soup):
+            checks, reason = self.inspect(html)
+        self.assertIsNone(reason)
+        self.assertEqual(checks['h1_text']['outcome'], 'fail')
+        self.assertLessEqual(work[0], 40 * (3 * count + 3))
 
     def test_alt_attribute_is_distinct_from_meaning_and_image_link_needs_nonempty_name(self):
         html = '''<html><head></head><body><a href="/a"><img alt=""></a>

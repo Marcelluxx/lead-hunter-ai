@@ -91,29 +91,27 @@ def inspect_dom(snapshot):
         return {}, 'incomplete_document'
     if len(soup.find_all(True)) > MAX_DOM_NODES:
         return {}, 'dom_node_limit'
-    for comment in soup.find_all(string=lambda item: isinstance(item, Comment)):
-        comment.extract()
-    for tag in soup.find_all(('script', 'style', 'template', 'noscript')):
-        tag.decompose()
     head, body = root.find('head', recursive=False), root.find('body', recursive=False)
     nodes = list(soup.descendants)
-    visible = {}; nearest_label = {}; ids = {}; labels = []
+    visible = {}; inert = {}; nearest_label = {}; ids = {}; labels = []
     for node in nodes:
-        parent_id = id(node.parent)
+        node_id, parent_id = id(node), id(node.parent)
+        inert[node_id] = inert.get(parent_id, False) or isinstance(node, Comment) or (
+            isinstance(node, Tag) and node.name in ('script', 'style', 'template', 'noscript'))
         if isinstance(node, Tag):
             hidden = node.has_attr('hidden') or str(node.get('aria-hidden', '')).casefold() == 'true' or _INLINE_HIDDEN.search(str(node.get('style', '')))
-            visible[id(node)] = visible.get(parent_id, True) and not hidden
-            nearest_label[id(node)] = node if node.name == 'label' else nearest_label.get(parent_id)
+            visible[node_id] = visible.get(parent_id, True) and not hidden and not inert[node_id]
+            nearest_label[node_id] = node if node.name == 'label' else nearest_label.get(parent_id)
             identifier = node.get('id')
             if isinstance(identifier, str) and identifier:
                 ids.setdefault(identifier, []).append(node)
             if node.name == 'label': labels.append(node)
         else:
-            visible[id(node)] = visible.get(parent_id, True)
+            visible[node_id] = visible.get(parent_id, True) and not inert[node_id]
     all_text = {}; exposed_text = {}; graphics = {}
     for node in reversed(nodes):
         node_id, parent_id = id(node), id(node.parent)
-        if isinstance(node, NavigableString) and _text(str(node)):
+        if isinstance(node, NavigableString) and not inert[node_id] and _text(str(node)):
             all_text[node_id] = True
             if visible[node_id]: exposed_text[node_id] = True
         if isinstance(node, Tag) and node.name == 'img' and visible[node_id] and _text(node.get('alt')):
@@ -142,9 +140,9 @@ def inspect_dom(snapshot):
             if target.scheme.casefold() in ('mailto', 'tel') and _text(target.path): contact = True
         except ValueError:
             continue
-    first_title = head.find('title')
+    first_title = next((tag for tag in head.find_all('title') if not inert[id(tag)]), None)
     def meta_present(name):
-        return any(str(tag.get('name', '')).casefold() == name and _text(tag.get('content')) for tag in head.find_all('meta'))
+        return any(not inert[id(tag)] and str(tag.get('name', '')).casefold() == name and _text(tag.get('content')) for tag in head.find_all('meta'))
     return {
         'title_text': metric(int(first_title is not None and bool(all_text.get(id(first_title)))), 1),
         'meta_description': metric(int(meta_present('description')), 1),
