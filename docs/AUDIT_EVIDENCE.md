@@ -6,7 +6,7 @@ persistenza e consegna; benchmark e calibrazione rimangono successivi.
 L'audit conserva website_score, diagnosis, site_brief, framework e cold_message.
 Aggiunge audit_report schema_version1, con status, findings ed evidence. In API
 il report è un oggetto separato per lead; gli attributi precedenti restano stringhe.
-XLSX locale e server hanno una colonna finale Audit Report/audit_report in JSON,
+XLSX locale e server hanno una colonna Audit Report/audit_report in JSON,
 senza spostare quelle precedenti. Nessuna migrazione DB necessaria: attributo JSON
 bounded nelle tabelle esistenti e righe di evidenza per tutte le pagine referenziate.
 

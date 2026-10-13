@@ -12,6 +12,7 @@ from ..domain.crawl import CrawlResult
 from ..domain.provenance import DataSource, FieldProvenance, VerifiedLead
 from ..domain.technology import detect_technologies, TECHNOLOGY_RULES_VERSION
 from .audit_evidence import bind_audit_report
+from .dom_checks import build_dom_report
 
 
 def build_verified_lead(
@@ -42,6 +43,7 @@ def build_verified_lead(
     dom_hash = sha256(crawl.raw_html_home.encode('utf-8', errors='replace')).hexdigest()
     if crawl.raw_html_home_sha256 and crawl.raw_html_home_sha256 != dom_hash:
         raise ValueError('crawl_dom_evidence_changed')
+    dom_report = build_dom_report(crawl)
     technologies = detect_technologies(crawl.raw_html_home)
     technology_provenance = FieldProvenance(source=DataSource.OFFICIAL_WEBSITE, source_url=official_url,
         collected_at=collected_at, evidence_sha256=dom_hash,
@@ -59,6 +61,12 @@ def build_verified_lead(
     provenance['audit_report'] = FieldProvenance(source=DataSource.OFFICIAL_WEBSITE,
         source_url=official_url, collected_at=collected_at, evidence_sha256=evidence.content_sha256,
         confidence=0.0, data_classification='website_audit')
+    dom_source = next((page for page in dom_report['pages'] if page['dom_sha256']), None)
+    provenance['dom_report'] = FieldProvenance(source=DataSource.OFFICIAL_WEBSITE,
+        source_url=dom_source['source_url'] if dom_source else official_url,
+        collected_at=_parse_timestamp(dom_source['retrieved_at']) if dom_source else collected_at,
+        evidence_sha256=dom_source['dom_sha256'] if dom_source else None,
+        confidence=0.0, data_classification='website_dom_checks')
     return VerifiedLead(
         business_name=business_name,
         category=search_keyword.strip(),
@@ -73,6 +81,7 @@ def build_verified_lead(
         cold_message=str(audit_data.get("cold_message") or ""),
         provenance=provenance,
         audit_report=audit_report,
+        dom_report=dom_report,
     )
 
 

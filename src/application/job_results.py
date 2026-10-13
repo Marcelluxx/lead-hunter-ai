@@ -23,9 +23,10 @@ from .reference_exports import ReferenceExportService
 from .diagnostics import DiagnosticError, MAX_TOTAL_BYTES
 from src.domain.audit import AuditValidationError
 from src.domain.audit_evidence import validate_public_report, MAX_REPORT_BYTES
+from src.domain.dom_checks import validate_dom_report, empty_dom_report, MAX_REPORT_BYTES as MAX_DOM_REPORT_BYTES
 
 _FIELDS = frozenset({'business_name', 'website', 'category', 'website_score', 'framework',
-                     'diagnosis', 'site_brief', 'cold_message', 'technology_signals', 'technology_rules_version', 'audit_report'})
+                     'diagnosis', 'site_brief', 'cold_message', 'technology_signals', 'technology_rules_version', 'audit_report', 'dom_report'})
 
 
 class JobResultError(ValueError):
@@ -114,8 +115,9 @@ class JobResultService:
                         and (row.expires_at is None or _utc(row.expires_at) > self.execution.now())]
                     report_rows = [row for row in allowed if row.field_name == 'audit_report']
                     report = _read_audit_report(report_rows, evidence)
+                    dom_report = _read_dom_report([row for row in allowed if row.field_name == 'dom_report'], evidence)
                     result['leads'].append({'id': str(lead.id), 'attributes': {row.field_name: row.value_text for row in allowed
-                        if row.field_name != 'audit_report'}, 'audit_report': report,
+                        if row.field_name not in ('audit_report', 'dom_report')}, 'audit_report': report, 'dom_report': dom_report,
                         'provenance': {row.field_name: {'source': row.source, 'source_url': row.source_url,
                             'collected_at': _utc(row.collected_at).isoformat(), 'evidence_id': str(row.evidence_id) if row.evidence_id else None}
                             for row in allowed},
@@ -231,15 +233,32 @@ def _read_audit_report(rows, evidence):
         raise JobResultError('job_audit_report_invalid') from None
 
 
+def _read_dom_report(rows, evidence):
+    if not rows:
+        return empty_dom_report()
+    try:
+        if len(rows) != 1 or len(rows[0].value_text.encode('utf-8')) > MAX_DOM_REPORT_BYTES:
+            raise AuditValidationError('dom_report_invalid')
+        report = validate_dom_report(json.loads(rows[0].value_text))
+        bound = {(item.source_url, item.content_sha256) for item in evidence}
+        if any((item['source_url'], item['dom_sha256']) not in bound
+                for item in report['pages'] if item['dom_sha256'] is not None):
+            raise AuditValidationError('dom_report_invalid')
+        return report
+    except (AuditValidationError, ValueError, TypeError, UnicodeError, RecursionError):
+        raise JobResultError('job_dom_report_invalid') from None
+
+
 def _verified_workbook(leads):
     book = Workbook(); sheet = book.active; sheet.title = 'Lead verificati'
     fields = ('business_name', 'category', 'website', 'website_score', 'framework', 'diagnosis', 'site_brief', 'cold_message',
               'technology_signals', 'technology_rules_version')
-    sheet.append([*fields, 'contacts', 'provenance', 'audit_report'])
+    sheet.append([*fields, 'contacts', 'provenance', 'audit_report', 'dom_report'])
     for lead in leads:
         sheet.append([*(lead['attributes'].get(field, '') for field in fields),
             json.dumps(lead['contacts'], ensure_ascii=False), json.dumps(lead['provenance'], ensure_ascii=False),
-            json.dumps(lead['audit_report'], ensure_ascii=False, allow_nan=False)])
+            json.dumps(lead['audit_report'], ensure_ascii=False, allow_nan=False),
+            json.dumps(lead['dom_report'], ensure_ascii=False, allow_nan=False)])
         for cell in sheet[sheet.max_row]:
             cell.data_type = 's'
     output = BytesIO(); book.save(output)
