@@ -6,9 +6,11 @@ Export duale:
 """
 
 import os
+import json
 import tempfile
 from io import BytesIO
 from pathlib import Path
+from src.domain.audit_evidence import validate_public_report
 from src.application.rating_filters import RatingFilterGuard
 from typing import Callable, Union, List, Dict, Any
 from openpyxl import Workbook
@@ -26,6 +28,12 @@ except (ImportError, ValueError):
     from src.domain.privacy import WorkspacePrivacyPolicy
     from src.security.spreadsheet import is_text_cell, sanitize_spreadsheet_value
 
+
+
+def _audit_report_json(report):
+    if report is None:
+        report = {'schema_version': 1, 'status': 'legacy_uncited', 'findings': [], 'evidence': []}
+    return json.dumps(validate_public_report(report), ensure_ascii=False, allow_nan=False)
 
 
 class DataExporter:
@@ -101,7 +109,7 @@ class DataExporter:
                 if score_col:
                     score_cell = ws.cell(row=row_idx, column=score_col)
                     try:
-                        score_val = int(score_cell.value) if score_cell.value else 0
+                        score_val = int(score_cell.value)
                         if score_val <= 3:
                             score_cell.fill = DataExporter.SCORE_RED
                         elif score_val <= 6:
@@ -178,7 +186,7 @@ class DataExporter:
         return [
             "Business Name", "Category", "Website",
             "Extracted Email", "Website Score", "Framework",
-            "Diagnosis", "Site Brief", "Cold Message", "Technology Signals", "Technology Rules"
+            "Diagnosis", "Site Brief", "Cold Message", "Technology Signals", "Technology Rules", "Audit Report"
         ]
 
     @staticmethod
@@ -212,6 +220,7 @@ class DataExporter:
                 lead.get("cold_message", "N/A"),
                 ', '.join(lead.get('technology_signals', ())),
                 lead.get('technology_rules_version', ''),
+                _audit_report_json(lead.get('audit_report')),
             ])
         return rows
 

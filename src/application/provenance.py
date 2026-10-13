@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 from ..domain.crawl import CrawlResult
 from ..domain.provenance import DataSource, FieldProvenance, VerifiedLead
 from ..domain.technology import detect_technologies, TECHNOLOGY_RULES_VERSION
+from .audit_evidence import bind_audit_report
 
 
 def build_verified_lead(
@@ -37,6 +38,7 @@ def build_verified_lead(
         collected_at=datetime.now(timezone.utc),
     )
     audit_data = dict(audit or {})
+    audit_report = bind_audit_report(crawl, audit_data.get('audit_report'))
     dom_hash = sha256(crawl.raw_html_home.encode('utf-8', errors='replace')).hexdigest()
     if crawl.raw_html_home_sha256 and crawl.raw_html_home_sha256 != dom_hash:
         raise ValueError('crawl_dom_evidence_changed')
@@ -54,6 +56,9 @@ def build_verified_lead(
             provenance[field_name] = site_provenance
     for field_name in ('framework', 'technology_signals', 'technology_rules_version'):
         provenance[field_name] = technology_provenance
+    provenance['audit_report'] = FieldProvenance(source=DataSource.OFFICIAL_WEBSITE,
+        source_url=official_url, collected_at=collected_at, evidence_sha256=evidence.content_sha256,
+        confidence=0.0, data_classification='website_audit')
     return VerifiedLead(
         business_name=business_name,
         category=search_keyword.strip(),
@@ -67,6 +72,7 @@ def build_verified_lead(
         site_brief=str(audit_data.get("site_brief") or ""),
         cold_message=str(audit_data.get("cold_message") or ""),
         provenance=provenance,
+        audit_report=audit_report,
     )
 
 
