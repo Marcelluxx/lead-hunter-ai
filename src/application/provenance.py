@@ -13,6 +13,7 @@ from ..domain.provenance import DataSource, FieldProvenance, VerifiedLead
 from ..domain.technology import detect_technologies, TECHNOLOGY_RULES_VERSION
 from .audit_evidence import bind_audit_report
 from .dom_checks import build_dom_report
+from ..domain.markup_score import build_score_report
 
 
 def build_verified_lead(
@@ -67,6 +68,11 @@ def build_verified_lead(
         collected_at=_parse_timestamp(dom_source['retrieved_at']) if dom_source else collected_at,
         evidence_sha256=dom_source['dom_sha256'] if dom_source else None,
         confidence=0.0, data_classification='website_dom_checks')
+    provenance['score_report'] = FieldProvenance(source=DataSource.OFFICIAL_WEBSITE,
+        source_url=provenance['dom_report'].source_url,
+        collected_at=provenance['dom_report'].collected_at,
+        evidence_sha256=provenance['dom_report'].evidence_sha256,
+        confidence=0.0, data_classification='website_markup_score')
     return VerifiedLead(
         business_name=business_name,
         category=search_keyword.strip(),
@@ -82,6 +88,7 @@ def build_verified_lead(
         provenance=provenance,
         audit_report=audit_report,
         dom_report=dom_report,
+        score_report=build_score_report(dom_report),
     )
 
 

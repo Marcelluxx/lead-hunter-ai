@@ -13,6 +13,8 @@ from ..domain.discovery import TransientCandidate
 from ..domain.provenance import DataSource, VerifiedLead
 from ..domain.audit_evidence import validate_public_report
 from ..domain.dom_checks import validate_dom_report
+from ..domain.dom_checks import empty_dom_report
+from ..domain.markup_score import validate_score_report
 from ..infrastructure.models import (
     EvidenceModel,
     LeadAttributeModel,
@@ -59,11 +61,15 @@ class DiscoveryPersistenceService:
     ) -> LeadModel:
         if not lead.provenance:
             raise DiscoveryPersistenceError("missing_provenance")
+        score_report = None if lead.score_report is None else validate_score_report(
+            lead.score_report, lead.dom_report if lead.dom_report is not None else empty_dom_report())
         record = LeadModel(workspace_id=workspace_id, job_id=job_id, status="verified")
         session.add(record)
         session.flush()
         evidence_by_key: dict[tuple[str, str], EvidenceModel] = {}
         values = lead.to_export_record()
+        if score_report is not None:
+            values['score_report'] = score_report
         if lead.audit_report is not None:
             report = validate_public_report(dict(lead.audit_report))
             values['audit_report'] = report
@@ -108,7 +114,7 @@ class DiscoveryPersistenceService:
                     session.flush()
                     evidence_by_key[key] = evidence
                 evidence_id = evidence.id
-            serialized = json.dumps(value, ensure_ascii=False, allow_nan=False) if field_name in ('audit_report', 'dom_report') else (
+            serialized = json.dumps(value, ensure_ascii=False, allow_nan=False) if field_name in ('audit_report', 'dom_report', 'score_report') else (
                 ", ".join(value) if isinstance(value, (list, tuple)) else str(value))
             session.add(
                 LeadAttributeModel(
