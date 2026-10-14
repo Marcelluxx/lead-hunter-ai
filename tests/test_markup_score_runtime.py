@@ -60,7 +60,7 @@ class MarkupRuntimeTests(unittest.TestCase):
         self.assertEqual(auditor.calls, 1)
         self.assertEqual(result['score_report'], build_score_report(result['dom_report']))
         summary = next(item for item in records(session) if item['kind'] == 'summary')
-        self.assertEqual(summary['data']['score_report'], result['score_report'])
+        self.assertEqual(summary['payload']['data']['score_report'], result['score_report'])
         crawler.close.assert_awaited_once()
         with self.assertRaisesRegex(ValueError, '^diagnostic_closed$'): session.capture('summary', {'data': {}})
 
