@@ -164,6 +164,10 @@ def run_url_test(
         markup = audit_res['score_report']
         markup_value = 'non disponibile' if markup['score'] is None else f"{markup['score']}/100"
         log_both(f"📊 Indice markup osservato: {markup_value} (non calibrato)")
+        coverage = markup['coverage']
+        coverage_status = {'complete': 'completa', 'partial': 'parziale', 'unavailable': 'non disponibile'}[markup['status']]
+        log_both(f"   Copertura DOM: {coverage_status}; {coverage['inspected_pages']}/{coverage['eligible_pages']} pagine osservate, "
+                 f"{coverage['inconclusive_pages']} inconclusive, {coverage['omitted_pages']} omesse")
         log_both(f"🛠️ framework: {audit_res.get('framework')}")
         log_both(f"🔬 diagnosis: {audit_res.get('diagnosis')}")
         log_both(f"📝 site_brief: {audit_res.get('site_brief')}")

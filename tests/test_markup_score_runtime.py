@@ -87,3 +87,27 @@ class MarkupRuntimeTests(unittest.TestCase):
         self.assertIn('Indice markup osservato: 100.0/100', output.getvalue())
         self.assertEqual(set(artifact), {'website_score', 'diagnosis', 'site_brief', 'framework', 'cold_message'})
         self.assertEqual(artifact['website_score'], 7)
+
+    def test_tester_prints_and_saves_partial_or_unavailable_observation_coverage(self):
+        from src.tester import run_url_test
+        for observed, status in [(1, 'parziale'), (0, 'non disponibile')]:
+            with self.subTest(observed=observed):
+                crawl = dom_crawl(20)
+                crawl.dom_evidence = [snapshot if i < observed else replace(snapshot, html=None,
+                    dom_sha256=None, failure_code='dom_unavailable') for i, snapshot in enumerate(crawl.dom_evidence)]
+                crawler = type('Crawler', (), {'crawl': AsyncMock(return_value=crawl), 'close': AsyncMock()})()
+                output = StringIO(); original_cwd = os.getcwd()
+                with tempfile.TemporaryDirectory() as task_dir:
+                    try:
+                        os.chdir(task_dir)
+                        with patch('src.tester.HybridCrawler', return_value=crawler), redirect_stdout(output):
+                            run_url_test('https://site.test/', auditor=_Auditor(), save_artifacts=True)
+                        saved_text = Path('test_output/test_report.txt').read_text(encoding='utf-8')
+                        artifact = json.loads(Path('test_output/ai_audit_test.json').read_text(encoding='utf-8'))
+                    finally:
+                        os.chdir(original_cwd)
+                coverage = f'Copertura DOM: {status}; {observed}/20 pagine osservate, {20 - observed} inconclusive, 0 omesse'
+                self.assertIn(coverage, output.getvalue()); self.assertIn(coverage, saved_text)
+                score = '100.0/100' if observed else 'non disponibile'
+                self.assertIn(f'Indice markup osservato: {score}', output.getvalue())
+                self.assertNotIn('score_report', artifact)

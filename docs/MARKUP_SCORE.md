@@ -71,8 +71,9 @@ score_report produce unavailable/copertura0 anche se conserva un vecchio DOM
 report, senza scrivere retroattivamente dati o applicare implicitamente rubriche.
 
 Diagnostica autorizzata include il report derivato nel riepilogo sigillato.
-Il vecchio tester mostra l'indice, ma conserva il file sintetico a campi
-selezionati. Gate licenze a scadenza, workspace, privacy, retention, snapshot e
+Il vecchio tester mostra indice, stato e conteggi di pagine osservate/eleggibili,
+inconclusive e omesse; questi dettagli restano anche nel report testuale. Conserva
+il file JSON sintetico a campi selezionati. Gate licenze a scadenza, workspace, privacy, retention, snapshot e
 stream continuano a governare tutti i nuovi campi.
 
 ## Calibrazione successiva
