@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 from src.crawler import HybridCrawler
 from src.auditor import LeadAuditor
 from src.application.dom_checks import build_dom_report, audit_with_dom_report
+from src.domain.markup_score import build_score_report
 from src.filters import extract_domain
 from src.security.privacy import (
     purge_expired_diagnostic_files,
@@ -155,11 +156,14 @@ def run_url_test(
             rating=4.5,
             review_count=10,
         )
-        audit_res = {**audit_res, 'dom_report': dom_report}
+        audit_res = {**audit_res, 'dom_report': dom_report, 'score_report': build_score_report(dom_report)}
 
         log_both("\n🤖 RISPOSTA AI AUDIT:")
         log_both("=" * 60)
         log_both(f"📊 website_score: {audit_res.get('website_score')}/10")
+        markup = audit_res['score_report']
+        markup_value = 'non disponibile' if markup['score'] is None else f"{markup['score']}/100"
+        log_both(f"📊 Indice markup osservato: {markup_value} (non calibrato)")
         log_both(f"🛠️ framework: {audit_res.get('framework')}")
         log_both(f"🔬 diagnosis: {audit_res.get('diagnosis')}")
         log_both(f"📝 site_brief: {audit_res.get('site_brief')}")

@@ -6,6 +6,7 @@ from src.domain.feature_licenses import LicenseError
 from .diagnostics import DiagnosticError
 from .job_execution import JobExecutionError
 from .dom_checks import build_dom_report, audit_with_dom_report
+from src.domain.markup_score import build_score_report
 
 
 def run_full_diagnostic(url, *, session, crawler, auditor) -> dict:
@@ -22,7 +23,7 @@ def run_full_diagnostic(url, *, session, crawler, auditor) -> dict:
         dom_report = build_dom_report(crawl)
         result = audit_with_dom_report(auditor, dom_report=dom_report, crawl_pages=crawl.pages, business_name='Website diagnostic',
                                        category='Testing & Diagnostics', rating=0, review_count=0)
-        result = {**result, 'dom_report': dom_report}
+        result = {**result, 'dom_report': dom_report, 'score_report': build_score_report(dom_report)}
         session.capture('summary', {'data': result})
         session.seal()
         return result
