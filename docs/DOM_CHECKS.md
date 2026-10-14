@@ -79,8 +79,10 @@ legame alle righe; dati corrotti o prove mancanti producono
 non viene persistito; le misure non possono essere ricalcolate dal solo database.
 
 API restituisce dom_report come oggetto separato dagli attributi legacy, che
-restano stringhe. Excel aggiunge l'ultima colonna DOM Report in locale e
-dom_report sul server, senza spostare i campi precedenti. Licenze a scadenza,
+restano stringhe. Excel aggiunge la colonna DOM Report in locale e
+dom_report sul server, senza spostare i campi precedenti. Il successivo
+[indice markup separato](MARKUP_SCORE.md) aggiunge altre due colonne in coda.
+Licenze a scadenza,
 privacy, workspace e controllo dei risultati durante lo streaming continuano a
 governare la consegna. L'AI riceve solo queste misure aggiuntive prima del
 catalogo delle citazioni, senza nuove chiamate al provider; i findings AI

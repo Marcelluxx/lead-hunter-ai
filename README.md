@@ -422,6 +422,12 @@ does not prove an AI diagnosis: observations remain inconclusive and legacy resu
 are explicitly uncited. DOM coverage and inconclusive pages are explicit; these
 measurements do not change the AI score or certify site quality.
 
+An [explainable markup index](docs/MARKUP_SCORE.md) is available alongside the AI
+score. Its versioned rubric shows nine component ratios and observed-page
+coverage in `score_report`; appended XLSX columns contain the numeric index and
+its report. Missing observations remain unavailable, and the rubric is explicitly
+uncalibrated pending a human-reviewed benchmark.
+
 ### Start the internal Streamlit console
 
 ```bash

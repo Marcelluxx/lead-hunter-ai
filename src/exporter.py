@@ -12,6 +12,7 @@ from io import BytesIO
 from pathlib import Path
 from src.domain.audit_evidence import validate_public_report
 from src.domain.dom_checks import validate_dom_report, empty_dom_report
+from src.domain.markup_score import validate_score_report, empty_score_report
 from src.application.rating_filters import RatingFilterGuard
 from typing import Callable, Union, List, Dict, Any
 from openpyxl import Workbook
@@ -192,7 +193,7 @@ class DataExporter:
         return [
             "Business Name", "Category", "Website",
             "Extracted Email", "Website Score", "Framework",
-            "Diagnosis", "Site Brief", "Cold Message", "Technology Signals", "Technology Rules", "Audit Report", "DOM Report"
+            "Diagnosis", "Site Brief", "Cold Message", "Technology Signals", "Technology Rules", "Audit Report", "DOM Report", "Markup Score", "Score Report"
         ]
 
     @staticmethod
@@ -209,6 +210,9 @@ class DataExporter:
         for lead in leads:
             if isinstance(lead, VerifiedLead):
                 lead = lead.to_export_record()
+
+            score_report = empty_score_report() if lead.get('score_report') is None else validate_score_report(
+                lead['score_report'], lead.get('dom_report') if lead.get('dom_report') is not None else empty_dom_report())
 
             extracted_email = lead.get("extracted_email", "")
             if isinstance(extracted_email, list):
@@ -228,6 +232,8 @@ class DataExporter:
                 lead.get('technology_rules_version', ''),
                 _audit_report_json(lead.get('audit_report')),
                 _dom_report_json(lead.get('dom_report')),
+                score_report['score'],
+                json.dumps(score_report, ensure_ascii=False, allow_nan=False),
             ])
         return rows
 

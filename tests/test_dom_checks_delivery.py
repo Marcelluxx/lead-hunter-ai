@@ -26,13 +26,13 @@ class DomDeliveryTests(unittest.TestCase):
     def test_local_workbook_appends_bounded_dom_report_without_private_text(self):
         lead = build_verified_lead(dom_crawl(), search_keyword='Studio', audit=LEGACY)
         row = workbook_row(DataExporter.export_bytes([lead], suppression_checker=lambda _: False))
-        self.assertEqual(list(row)[-2:], ['Audit Report', 'DOM Report'])
+        self.assertEqual(list(row)[11:13], ['Audit Report', 'DOM Report'])
         self.assertEqual(json.loads(row['DOM Report']), lead.dom_report)
         self.assertEqual(lead.provenance['dom_report'].data_classification, 'website_dom_checks')
         self.assertEqual(lead.provenance['dom_report'].confidence, 0)
         self.assertNotIn('PRIVATE_', row['DOM Report'])
         self.assertNotIn('mario.rossi', row['DOM Report'])
-        historical = replace(lead, dom_report=None)
+        historical = replace(lead, dom_report=None, score_report=None)
         row = workbook_row(DataExporter.export_bytes([historical], suppression_checker=lambda _: False))
         self.assertEqual(json.loads(row['DOM Report']), empty_dom_report())
 
@@ -100,7 +100,7 @@ class DomServerDeliveryTests(unittest.TestCase):
         export = self.fx.client.get(url + '/export', headers=self.fx.headers)
         self.assertEqual(export.status_code, 200, export.text)
         row = workbook_row(export.content)
-        self.assertEqual(list(row)[-2:], ['audit_report', 'dom_report'])
+        self.assertEqual(list(row)[12:14], ['audit_report', 'dom_report'])
         self.assertEqual(json.loads(row['dom_report']), report)
 
     def test_corrupt_json_or_unbound_dom_hash_is_a_safe_delivery_error(self):
@@ -127,6 +127,8 @@ class DomServerDeliveryTests(unittest.TestCase):
         with self.fx.fx.database.session(self.fx.fx.workspace.id) as session:
             attribute = session.scalar(select(LeadAttributeModel).where(LeadAttributeModel.field_name == 'dom_report'))
             self.assertIsNotNone(attribute); session.delete(attribute)
+            score = session.scalar(select(LeadAttributeModel).where(LeadAttributeModel.field_name == 'score_report'))
+            if score is not None: session.delete(score)
         response = self.fx.client.get(url + '/results', headers=self.fx.headers)
         self.assertEqual(response.status_code, 200, response.text)
         lead = response.json()['leads'][0]
