@@ -117,7 +117,8 @@ se il punteggio derivato non è storico; input incompleto/corrotto rifiutato.
 `evaluate --dataset FILE --reviews FILE [FILE ...] --out FILE` confronta.
 Il file valutazioni non deve contenere più di 500 packet, unici per revisore.
 Tutti i file letti bounded 32 MiB; anche l'insieme dei packet di una valutazione
-è limitato a 32 MiB serializzati. JSON con chiavi duplicate/NaN vietati,
+è limitato a 32 MiB serializzati e 32 MiB complessivi letti dai file, prima
+di caricarli tutti in memoria. JSON con chiavi duplicate/NaN vietati,
 profondità e valori invalidi producono codice sicuro senza contenuti/path.
 Output UTF-8 JSON, scrittura su file nuovo esclusivo con permessi 0600 dove
 supportati; niente overwrite, anche input=output; fsync, chiusura e rimozione

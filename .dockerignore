@@ -17,6 +17,7 @@ output
 tools/license_issuer
 .secrets
 .leadhunter-state
+.benchmark-data
 .superpowers
 src/prompts.py
 **/*.pem

@@ -9,6 +9,7 @@
 *.keystore
 .secrets/
 .leadhunter-state/
+.benchmark-data/
 *.lh
 __pycache__/
 *.xlsx
