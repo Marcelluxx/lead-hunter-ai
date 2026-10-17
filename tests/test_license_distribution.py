@@ -10,6 +10,15 @@ from scripts.check_customer_image import check_customer_image
 
 
 class CustomerImageGateTests(unittest.TestCase):
+    def test_human_benchmark_data_is_private_development_material(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            private = root / '.benchmark-data' / 'reviews.json'
+            private.parent.mkdir()
+            private.write_text('synthetic-human-benchmark-data')
+            with self.assertRaises(SystemExit):
+                check_customer_image(root)
+
     def test_public_dependency_certificates_do_not_allow_private_licensing_keys(self):
         with tempfile.TemporaryDirectory() as root:
             root = Path(root)
@@ -38,7 +47,7 @@ class LicenseDistributionTests(unittest.TestCase):
             (root / 'Dockerfile').write_text('FROM scratch\nCOPY . /app\nCMD ["/app/public.txt"]\n')
             forbidden = ['tools/license_issuer/keys.py', '.secrets/private', '.leadhunter-state/state.json',
                          'private.pem', 'private.key', 'private.p12', 'private.pfx',
-                         'nested/private.pem', 'src/prompts.py']
+                         'nested/private.pem', 'src/prompts.py', '.benchmark-data/reviews.json']
             for name in forbidden + ['public.txt']:
                 file = root / name
                 file.parent.mkdir(parents=True, exist_ok=True)

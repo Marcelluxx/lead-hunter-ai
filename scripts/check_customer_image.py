@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 def check_customer_image(root: Path):
-    forbidden = ["tools/license_issuer", ".secrets", ".leadhunter-state", ".superpowers", "src/prompts.py"]
+    forbidden = ["tools/license_issuer", ".secrets", ".leadhunter-state", ".superpowers", ".benchmark-data", "src/prompts.py"]
     for relative in forbidden:
         if (root / relative).exists():
             raise SystemExit("Customer image includes private development material.")
