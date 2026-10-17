@@ -105,6 +105,11 @@ con campi decisionali null. Il revisore modifica soltanto:
   changed_site, insufficient_context, other quando non valutabile;
 - pending e tutti i campi decisionali null se non ancora revisionata.
 
+reviewed_at accetta data/ora ISO con fuso esplicito: Z, +00:00, frazioni di
+secondo e altri offset. Il validatore normalizza in UTC su una copia, senza
+modificare il file del revisore. Date senza fuso o prima di captured_at sono
+rifiutate anche quando usano un offset diverso.
+
 Esempio **sintetico** di soli campi da compilare, non un giudizio umano reale:
 
 ```json

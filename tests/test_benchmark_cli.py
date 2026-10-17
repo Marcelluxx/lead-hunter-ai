@@ -40,7 +40,7 @@ class BenchmarkCliTests(unittest.TestCase):
             self.assertEqual(self.call('review-packet', '--dataset', dataset, '--reviewer', 'rater_a', '--out', reviews).returncode, 0)
             packet = json.loads(reviews.read_text(encoding='utf-8'))
             self.assertNotIn('website_score', json.dumps(packet))
-            packet['reviews'][0].update(status='reviewed', reviewed_at='2026-10-15T11:00:00+00:00',
+            packet['reviews'][0].update(status='reviewed', reviewed_at='2026-10-15T11:00:00Z',
                                        quality_score=5, intervention_priority=3)
             reviews.write_text(json.dumps(packet), encoding='utf-8')
             result = self.call('evaluate', '--dataset', dataset, '--reviews', reviews, '--out', report)

@@ -115,3 +115,26 @@ class BenchmarkContractsTests(unittest.TestCase):
         for mutate in mutations:
             value = copy.deepcopy(base); mutate(value)
             with self.subTest(mutate=mutate), self.assertRaises(error): r.validate_review_packet(value, dataset)
+
+    def test_review_dates_normalize_iso_spellings_without_mutating_human_files(self):
+        d, r, error = self.api(); dataset = d.build_dataset([snapshot()], 'v1')
+        for raw, expected in [('2026-10-15T11:00:00Z', '2026-10-15T11:00:00+00:00'),
+                ('2026-10-15T11:00:00.123+00:00', '2026-10-15T11:00:00.123000+00:00'),
+                ('2026-10-15T13:00:00+02:00', '2026-10-15T11:00:00+00:00')]:
+            for status in ('reviewed', 'unassessable'):
+                packet = reviewed_packet(dataset)
+                packet['reviews'][0]['reviewed_at'] = raw
+                if status == 'unassessable':
+                    packet['reviews'][0].update(status=status, quality_score=None,
+                        intervention_priority=None, reason='changed_site')
+                original = copy.deepcopy(packet)
+                with self.subTest(raw=raw, status=status):
+                    try:
+                        validated = r.validate_review_packet(packet, dataset)
+                    except error:
+                        self.fail('A valid explicitly zoned review timestamp was rejected')
+                    self.assertEqual(validated['reviews'][0]['reviewed_at'], expected)
+                    self.assertEqual(packet, original)
+        for raw in ('2026-10-15T11:00:00', '2026-10-15T11:00:00+02:00'):
+            packet = reviewed_packet(dataset); packet['reviews'][0]['reviewed_at'] = raw
+            with self.assertRaises(error): r.validate_review_packet(packet, dataset)

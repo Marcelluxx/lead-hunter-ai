@@ -1,4 +1,6 @@
 """Blind human packets with two independent dimensions and snapshot binding."""
+import json
+
 from .contracts import (HUMAN_RUBRIC, bounded, canonical, contract, identifier,
                         integer, keys, require, timestamp)
 from .dataset import validate_dataset
@@ -27,7 +29,9 @@ def _validate_packet(packet, checked_dataset):
     require(packet['rubric_version'] == HUMAN_RUBRIC)
     require(packet['dataset_sha256'] == checked_dataset['dataset_sha256'])
     identifier(packet['reviewer_id'])
-    rows = packet['reviews']
+    # Normalize editable dates on an independent copy, never in the human file.
+    normalized = json.loads(canonical(packet))
+    rows = normalized['reviews']
     require(type(rows) is list and len(rows) == len(checked_dataset['samples']))
     for row, sample in zip(rows, checked_dataset['samples']):
         keys(row, REVIEW_FIELDS)
@@ -38,7 +42,8 @@ def _validate_packet(packet, checked_dataset):
             require(all(row[key] is None for key in ('reviewed_at', 'quality_score', 'intervention_priority', 'reason')))
             continue
         reviewed = timestamp(row['reviewed_at'])
-        require(reviewed == row['reviewed_at'] and reviewed >= sample['captured_at'])
+        require(reviewed >= sample['captured_at'])
+        row['reviewed_at'] = reviewed
         if status == 'reviewed':
             integer(row['quality_score'], 1, 10)
             integer(row['intervention_priority'], 0, 3)
@@ -47,9 +52,7 @@ def _validate_packet(packet, checked_dataset):
             require(row['quality_score'] is None and row['intervention_priority'] is None)
             require(type(row['reason']) is str and row['reason'] in
                     ('unavailable', 'changed_site', 'insufficient_context', 'other'))
-    # Independent JSON primitives; evaluating may never mutate the operator's file.
-    import json
-    return json.loads(canonical(packet))
+    return normalized
 
 
 @contract('review_invalid')

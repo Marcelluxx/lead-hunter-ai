@@ -34,14 +34,14 @@ tests/benchmark_helpers.py, tests/test_benchmark_contracts.py.
 `build_review_packet(dataset:dict,reviewer_id:str)->dict`,
 `validate_review_packet(packet:dict,dataset:dict)->dict`.
 
-- [ ] Scrivere test per canonicalizzazione ordine/digest, private projection, score
+- [x] Scrivere test per canonicalizzazione ordine/digest, private projection, score
   zero e storico, bool/NaN/corruzione DOM/score, 501 campioni, duplicati URL+tempo.
-- [ ] RED: unittest tests.test_benchmark_contracts -v, contratto assente.
-- [ ] Implementare contratti con errori benchmark_invalid/dataset_invalid/review_invalid;
+- [x] RED: unittest tests.test_benchmark_contracts -v, contratto assente.
+- [x] Implementare contratti con errori benchmark_invalid/dataset_invalid/review_invalid;
   riusare public_evidence_url e validate_score_report. Packet senza predizioni;
   pending/assessable/unassessable, date e schema rigorosi come specifica.
-- [ ] GREEN: stessi test, anche modifica metadata/hash, timestamp e reviewer invalidi.
-- [ ] Suite progetto, lock/compile/diff/Gitleaks e commit: feat: add bound human benchmark datasets and blind reviews.
+- [x] GREEN: stessi test, anche modifica metadata/hash, timestamp e reviewer invalidi.
+- [x] Suite progetto, lock/compile/diff/Gitleaks e commit: feat: add bound human benchmark datasets and blind reviews.
 
 ### Task 2: Metriche di confronto
 
@@ -49,14 +49,14 @@ tests/benchmark_helpers.py, tests/test_benchmark_contracts.py.
 **Interfaces:** Consumes Task1 validate_dataset/validate_review_packet;
 produces `evaluate(dataset:dict,packets:list[dict])->dict`.
 
-- [ ] Test per tre campioni, qualità AI vs umano con differenze 1,-1,0:
+- [x] Test per tre campioni, qualità AI vs umano con differenze 1,-1,0:
   MAE0.666667, RMSE0.816497, bias0; priorità distinta; missing esclusi.
-- [ ] RED: unittest tests.test_benchmark_evaluation -v, evaluate assente.
-- [ ] Implementare ranks/ties/Spearman, medie per sito, accordo pairwise,
+- [x] RED: unittest tests.test_benchmark_evaluation -v, evaluate assente.
+- [x] Implementare ranks/ties/Spearman, medie per sito, accordo pairwise,
   n metriche/null, gruppi DOM e output senza URL/reviewer ID, max500 packet.
-- [ ] GREEN: stessi test, inclusi ranghi inversi/pari/costanti, duplicati revisori,
+- [x] GREEN: stessi test, inclusi ranghi inversi/pari/costanti, duplicati revisori,
   ordine input e numero revisori diverso, nessuna calibrazione o scale confuse.
-- [ ] Suite progetto e controlli; commit feat: compare human judgments with uncalibrated audit signals.
+- [x] Suite progetto e controlli; commit feat: compare human judgments with uncalibrated audit signals.
 
 ### Task 3: CLI e adapter server offline
 
@@ -66,17 +66,17 @@ Modify .gitignore/.dockerignore; docs/MODERNIZZAZIONE_AUTONOMA.md.
 **Interfaces:** Consumes Task1/2; `dataset_from_job(result:dict,*,prediction_version:str,captured_at:str)->dict`;
 `load_json(path)->dict`, `write_json_new(path,value)->None`, CLI main(argv=None)->int.
 
-- [ ] Test subprocess prepare/review-packet/evaluate su tmp, senza env/credenziali;
+- [x] Test subprocess prepare/review-packet/evaluate su tmp, senza env/credenziali;
   artifact riaperti con metriche attese; adapter server con dati privati non copiati.
-- [ ] RED: unittest tests.test_benchmark_cli -v, CLI assente.
-- [ ] Implementare input bounded/no duplicate keys/NaN, esclusione overwrite,
+- [x] RED: unittest tests.test_benchmark_cli -v, CLI assente.
+- [x] Implementare input bounded/no duplicate keys/NaN, esclusione overwrite,
   output0600/fsync/cleanup file proprio fallito, messaggi sicuri. Adapter legge
   output results completed e proietta solo i campi necessari, nessun contatto.
-- [ ] GREEN: end-to-end, JSON annidato/oversize/duplicate/errori safe, input=output,
+- [x] GREEN: end-to-end, JSON annidato/oversize/duplicate/errori safe, input=output,
   storico, from-job con data obbligatoria, file precedente preservato.
-- [ ] Manuale con rubriche, protocollo cieco, limiti e comandi; dati sintetici solo
+- [x] Manuale con rubriche, protocollo cieco, limiti e comandi; dati sintetici solo
   nei test. Roadmap aggiorna merge16 e distingue strumenti pronti da benchmark reale.
-- [ ] Suite completa PostgreSQL/Chromium/distribuzione, lock/compile/diff/Gitleaks;
+- [x] Suite completa PostgreSQL/Chromium/distribuzione, lock/compile/diff/Gitleaks;
   commit feat: add offline benchmark collection and evaluation CLI.
 
 ## Chiusura

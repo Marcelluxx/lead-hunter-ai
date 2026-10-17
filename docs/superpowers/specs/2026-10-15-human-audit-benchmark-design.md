@@ -54,7 +54,7 @@ diagnosi, messaggio commerciale o altra indicazione del modello.
 
 La scheda nuova è pending, reviewed_at/scores null e reason null. Il revisore
 compila tutte le righe, oppure può lasciarne alcune pending. Per reviewed:
-reviewed_at UTC esplicito >= captured_at, quality_score intero 1–10,
+reviewed_at con fuso esplicito, normalizzato UTC e >= captured_at, quality_score intero 1–10,
 intervention_priority intero 0–3, reason null. Per unassessable: data valida,
 entrambi i punteggi null e reason uno di unavailable/changed_site/
 insufficient_context/other. Pending richiede tutti i campi decisionali null.
@@ -68,6 +68,9 @@ intervento evidente; 1 miglioramento non urgente; 2 intervento utile e
 prioritario; 3 problema che blocca un compito importante. Non inferire budget,
 intenzione d'acquisto o potenziale economico. Non derivare una scala dall'altra.
 
+Le date editabili ammettono le rappresentazioni ISO equivalenti, incluse Z,
+frazioni di secondo e offset espliciti, normalizzate su una copia senza cambiare
+il file umano. Date senza fuso o precedenti a captured_at sono rifiutate.
 Packet legato a dataset esatto, con tutte le righe una volta, ordine canonico,
 URL/tempo uguali al dataset. Variazioni a versione/hash/prove invalidano il
 legame. Più revisori sono ammessi; un reviewer_id può comparire una sola volta
