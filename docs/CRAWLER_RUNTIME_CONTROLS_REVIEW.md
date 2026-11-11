@@ -42,6 +42,10 @@ e la versione compatibile di Streamlit richiedono almeno 3.11. Il minimo
 supportato, la matrice CI e la documentazione corrente sono allineati a
 Python 3.11–3.13. L'immagine applicativa era già su Python 3.11.
 
+I test di interfaccia usano percorsi assoluti per AppTest e la sua API
+di lettura dello stato. Passano tutti i 25 test mirati, inclusi i controlli
+su revoca della licenza e persistenza dei dati nella sessione.
+
 ## Decisioni e limiti
 
 | Decisione | Conseguenza |
@@ -55,7 +59,6 @@ Python 3.11–3.13. L'immagine applicativa era già su Python 3.11.
 | Suite PostgreSQL/Docker/Chromium eseguita dall'autore | La review indipendente non ha ripetuto tutta la matrice |
 | Matching REP verificato per gruppi, wildcard, specificità e codifica | Nessun claim di conformità RFC esaustiva |
 | Documento tardivo senza binding affidabile scartato | Alcuni siti con navigazione client possono risultare non auditabili |
-| Aggiornamento supply chain separato dal primo blocco funzionale | Il merge resta bloccato dal gate attuale |
 
 I sei ambiti lasciati fuori giudizio dal reviewer sono coperti nella tabella:
 egress/quote, TLS remoto, limiti di processo, suite completa, RFC esaustiva
