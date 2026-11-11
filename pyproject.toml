@@ -12,6 +12,7 @@ dependencies = [
     "dramatiq[redis]>=2.2,<3",
     "fastapi>=0.116,<1",
     "folium>=0.18,<1",
+    "httpx>=0.28,<1",
     "openai>=2,<3",
     "openpyxl>=3.1,<4",
     "pandas>=2.2,<4",
