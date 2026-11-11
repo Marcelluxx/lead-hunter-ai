@@ -2,7 +2,7 @@
 name = "lead-hunter-ai"
 version = "0.1.0"
 description = "Evidence-first lead discovery and website audit platform"
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.11,<3.14"
 license = "LicenseRef-Proprietary"
 dependencies = [
     "alembic>=1.16,<2",
@@ -28,7 +28,7 @@ dependencies = [
     "redis>=6,<8",
     "requests>=2.31,<3",
     "sqlalchemy>=2.0,<2.1",
-    "streamlit>=1.40,<2",
+    "streamlit>=1.66,<2",
     "streamlit-folium>=0.24,<1",
     "uvicorn[standard]>=0.35,<1",
 ]
@@ -51,10 +51,15 @@ required-version = ">=0.11.15,<0.12"
 # Do not distribute the vulnerable, unused package (GHSA-8mgp-746c-j5xp).
 # Keep Crawl4AI pinned: revalidate this exclusion before upgrading or enabling NLP.
 exclude-dependencies = ["nltk"]
-# Security floors verified by the October 2026 release audit. Keep GitPython
-# within its existing minor line while upgrading the affected transitive packages.
+# Security floors from the runtime dependency audit. Keep these constraints
+# while the packages are transitive so a future resolution cannot regress.
 constraint-dependencies = [
-    "gitpython>=3.1.60,<3.2",
+    "aiohttp>=3.14.4",
+    "brotli>=1.2.1",
+    "certifi>=2026.10.18",
+    "filelock>=4.2.1",
+    "gitpython>=3.2.1",
     "multidict>=6.9.1,<7",
+    "pillow>=13.0.0",
     "urllib3>=2.8.0,<3",
 ]

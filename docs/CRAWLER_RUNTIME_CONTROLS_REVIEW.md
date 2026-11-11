@@ -26,8 +26,21 @@ operativa del primo blocco, senza cambi a UI, hosting o condizioni commerciali.
 - La scansione supply chain [42984866376](https://github.com/Marcelluxx/lead-hunter-ai/actions/runs/42984866376)
   ha rilevato 69 vulnerabilità in sei pacchetti: aiohttp, brotli, certifi,
   filelock, gitpython e pillow. Le sei versioni sono identiche a develop.
-  La PR non allenta il gate e resta in bozza. Non sono state incluse
-  migrazioni delle versioni maggiori delle dipendenze.
+  La PR è rimasta in bozza durante la prima consegna, senza allentare il gate.
+
+## Aggiornamento dipendenze prima del merge
+
+Su richiesta del proprietario, il lock è stato rigenerato con le correzioni:
+aiohttp 3.14.5, brotli 1.2.1, certifi 2026.10.23, filelock 4.2.10 e Pillow
+13.0.0. Streamlit 1.67.0 accetta Pillow 13 e non porta più GitPython nel lock;
+un vincolo impedisce di risolvere una versione vulnerabile di GitPython se
+torna transitivo. Lo scan locale degli stessi requisiti runtime esportati
+dalla pipeline non rileva vulnerabilità note.
+
+La combinazione corretta non è risolvibile per Python 3.10: Filelock corretto
+e la versione compatibile di Streamlit richiedono almeno 3.11. Il minimo
+supportato, la matrice CI e la documentazione corrente sono allineati a
+Python 3.11–3.13. L'immagine applicativa era già su Python 3.11.
 
 ## Decisioni e limiti
 
