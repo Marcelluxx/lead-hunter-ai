@@ -22,8 +22,8 @@ di audit e autorizzazione. Nessun provider reale nei test.
 
 ### Task 1: Policy robots e limiti runtime
 
-- [ ] RED tests/test_crawler_operations.py: policy, budget, retry e integrazione non disponibili.
-- [ ] Implementare RobotsPolicy.require(decision, guard) in src/robots_policy.py e
+- [x] RED tests/test_crawler_operations.py: policy, budget, retry e integrazione non disponibili.
+- [x] Implementare RobotsPolicy.require(decision, guard) in src/robots_policy.py e
   CrawlLimits/CrawlRuntime in src/crawl_runtime.py; collegarli a HybridCrawler.
-- [ ] GREEN con fixture in memoria; controllare lock, regressioni, Chromium reale.
-- [ ] Aggiornare roadmap/manuale, completare review del branch e verificare prima del push.
+- [x] GREEN con fixture in memoria; controllare lock, regressioni, Chromium reale.
+- [x] Aggiornare roadmap/manuale, completare review del branch e verificare prima del push.

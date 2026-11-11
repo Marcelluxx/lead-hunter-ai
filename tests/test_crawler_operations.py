@@ -151,6 +151,60 @@ class BrowserOperationsTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue((await crawler.crawl(OTHER)).is_auditable)
                 self.assertEqual(crawler._crawler.arun.await_count, len(failures) + 1)
 
+    async def test_redirected_429_cools_responding_host_not_requested_host(self):
+        limited = page(status=429, final=OTHER)
+        limited.response_headers["Retry-After"] = "120"
+        crawler, _ = self.crawler(visits=[limited, page(), page(OTHER)])
+        now = 1000
+        crawler._runtime.clock = lambda: now
+        self.assertEqual((await crawler.crawl(HOME)).error_code, "domain_rate_limited")
+        now += 61
+        self.assertEqual((await crawler.crawl(OTHER)).error_code, "domain_cooldown")
+        self.assertTrue((await crawler.crawl(HOME)).is_auditable)
+        now += 60
+        self.assertTrue((await crawler.crawl(OTHER)).is_auditable)
+        self.assertEqual(crawler._crawler.arun.await_count, 3)
+
+    async def test_late_document_change_cannot_reuse_earlier_response_metadata(self):
+        crawler, _ = self.crawler()
+        async def visit(*args, **kwargs):
+            await crawler._remember_response(SimpleNamespace(url=HOME), None,
+                response=SimpleNamespace(url=HOME, status=200, headers={"Content-Type": "text/html"}))
+            return page(final=OTHER)
+        crawler._crawler.arun.side_effect = visit
+        result = await crawler.crawl(HOME)
+        self.assertEqual(result.error_code, "navigation_response_unverified")
+        self.assertFalse(result.is_auditable)
+        self.assertEqual(result.pages, {})
+        self.assertEqual(result.dom_evidence, [])
+
+    async def test_late_reload_at_same_url_cannot_supply_evidence_using_old_200(self):
+        crawler, _ = self.crawler()
+        listeners = {}
+        frame = object()
+        browser_page = SimpleNamespace(url=HOME, main_frame=frame, on=listeners.__setitem__,
+            remove_listener=lambda event, callback: listeners.pop(event))
+        def response(status):
+            request = SimpleNamespace(frame=frame, is_navigation_request=lambda: True)
+            return SimpleNamespace(url=HOME, status=status, request=request,
+                                   headers={"Content-Type": "text/html"})
+        async def visit(*args, **kwargs):
+            await crawler._validate_navigation(browser_page, None, HOME)
+            await crawler._remember_response(browser_page, None, response=response(200))
+            listeners["response"](response(429))
+            # Crawl4AI translates exceptions from hooks into failed results.
+            try:
+                await crawler._before_return_html(browser_page, None, html="<html>late page</html>")
+            except ValueError:
+                return page(status=500)
+            return page()
+        crawler._crawler.arun.side_effect = visit
+        result = await crawler.crawl(HOME)
+        self.assertEqual(result.error_code, "domain_rate_limited")
+        self.assertFalse(result.is_auditable)
+        self.assertEqual((await crawler.crawl(HOME)).error_code, "domain_cooldown")
+        self.assertEqual(listeners, {})
+
     async def test_page_timeout_cancels_provider_without_creating_evidence(self):
         _, limits, _, _ = operation_types(self)
         cancelled = asyncio.Event()

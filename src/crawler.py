@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Set
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
+from playwright.async_api import Error as BrowserError
 from .domain import (
     ContactExtractionMethod,
     ContactPoint,
@@ -85,6 +86,9 @@ class HybridCrawler:
         self._deadline = None
         self._browser_requests = 0
         self._last_response = None
+        self._anchor_request = None
+        self._late_response = None
+        self._response_listener = None
         self._navigation_error = None
         self._attempt_blocked = False
         self._crawler = None
@@ -163,15 +167,60 @@ class HybridCrawler:
     async def _validate_navigation(self, page, context, url, **kwargs):
         self._check_diagnostic_failure()
         await self._bounded(lambda: self.url_policy.validate_async(url))
+        self._check_diagnostic_failure()
+        def observe(response):
+            request = response.request
+            if self._last_response is None or request is self._anchor_request:
+                return
+            try:
+                if not request.is_navigation_request() or request.frame != page.main_frame:
+                    return
+                self._late_response = (self.url_policy.validate_syntax(response.url),
+                                       response.status, response.headers)
+            except (BrowserError, UrlPolicyError):
+                return
+        page.on("response", observe)
+        self._response_listener = (page, observe)
         return page
 
     async def _remember_response(self, page, context, *, response, **kwargs):
         try:
             self._check_diagnostic_failure()
             if response is not None:
-                self._last_response = (response.status, response.headers)
-                decision = await self._bounded(lambda: self.url_policy.validate_async(page.url))
+                syntax = self.url_policy.validate_syntax(response.url)
+                self._last_response = (syntax, response.status, response.headers)
+                self._anchor_request = getattr(response, "request", None)
+                decision = await self._bounded(lambda: self.url_policy.validate_async(response.url))
                 await self._bounded(lambda: self._robots.require(decision, self._check_diagnostic_failure))
+        except (UrlPolicyError, CrawlControlError) as exc:
+            self._navigation_error = exc
+            raise
+        except (LicenseError, DiagnosticError, JobExecutionError) as exc:
+            self._diagnostic_error = exc
+            raise
+        return page
+
+    def _rate_limit(self, hostname, headers):
+        retry = next((value for key, value in (headers or {}).items() if key.lower() == "retry-after"), "")
+        self._runtime.outcome(hostname, rate_limited=True, retry_after=retry_delay(retry))
+        raise CrawlControlError("domain_rate_limited")
+
+    def _require_response_binding(self, url):
+        if self._late_response is not None:
+            target, status, headers = self._late_response
+            if status == 429:
+                self._rate_limit(target.hostname, headers)
+            raise CrawlControlError("navigation_response_unverified")
+        if (self._last_response is None or self.url_policy.validate_syntax(url).normalized_url
+                != self._last_response[0].normalized_url):
+            raise CrawlControlError("navigation_response_unverified")
+
+    async def _before_return_html(self, page, context, *, html, **kwargs):
+        try:
+            self._check_diagnostic_failure()
+            self._require_response_binding(page.url)
+            if self.diagnostics is not None and 200 <= self._last_response[1] < 300:
+                await self._capture_loaded_diagnostics(page, context, html=html, **kwargs)
         except (UrlPolicyError, CrawlControlError) as exc:
             self._navigation_error = exc
             raise
@@ -209,6 +258,8 @@ class HybridCrawler:
             self._runtime.require(host, consume=True)
             self._browser_requests = 0
             self._last_response = None
+            self._anchor_request = None
+            self._late_response = None
             self._navigation_error = None
             self._attempt_blocked = False
             try:
@@ -226,19 +277,30 @@ class HybridCrawler:
                 self._check_diagnostic_failure()
                 if self._navigation_error is not None:
                     raise self._navigation_error
+                final_url = self._final_url(result, decision.normalized_url)
+                if self._last_response is not None and getattr(result, "success", False):
+                    self._require_response_binding(final_url)
                 status, _ = self._page_metadata(result)
+                response_host = (self._last_response[0].hostname if self._last_response else
+                                 self.url_policy.validate_syntax(final_url).hostname) if status is not None else host
+                if response_host != host:
+                    self._runtime.require(response_host, consume=True)
                 if status == 429:
-                    headers = self._last_response[1] if self._last_response else getattr(result, "response_headers", {})
-                    retry = next((value for key, value in (headers or {}).items()
-                                  if key.lower() == "retry-after"), "")
-                    self._runtime.outcome(host, rate_limited=True, retry_after=retry_delay(retry))
-                    raise CrawlControlError("domain_rate_limited")
+                    headers = self._last_response[2] if self._last_response else getattr(result, "response_headers", {})
+                    self._rate_limit(response_host, headers)
                 transient = status == 408 or (status is not None and 500 <= status <= 599)
                 transient = transient or (status is None and not getattr(result, "success", False)
                                             and not self._attempt_blocked)
-                self._runtime.outcome(host, transient=transient)
+                self._runtime.outcome(response_host, transient=transient)
                 if not transient or attempt == retries:
                     return result
+                if response_host != host:
+                    self._runtime.require(response_host)
+            finally:
+                if self._response_listener is not None:
+                    observed_page, listener = self._response_listener
+                    self._response_listener = None
+                    observed_page.remove_listener("response", listener)
             await self._bounded(lambda: asyncio.sleep(0.2))
 
     def _check_diagnostic_failure(self):
@@ -283,7 +345,7 @@ class HybridCrawler:
 
         headers = getattr(provider_result, "response_headers", None) or {}
         if self._last_response is not None:
-            status_code, headers = self._last_response
+            _, status_code, headers = self._last_response
         content_type = ""
         if isinstance(headers, dict):
             content_type = next(
@@ -295,6 +357,10 @@ class HybridCrawler:
                 "",
             )
         return status_code, content_type
+
+    @staticmethod
+    def _final_url(provider_result, fallback):
+        return getattr(provider_result, "redirected_url", None) or getattr(provider_result, "url", None) or fallback
 
     async def crawl(self, url: str) -> CrawlResult:
         """
@@ -378,8 +444,7 @@ class HybridCrawler:
                     "before_goto", self._validate_navigation
                 )
                 self._crawler.crawler_strategy.set_hook("after_goto", self._remember_response)
-                if self.diagnostics is not None:
-                    self._crawler.crawler_strategy.set_hook('before_return_html', self._capture_loaded_diagnostics)
+                self._crawler.crawler_strategy.set_hook('before_return_html', self._before_return_html)
                 try:
                     await self._bounded(self._crawler.start, seconds=self.limits.page_seconds)
                 except (Exception, asyncio.CancelledError):
@@ -408,7 +473,7 @@ class HybridCrawler:
                 logger.error("Crawl4AI: crawl homepage fallito per '%s' (%s)", self._log_target(url), result.error_code)
                 return result
 
-            final_url = getattr(home_result, "redirected_url", None) or getattr(home_result, "url", None) or safe_url
+            final_url = self._final_url(home_result, safe_url)
             final_decision = await self._bounded(lambda: self.url_policy.validate_async(final_url))
             await self._bounded(lambda: self._robots.require(final_decision, self._check_diagnostic_failure))
             allowed_internal_hosts = {initial_decision.hostname, final_decision.hostname}
@@ -515,8 +580,7 @@ class HybridCrawler:
                     page_result = await self._visit(page_target, run_config)
                     self._check_diagnostic_failure()
                     if page_result and page_result.success:
-                        page_final_url = (getattr(page_result, "redirected_url", None)
-                                          or getattr(page_result, "url", None) or p_url)
+                        page_final_url = self._final_url(page_result, p_url)
                         page_decision = await self._bounded(lambda: self.url_policy.validate_async(
                             page_final_url, allowed_hosts=allowed_internal_hosts))
                         await self._bounded(lambda: self._robots.require(page_decision, self._check_diagnostic_failure))
