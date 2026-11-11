@@ -2,6 +2,7 @@ import base64
 from datetime import datetime, timezone
 from io import BytesIO
 import os
+from pathlib import Path
 import re
 import sys
 import unittest
@@ -99,7 +100,8 @@ class ReferenceExportUiTests(unittest.TestCase):
         for target, value in [('main.create_orchestrator', orchestrator), ('streamlit_folium.st_folium', None)]:
             replacement = patch(target, return_value=value)
             replacement.start(); self.addCleanup(replacement.stop)
-        return AppTest.from_file('src/gui.py', default_timeout=15)
+        gui_path = Path(__file__).resolve().parents[1] / 'src' / 'gui.py'
+        return AppTest.from_file(gui_path, default_timeout=15)
 
     def start_search(self, app):
         button = next(b for b in app.button if 'AVVIA LEAD HUNTER' in b.label)
