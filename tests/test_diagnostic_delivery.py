@@ -131,7 +131,7 @@ class DiagnosticDeliveryTests(unittest.TestCase):
         raw = base64.b64decode(re.search('base64,([A-Za-z0-9+/=]+)', html).group(1))
         with ZipFile(BytesIO(raw)) as archive:
             self.assertEqual(json.loads(archive.read('manifest.json'))['schema_version'], 1)
-        self.assertNotIn(raw, [v for v in app.session_state.filtered_state.values() if isinstance(v, bytes)])
+        self.assertNotIn(raw, [v for v in app.session_state.values() if isinstance(v, bytes)])
         self.assertEqual(len(app.get('download_button')), 0)
 
     def test_gui_revocation_inside_html_builder_blocks_delivery(self):

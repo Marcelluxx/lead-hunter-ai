@@ -131,7 +131,7 @@ class DomRuntimeTests(unittest.TestCase):
 class DomBrowserTests(unittest.IsolatedAsyncioTestCase):
     async def test_real_home_and_internal_snapshots_preserve_response_binding(self):
         from src.crawler import HybridCrawler
-        from tests.test_crawler_runtime import WEBSITE_HTML
+        from tests.test_crawler_runtime import WEBSITE_HTML, robots_missing
         class FixtureCrawler(HybridCrawler):
             async def _install_network_guard(self, page, context, **kwargs):
                 async def route_fixture(route):
@@ -143,7 +143,7 @@ class DomBrowserTests(unittest.IsolatedAsyncioTestCase):
                 await context.route('**', route_fixture)
                 return page
         for mode in ['high_fidelity', 'optimized']:
-            crawler = FixtureCrawler(max_pages=2, token_mode=mode)
+            crawler = FixtureCrawler(max_pages=2, token_mode=mode, robots_fetch=robots_missing)
             try:
                 result = await crawler.crawl('https://93.184.216.34/')
             finally:

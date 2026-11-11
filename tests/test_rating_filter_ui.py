@@ -1,6 +1,7 @@
 import base64
 import contextlib
 from io import BytesIO, StringIO
+from pathlib import Path
 import re
 import sys
 import unittest
@@ -33,7 +34,8 @@ class RatingFilterUiTests(unittest.TestCase):
         env.start(); self.addCleanup(env.stop)
 
     def app(self):
-        app = AppTest.from_file('src/gui.py', default_timeout=20).run()
+        gui_path = Path(__file__).resolve().parents[1] / 'src' / 'gui.py'
+        app = AppTest.from_file(gui_path, default_timeout=20).run()
         self.assertEqual(len(app.exception), 0)
         return app
 

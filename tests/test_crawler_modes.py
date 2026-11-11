@@ -64,6 +64,8 @@ class CrawlerModeTests(unittest.TestCase):
 @unittest.skipUnless(os.environ.get('LEADHUNTER_BROWSER_TESTS') == '1', 'Opt-in Chromium integration')
 class CrawlerModeBrowserTests(unittest.IsolatedAsyncioTestCase):
     async def test_real_home_and_internal_pages_follow_mode_without_inventing_js_requirement(self):
+        from tests.test_crawler_runtime import robots_missing
+
         class FixtureCrawler(HybridCrawler):
             def _select_markdown(self, md, **kwargs):
                 self.selection_metadata.append((self.token_mode, len(md.raw_markdown), len(md.fit_markdown),
@@ -79,7 +81,7 @@ class CrawlerModeBrowserTests(unittest.IsolatedAsyncioTestCase):
                 await context.route('**', fixture)
                 return page
         for mode in ['high_fidelity', 'optimized']:
-            crawler = FixtureCrawler(max_pages=2, token_mode=mode)
+            crawler = FixtureCrawler(max_pages=2, token_mode=mode, robots_fetch=robots_missing)
             crawler.selection_metadata = []
             try:
                 result = await crawler.crawl('https://93.184.216.34/')

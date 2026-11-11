@@ -5,7 +5,7 @@ check succeeds on the exact commit being released.
 
 ## Required pull-request checks
 
-- Python 3.10, 3.11, 3.12 and 3.13 tests from the committed `uv.lock`;
+- Python 3.11, 3.12 and 3.13 tests from the committed `uv.lock`;
 - mandatory PostgreSQL 17 concurrency, RLS, retention and suppression tests;
 - container build from digest-pinned base images;
 - clean-database bootstrap of the least-privilege application and worker roles;

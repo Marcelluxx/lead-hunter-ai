@@ -14,6 +14,11 @@ from unittest.mock import patch
 
 from src.crawler import HybridCrawler
 from src.domain import CrawlStatus
+from src.robots_policy import RobotsResponse
+
+
+async def robots_missing(_decision):
+    return RobotsResponse(404)
 
 
 WEBSITE_HTML = """<html><head><style>main { color: blue; }</style></head><body><main><h1>Studio Aurora</h1><p>
@@ -92,7 +97,7 @@ class CrawlerBrowserRuntimeTests(unittest.IsolatedAsyncioTestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             with patch.dict(os.environ, {"CRAWL4_AI_BASE_DIRECTORY": directory}), redirect_stdout(logs), redirect_stderr(logs):
-                crawler = FixtureCrawler(max_pages=2, diagnostics=diagnostic)
+                crawler = FixtureCrawler(max_pages=2, diagnostics=diagnostic, robots_fetch=robots_missing)
                 try:
                     result = await crawler.crawl("https://93.184.216.34/?token=browser-secret-sentinel")
                     crawler._crawler.logger.error('browser-secret-sentinel', force_verbose=True)

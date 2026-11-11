@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://github.com/Marcelluxx/lead-hunter-ai/actions/workflows/ci.yml"><img src="https://github.com/Marcelluxx/lead-hunter-ai/actions/workflows/ci.yml/badge.svg?branch=develop" alt="CI status"></a>
   <a href="https://github.com/Marcelluxx/lead-hunter-ai/actions/workflows/security.yml"><img src="https://github.com/Marcelluxx/lead-hunter-ai/actions/workflows/security.yml/badge.svg?branch=develop" alt="Security status"></a>
-  <img src="https://img.shields.io/badge/Python-3.10--3.13-3776AB?logo=python&logoColor=white" alt="Python 3.10 through 3.13">
+  <img src="https://img.shields.io/badge/Python-3.11--3.13-3776AB?logo=python&logoColor=white" alt="Python 3.11 through 3.13">
   <img src="https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL 17">
   <img src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white" alt="Docker Compose">
   <img src="https://img.shields.io/badge/License-Proprietary-critical" alt="Proprietary license">
@@ -155,7 +155,7 @@ Recommended:
 - Git;
 - Docker Desktop with Docker Compose v2;
 - `uv` 0.11.15;
-- Python 3.10, 3.11, 3.12, or 3.13;
+- Python 3.11, 3.12, or 3.13;
 - OpenSSL for local JWT key generation;
 - a Google Cloud project with Places API V1 enabled;
 - an OpenRouter key for the website-audit mode;
